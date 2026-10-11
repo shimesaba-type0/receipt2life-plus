@@ -15,6 +15,7 @@ import {
   uploadPhoto,
 } from "../api";
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
+import { DELETE_CONCURRENCY, UPLOAD_CONCURRENCY, type UploadStatus, planUploads, runWithLimit, statusLabel, summarizeResults } from "../photo-queue";
 import { resizePhoto } from "../photo-resize-browser";
 import { Link } from "../router";
 import "./Day.css";
@@ -73,7 +74,7 @@ export function Day(props: { date: string }) {
   const [adding, setAdding] = useState(false);
   const [editingEvent, setEditingEvent] = useState<string | "new" | null>(null);
   const [viewPhoto, setViewPhoto] = useState<PhotoView | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [confirmPhotoDelete, setConfirmPhotoDelete] = useState(false);
 
   async function load() {
     const res = await run(() => getDay(date));
@@ -104,7 +105,7 @@ export function Day(props: { date: string }) {
   useEffect(() => {
     if (!viewPhoto) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setViewPhoto(null);
+      if (e.key === "Escape") closeLightbox();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -206,30 +207,15 @@ export function Day(props: { date: string }) {
     if (ok) setEditingEvent(null);
   }
 
-  async function onFiles(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = "";
-    if (files.length === 0) return;
-    await guarded(async () => {
-      for (const file of files) {
-        let blob: Blob;
-        try {
-          blob = await resizePhoto(file);
-        } catch (err) {
-          return err instanceof Error ? err.message : "画像を処理できませんでした。";
-        }
-        const res = await run(() => uploadPhoto(blob, { date }));
-        if (!res.ok) return res.message;
-      }
-      return null;
-    }, "写真を追加しました。");
+  async function removePhoto(photo: PhotoView) {
+    const ok = await guarded(async () => failOf(await run(() => deletePhoto(photo.id))), "写真を削除しました。");
+    if (ok) closeLightbox();
+    else setConfirmPhotoDelete(false);
   }
 
-  async function removePhoto(photo: PhotoView) {
-    if (!window.confirm("この写真を削除しますか?")) return;
-    const ok = await guarded(async () => failOf(await run(() => deletePhoto(photo.id))), "写真を削除しました。");
-    if (ok) setViewPhoto(null);
+  function closeLightbox() {
+    setViewPhoto(null);
+    setConfirmPhotoDelete(false);
   }
 
   const today = todayJst();
@@ -353,43 +339,300 @@ export function Day(props: { date: string }) {
             </ul>
           </div>
 
-          <div class="card">
-            <div class="day__row-head">
-              <h2 class="day__h">写真</h2>
-              <button type="button" class="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
-                写真を追加
-              </button>
-              <input ref={fileRef} type="file" class="sr-only" accept="image/jpeg,image/png,image/webp" multiple tabIndex={-1} onChange={onFiles} aria-label="写真のファイル" />
-            </div>
-            {busy && <p class="muted">処理中…</p>}
-            {data.photos.length === 0 && <p class="muted">この日の写真はありません。</p>}
-            <ul class="day__photos">
-              {data.photos.map((p) => (
-                <li key={p.id}>
-                  <button type="button" class="day__thumb" onClick={() => setViewPhoto(p)} aria-label={p.caption ? `写真を拡大: ${p.caption}` : "写真を拡大"}>
-                    <img src={photoUrl(p.id)} alt={p.caption ?? ""} loading="lazy" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <PhotosCard date={date} photos={data.photos} disabled={busy} onView={setViewPhoto} onChanged={load} />
         </>
       )}
 
       {viewPhoto && (
-        <div class="day__lightbox" role="dialog" aria-modal="true" aria-label="写真の拡大表示" onClick={() => setViewPhoto(null)}>
+        <div class="day__lightbox" role="dialog" aria-modal="true" aria-label="写真の拡大表示" onClick={closeLightbox}>
           <img src={photoUrl(viewPhoto.id)} alt={viewPhoto.caption ?? ""} onClick={(e) => e.stopPropagation()} />
           <div class="day__lightbox-bar" onClick={(e) => e.stopPropagation()}>
-            <button type="button" class="btn" onClick={() => setViewPhoto(null)}>
-              閉じる
-            </button>
-            <button type="button" class="btn day__danger" disabled={busy} onClick={() => removePhoto(viewPhoto)}>
-              削除
-            </button>
+            {confirmPhotoDelete ? (
+              <>
+                <span class="day__lightbox-ask" role="alert">
+                  この写真を削除しますか?
+                </span>
+                <button type="button" class="btn day__danger" disabled={busy} onClick={() => removePhoto(viewPhoto)}>
+                  削除する
+                </button>
+                <button type="button" class="btn" disabled={busy} onClick={() => setConfirmPhotoDelete(false)}>
+                  やめる
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" class="btn" onClick={closeLightbox}>
+                  閉じる
+                </button>
+                <button type="button" class="btn day__danger" disabled={busy} onClick={() => setConfirmPhotoDelete(true)}>
+                  削除
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
     </section>
+  );
+}
+
+interface UploadItem {
+  id: number;
+  name: string;
+  status: UploadStatus;
+  error: string | null;
+}
+
+// 写真エリア。複数アップロード(選択・ドラッグ&ドロップ)と複数削除(選択モード)
+function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolean; onView: (p: PhotoView) => void; onChanged: () => Promise<void> }) {
+  const { date, photos, disabled } = props;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const workingRef = useRef(false);
+  const [working, setWorking] = useState(false);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [resultMsg, setResultMsg] = useState<string | null>(null);
+  const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const off = disabled || working;
+
+  // 再読み込みで無くなった写真は選択から外す
+  useEffect(() => {
+    setSelected((cur) => {
+      const ids = new Set(photos.map((p) => p.id));
+      const next = new Set([...cur].filter((id) => ids.has(id)));
+      return next.size === cur.size ? cur : next;
+    });
+  }, [photos]);
+
+  function begin(): boolean {
+    if (workingRef.current) return false;
+    workingRef.current = true;
+    setWorking(true);
+    setResultMsg(null);
+    setFailures([]);
+    return true;
+  }
+  function end() {
+    workingRef.current = false;
+    setWorking(false);
+  }
+
+  async function upload(files: File[]) {
+    if (files.length === 0 || disabled || !begin()) return;
+    setSelecting(false);
+    setConfirming(false);
+    setSelected(new Set());
+    const plan = planUploads(files);
+    const accepted = new Set<File>(plan.accepted);
+    let r = 0;
+    const items: UploadItem[] = files.map((f, id) => {
+      if (accepted.has(f)) return { id, name: f.name, status: "waiting", error: null };
+      return { id, name: f.name, status: "failed", error: plan.rejected[r++]?.reason ?? "追加できません。" };
+    });
+    setUploads(items);
+    const patch = (id: number, p: Partial<UploadItem>) => setUploads((cur) => cur.map((u) => (u.id === id ? { ...u, ...p } : u)));
+    const final = new Map<number, string | null>();
+    try {
+      const targets = items.filter((it) => it.status === "waiting");
+      await runWithLimit(targets, UPLOAD_CONCURRENCY, async (it) => {
+        const file = files[it.id] as File;
+        let error: string | null = null;
+        try {
+          patch(it.id, { status: "resizing" });
+          const blob = await resizePhoto(file);
+          patch(it.id, { status: "uploading" });
+          const res = await run(() => uploadPhoto(blob, { date }));
+          if (!res.ok) error = res.message;
+        } catch (err) {
+          error = err instanceof Error ? err.message : "画像を処理できませんでした。";
+        }
+        patch(it.id, error ? { status: "failed", error } : { status: "done" });
+        final.set(it.id, error);
+      });
+      const summary = summarizeResults(
+        "追加",
+        items.map((it) => ({ name: it.name, error: it.status === "failed" ? it.error : (final.get(it.id) ?? null) })),
+      );
+      setResultMsg(summary.message);
+      setFailures(summary.failures);
+      await props.onChanged();
+    } finally {
+      end();
+    }
+  }
+
+  function onPick(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    void upload(files);
+  }
+
+  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+
+  function toggle(id: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function leaveSelect() {
+    setSelecting(false);
+    setConfirming(false);
+    setSelected(new Set());
+  }
+
+  async function deleteSelected() {
+    const targets = photos.map((p, i) => ({ p, label: p.caption || `写真${i + 1}` })).filter((x) => selected.has(x.p.id));
+    if (targets.length === 0 || disabled || !begin()) return;
+    setConfirming(false);
+    setUploads([]);
+    try {
+      const settled = await runWithLimit(targets, DELETE_CONCURRENCY, async (t) => {
+        const res = await run(() => deletePhoto(t.p.id));
+        return res.ok ? null : res.message;
+      });
+      const results = targets.map((t, i) => {
+        const s = settled[i];
+        return { id: t.p.id, name: t.label, error: s?.status === "fulfilled" ? s.value : "削除できませんでした。" };
+      });
+      const summary = summarizeResults("削除", results);
+      setResultMsg(summary.message);
+      setFailures(summary.failures);
+      // 失敗分は選択状態のまま残す
+      const failedIds = new Set(results.filter((x) => x.error !== null).map((x) => x.id));
+      setSelected(failedIds);
+      if (failedIds.size === 0) setSelecting(false);
+      await props.onChanged();
+    } finally {
+      end();
+    }
+  }
+
+  return (
+    <div
+      class={`card day__drop${dragOver ? " is-over" : ""}`}
+      onDragEnter={(e) => {
+        if (hasFiles(e)) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (hasFiles(e)) e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        setDragOver(false);
+        void upload(Array.from(e.dataTransfer?.files ?? []));
+      }}
+    >
+      <div class="day__row-head">
+        <h2 class="day__h">写真</h2>
+        <div class="day__photo-tools">
+          {photos.length > 0 && (
+            <button type="button" class="btn" disabled={off} aria-pressed={selecting} onClick={() => (selecting ? leaveSelect() : setSelecting(true))}>
+              {selecting ? "選択をやめる" : "選択"}
+            </button>
+          )}
+          <button type="button" class="btn" disabled={off} onClick={() => fileRef.current?.click()}>
+            写真を追加
+          </button>
+          <input ref={fileRef} type="file" class="sr-only" accept="image/jpeg,image/png,image/webp" multiple tabIndex={-1} onChange={onPick} aria-label="写真のファイル" />
+        </div>
+      </div>
+      <p class="muted day__hint">複数まとめて追加できます(1回20枚まで)。パソコンでは、この枠に画像をドラッグ&ドロップしても追加できます。</p>
+
+      <div class="day__progress" role="status">
+        {uploads.length > 0 && (
+          <ul class="day__queue">
+            {uploads.map((u) => (
+              <li key={u.id} class={`day__queue-item is-${u.status}`}>
+                <span class="day__queue-name">{u.name}</span>
+                <span class="day__queue-state">{statusLabel(u.status)}</span>
+                {u.status === "failed" && u.error && <span class="day__queue-error">{u.error}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {resultMsg && <p class="day__result">{resultMsg}</p>}
+      </div>
+      {uploads.length === 0 && failures.length > 0 && (
+        <ul class="day__queue" aria-label="失敗した写真">
+          {failures.map((f, i) => (
+            <li key={i} class="day__queue-item is-failed">
+              <span class="day__queue-name">{f.name}</span>
+              <span class="day__queue-error">{f.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {selecting && (
+        <div class="day__selbar">
+          <span class="day__selcount">{selected.size}枚選択中</span>
+          <button type="button" class="btn" disabled={off} onClick={() => setSelected(new Set(photos.map((p) => p.id)))}>
+            すべて選択
+          </button>
+          <button type="button" class="btn" disabled={off || selected.size === 0} onClick={() => setSelected(new Set())}>
+            選択を解除
+          </button>
+          <button type="button" class="btn day__danger" disabled={off || selected.size === 0} onClick={() => setConfirming(true)}>
+            {selected.size}枚を削除
+          </button>
+        </div>
+      )}
+      {selecting && confirming && (
+        <div class="day__confirm" role="alertdialog" aria-label="写真の削除の確認">
+          <p>{selected.size}枚の写真を削除します。元に戻せません。よろしいですか?</p>
+          <div class="day__actions">
+            <button type="button" class="btn day__danger" disabled={off} onClick={() => void deleteSelected()}>
+              {selected.size}枚を削除する
+            </button>
+            <button type="button" class="btn" disabled={off} onClick={() => setConfirming(false)}>
+              やめる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {working && uploads.length === 0 && <p class="muted">処理中…</p>}
+      {photos.length === 0 && <p class="muted">この日の写真はありません。</p>}
+      <ul class="day__photos">
+        {photos.map((p) => {
+          const on = selected.has(p.id);
+          return (
+            <li key={p.id} class="day__photo">
+              <button
+                type="button"
+                class="day__thumb"
+                onClick={() => (selecting ? toggle(p.id) : props.onView(p))}
+                aria-label={selecting ? (p.caption ? `写真を選択: ${p.caption}` : "写真を選択") : p.caption ? `写真を拡大: ${p.caption}` : "写真を拡大"}
+                aria-pressed={selecting ? on : undefined}
+                disabled={selecting && off}
+              >
+                <img src={photoUrl(p.id)} alt={p.caption ?? ""} loading="lazy" />
+                {selecting && (
+                  <span class={`day__check${on ? " is-on" : ""}`} aria-hidden="true">
+                    {on ? "✓" : ""}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
