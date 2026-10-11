@@ -59,7 +59,8 @@ export function accessAuth(options: { getKey?: KeyResolver } = {}): MiddlewareHa
     const teamDomain = normalizeTeamDomain(c.env.ACCESS_TEAM_DOMAIN);
     const audience = c.env.ACCESS_AUD?.trim();
     if (!teamDomain || !audience) {
-      console.error("auth: ACCESS_TEAM_DOMAIN / ACCESS_AUD が未設定のため、全リクエストを拒否します");
+      const missing = [!teamDomain && "ACCESS_TEAM_DOMAIN", !audience && "ACCESS_AUD"].filter(Boolean).join(", ");
+      console.error(`auth: ${missing} が未設定のため、全リクエストを拒否します`);
       return unauthorized(c);
     }
 
