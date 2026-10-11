@@ -1,0 +1,63 @@
+/* 月カレンダー専用 */
+.cal { --lane-h: 18px; --lane-gap: 2px; --date-h: 26px; }
+.cal__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal__title { text-align: center; }
+.cal__total { margin: 2px 0 0; font-size: 15px; color: var(--muted); }
+.cal__nav { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); font-size: 24px; line-height: 1; }
+
+.cal__grid { padding: 8px; }
+.cal__weekdays, .cal__week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal__wd { text-align: center; font-size: 12px; padding: 4px 0; color: var(--muted); }
+.cal__week { position: relative; border-top: 1px solid var(--line-soft); }
+
+.cal__day { display: flex; flex-direction: column; align-items: center; min-height: calc(var(--date-h) + var(--lanes, 0) * (var(--lane-h) + var(--lane-gap)) + 28px); padding: 2px 1px 4px; }
+.cal__day:hover { background: var(--accent-soft); color: inherit; }
+.cal__date { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-bottom: calc(var(--date-h) - 24px + var(--lanes, 0) * (var(--lane-h) + var(--lane-gap))); border-radius: 12px; font-size: 13px; }
+.cal__amount { font-size: 10px; line-height: 1.2; color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.is-sun, .is-sun .cal__date { color: #c0392b; }
+.is-sat, .is-sat .cal__date { color: #2f62b5; }
+.cal__wd.is-sun { color: #c0392b; }
+.cal__wd.is-sat { color: #2f62b5; }
+.cal__day.is-out { opacity: 0.4; }
+.cal__day.is-today .cal__date { background: var(--accent); color: #fff; font-weight: 700; }
+
+/* 期間の帯: 日の枠の上に重ねる(タップは下の日に通す) */
+.cal__band {
+  position: absolute;
+  top: calc(var(--date-h) + var(--lane) * (var(--lane-h) + var(--lane-gap)));
+  left: calc(var(--col) * 100% / 7 + 2px);
+  width: calc(var(--span) * 100% / 7 - 4px);
+  height: var(--lane-h);
+  display: flex; align-items: center;
+  padding: 0 4px;
+  border-left: 3px solid var(--band);
+  background: var(--band-soft);
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 11px; line-height: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.cal__band.is-cont-before { left: calc(var(--col) * 100% / 7); width: calc(var(--span) * 100% / 7 - 2px); border-radius: 0 3px 3px 0; }
+.cal__band.is-cont-after { border-radius: 3px 0 0 3px; width: calc(var(--span) * 100% / 7 - 2px); }
+.cal__band.is-cont-before.is-cont-after { width: calc(var(--span) * 100% / 7); border-radius: 0; }
+.cal__band-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal__band--red, .cal__dot--red { --band: var(--event-red); --band-soft: var(--event-red-soft); }
+.cal__band--orange, .cal__dot--orange { --band: var(--event-orange); --band-soft: var(--event-orange-soft); }
+.cal__band--green, .cal__dot--green { --band: var(--event-green); --band-soft: var(--event-green-soft); }
+.cal__band--blue, .cal__dot--blue { --band: var(--event-blue); --band-soft: var(--event-blue-soft); }
+.cal__band--purple, .cal__dot--purple { --band: var(--event-purple); --band-soft: var(--event-purple-soft); }
+
+.cal__events-title { margin: 0 0 8px; font-size: 16px; }
+.cal__list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; }
+.cal__item { display: flex; align-items: center; gap: 10px; min-height: 44px; flex-wrap: wrap; }
+.cal__dot { width: 12px; height: 12px; border-radius: 6px; background: var(--band); flex: none; }
+.cal__item-title { font-weight: 500; }
+.cal__item-period { font-size: 13px; }
+.cal__add { display: inline-flex; align-items: center; justify-content: center; }
+
+@media (max-width: 480px) {
+  .cal .page__title { font-size: 18px; }
+  .cal__grid { padding: 4px; }
+  .cal__amount { font-size: 9px; }
+}
