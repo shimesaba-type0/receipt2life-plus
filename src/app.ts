@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { Hono } from "hono";
 import { accessAuth, type KeyResolver } from "./auth/access";
 import type { AppEnv } from "./env";
+import { registerIoRoutes } from "./api/io";
 import { createMcpServer } from "./mcp/server";
 
 export interface AppOptions {
@@ -16,6 +17,8 @@ export function createApp(options: AppOptions = {}) {
   app.use("*", accessAuth(options.getKey ? { getKey: options.getKey } : {}));
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  registerIoRoutes(app);
 
   // MCP(Streamable HTTP、ステートレス): リクエストごとにサーバーとトランスポートを作る
   app.all("/mcp", async (c) => {
