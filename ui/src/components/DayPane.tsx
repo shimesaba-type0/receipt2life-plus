@@ -3,6 +3,7 @@ import type { DayData, FieldError } from "../../../src/api/contract";
 import { getDay, photoUrl } from "../api";
 import { formatPeriodShort, txSubline } from "../calendar-layout";
 import { formatDateJa, formatYen } from "../format";
+import { holidayName } from "../holidays";
 import { Link } from "../router";
 import "./DayPane.css";
 
@@ -32,6 +33,7 @@ export function DayPane(props: { date: string }) {
   }, [date, reloadKey]);
 
   const data = state.status === "ready" ? state.data : null;
+  const holiday = holidayName(date);
 
   return (
     <aside class="dp" aria-label={`${formatDateJa(date)}の詳細`} aria-busy={state.status === "loading"}>
@@ -40,6 +42,11 @@ export function DayPane(props: { date: string }) {
           <h2 class="dp__date">{formatDateJa(date)}</h2>
           <span class="dp__total num">{data ? formatYen(data.total) : "—"}</span>
         </div>
+        {holiday && (
+          <p class="dp__holiday">
+            <span class="chip chip--holiday">{holiday}</span>
+          </p>
+        )}
         {data && <p class="dp__count muted">{data.count}件</p>}
         {state.status === "loading" && (
           <p class="muted" role="status">
