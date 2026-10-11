@@ -22,14 +22,19 @@
 .cal__week { position: relative; border-top: 1px solid var(--line-soft); }
 
 /* 日セル: 日付が上、金額が下。帯が増えたぶんだけ高くなる */
-.cal__day { display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; min-height: calc(var(--cell-h) + max(var(--lanes, 0) - 1, 0) * (var(--lane-h) + var(--lane-gap))); padding: 4px 0 6px; }
+.cal__day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; min-height: calc(var(--cell-h) + max(var(--lanes, 0) - 1, 0) * (var(--lane-h) + var(--lane-gap))); padding: 4px 0 6px; }
 .cal__day:hover { background: var(--accent-soft); color: inherit; }
 .cal__date { display: inline-flex; align-items: center; justify-content: center; width: var(--date-size); height: var(--date-size); border-radius: calc(var(--date-size) / 2); font-size: 14px; font-weight: 500; }
 .cal__amount { font-size: 11px; line-height: 14px; min-height: 14px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; }
 .cal__wd.is-sun, .cal__day.is-sun .cal__date { color: var(--danger); }
 .cal__wd.is-sat, .cal__day.is-sat .cal__date { color: var(--sat); }
+/* 祝日は日曜と同じ色(日曜・土曜と重なっても同じ) */
+.cal__day.is-holiday .cal__date { color: var(--danger); }
+/* 祝日名: モバイルは「祝」の1文字をセルの右上に、PC幅は日付の横に名称を出す */
+.cal__hol { position: absolute; top: 3px; right: 2px; max-width: calc(100% - 4px); font-size: 10px; line-height: 12px; color: var(--danger); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.cal__hol-name { display: none; }
 /* 前後の月の日は、薄くせず文字色を変える(金額も) */
-.cal__day.is-out .cal__date, .cal__day.is-out .cal__amount { color: var(--other); }
+.cal__day.is-out .cal__date, .cal__day.is-out .cal__amount, .cal__day.is-out .cal__hol { color: var(--other); }
 .cal__day.is-today .cal__date { background: var(--accent); color: #fff; }
 
 /* 期間の帯: 日の枠の上に重ねる(タップは下の日に通す) */
@@ -67,6 +72,7 @@
 .cal__list li { border-bottom: 1px solid var(--line-soft); }
 .cal__list li:last-child { border-bottom: 0; }
 .cal__item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 16px; }
+.cal__hol-date { flex: none; min-width: 4.5em; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--danger); }
 .cal__dot { width: 12px; height: 12px; border-radius: 6px; background: var(--band); flex: none; }
 .cal__item-title { flex: 1; min-width: 0; font-size: 15px; }
 .cal__item-period { flex: none; font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -80,6 +86,9 @@
   .cal__side { flex: 2 1 0; }
   .cal__grid { padding: 12px 8px 8px; }
   .cal__day { align-items: flex-start; padding: 6px 8px 8px; border-left: 1px solid var(--bg); }
+  .cal__hol { top: 14px; left: 44px; right: 4px; max-width: none; }
+  .cal__hol-short { display: none; }
+  .cal__hol-name { display: inline; }
   .cal__amount { align-self: flex-end; font-size: 13px; line-height: 16px; min-height: 16px; }
   .cal__day.is-selected { background: #f1f7f4; }
   .cal__band { font-size: 12px; padding: 0 8px; }

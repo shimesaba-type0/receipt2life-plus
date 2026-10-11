@@ -3,6 +3,7 @@ import type { CalendarData, EventView, FieldError } from "../../../src/api/contr
 import { getCalendar } from "../api";
 import { buildMonthGrid, defaultSelectedDate, eventEnd, formatCellAmount, formatPeriodShort, laneCount, layoutWeekBands } from "../calendar-layout";
 import { addMonths, formatDateJa, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
+import { formatHolidayDate, holidayName, holidaysInMonth } from "../holidays";
 import { DayPane } from "../components/DayPane";
 import { MonthPicker } from "../components/MonthPicker";
 import { Link, navigate } from "../router";
@@ -74,6 +75,7 @@ export function Calendar(props: { month: string | null }) {
   const weeks = useMemo(() => buildMonthGrid(month), [month]);
   const data = state.status === "ready" ? state.data : null;
   const totals = useMemo(() => new Map((data?.days ?? []).map((d) => [d.date, d])), [data]);
+  const holidays = useMemo(() => holidaysInMonth(month), [month]);
   const addDate = monthOf(today) === month ? today : monthRange(month).from;
 
   return (
@@ -134,7 +136,8 @@ export function Calendar(props: { month: string | null }) {
             <div class="cal__week" key={week[0]} style={{ "--lanes": lanes }}>
               {week.map((date, col) => {
                 const day = totals.get(date);
-                const cls = ["cal__day", col === 0 ? "is-sun" : col === 6 ? "is-sat" : "", monthOf(date) !== month ? "is-out" : "", date === today ? "is-today" : ""]
+                const holiday = holidayName(date);
+                const cls = ["cal__day", col === 0 ? "is-sun" : col === 6 ? "is-sat" : "", holiday ? "is-holiday" : "", monthOf(date) !== month ? "is-out" : "", date === today ? "is-today" : ""]
                   .filter(Boolean)
                   .join(" ");
                 const onClick = (e: MouseEvent) => {
@@ -151,9 +154,15 @@ export function Calendar(props: { month: string | null }) {
                     class={`${cls}${wide && date === selected ? " is-selected" : ""}`}
                     onClick={onClick}
                     aria-current={wide && date === selected ? "date" : undefined}
-                    aria-label={`${formatDateJa(date)}${day ? ` ${formatYen(day.total)}(${day.count}件)` : ""}`}
+                    aria-label={`${formatDateJa(date)}${holiday ? ` ${holiday}` : ""}${day ? ` ${formatYen(day.total)}(${day.count}件)` : ""}`}
                   >
                     <span class="cal__date num">{Number(date.slice(8))}</span>
+                    {holiday && (
+                      <span class="cal__hol" aria-hidden="true">
+                        <span class="cal__hol-short">祝</span>
+                        <span class="cal__hol-name">{holiday}</span>
+                      </span>
+                    )}
                     <span class="cal__amount num">{formatCellAmount(day?.total)}</span>
                   </a>
                 );
@@ -199,6 +208,22 @@ export function Calendar(props: { month: string | null }) {
           出来事を追加
         </Link>
       </section>
+
+      {holidays.length > 0 && (
+        <section class="cal__events" aria-label="今月の祝日">
+          <h2 class="cal__events-title">今月の祝日</h2>
+          <ul class="cal__list">
+            {holidays.map((h) => (
+              <li key={h.date}>
+                <div class="cal__item cal__item--holiday">
+                  <span class="cal__hol-date num">{formatHolidayDate(h.date)}</span>
+                  <span class="cal__item-title">{h.name}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       </div>
       {wide && (
         <div class="cal__side">

@@ -17,6 +17,7 @@ import {
   updateTransaction,
 } from "../api";
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
+import { holidayName } from "../holidays";
 import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-queue";
 import { LinkCard } from "../components/LinkCard";
 import { PhotoUploader } from "../components/PhotoUploader";
@@ -251,6 +252,7 @@ export function Day(props: { date: string }) {
 
   const today = todayJst();
   const month = monthOf(date);
+  const holiday = holidayName(date);
 
   return (
     <section class="page day">
@@ -260,7 +262,10 @@ export function Day(props: { date: string }) {
             <path d="M15 6l-6 6 6 6" />
           </svg>
         </Link>
-        <h1 class="page__title day__title">{formatShort(date)}</h1>
+        <h1 class="page__title day__title">
+          {formatShort(date)}
+          {holiday && <span class="chip chip--holiday day__holiday">{holiday}</span>}
+        </h1>
         <Link href={`/day/${today}`} class="day__today">
           今日
         </Link>
