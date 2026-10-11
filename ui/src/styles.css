@@ -40,7 +40,7 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
 .nav__brand { display: none; }
 .nav__item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 44px; color: var(--muted); font-size: 12px; }
 .nav__item.is-active { color: var(--accent); font-weight: 700; }
-.nav__export { display: none; }
+.nav__export, .nav__pc { display: none; }
 
 @media (min-width: 900px) {
   .shell { flex-direction: row; }
@@ -49,7 +49,7 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
   .nav__brand { display: block; font-size: 17px; font-weight: 700; padding: 0 12px 20px; }
   .nav__item { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
   .nav__item.is-active { background: var(--accent-soft); }
-  .nav__export { display: flex; }
+  .nav__export, .nav__pc { display: flex; }
   .nav__item--mobile { display: none; }
 }
 

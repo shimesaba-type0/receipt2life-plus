@@ -2,6 +2,9 @@ import type { Route } from "../route";
 import { Link } from "../router";
 import { todayJst } from "../format";
 
+// カテゴリ(4つの区画)のアイコン。ホームの見出しのボタンでも使う
+export const CATEGORY_ICON = ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"];
+
 function Icon(props: { d: string[] }) {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -31,6 +34,11 @@ export function Nav(props: { route: Route }) {
           <span>{item.label}</span>
         </Link>
       ))}
+      {/* カテゴリは下のタブを増やさず、PCの左メニューだけ(スマホはホームの見出しのボタンから開く) */}
+      <Link href="/categories" class={`nav__item nav__pc${route.name === "categories" ? " is-active" : ""}`} aria-current={route.name === "categories" ? "page" : undefined}>
+        <Icon d={CATEGORY_ICON} />
+        <span>カテゴリ</span>
+      </Link>
       <Link href="/backup" class={`nav__item nav__export${route.name === "backup" ? " is-active" : ""}`} aria-current={route.name === "backup" ? "page" : undefined}>
         <Icon d={["M12 4v11", "M7 11l5 5 5-5", "M5 20h14"]} />
         <span>エクスポート</span>

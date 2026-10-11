@@ -45,6 +45,7 @@
 .day__form label { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .day__form input, .day__form select, .day__form textarea { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .day__form textarea { resize: vertical; }
+.day__form .day__catlink { align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--accent); font-size: 13px; font-weight: 500; }
 .day__dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .day__dates > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .day__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
