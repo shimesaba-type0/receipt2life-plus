@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildMonthGrid, eventEnd, layoutWeekBands, laneCount } from "../../ui/src/calendar-layout";
+import {
+  buildMonthGrid,
+  defaultSelectedDate,
+  eventEnd,
+  formatCellAmount,
+  formatPeriodShort,
+  layoutWeekBands,
+  laneCount,
+  txSubline,
+} from "../../ui/src/calendar-layout";
 
 const ev = (id: string, start: string, end: string | null = null) => ({
   id,
@@ -87,5 +96,43 @@ describe("layoutWeekBands", () => {
   });
   it("帯が無ければレーン数は0", () => {
     expect(laneCount([])).toBe(0);
+  });
+});
+
+describe("formatPeriodShort", () => {
+  it("1日だけなら M/D", () => {
+    expect(formatPeriodShort("2026-10-07", null)).toBe("10/7");
+    expect(formatPeriodShort("2026-10-07", "2026-10-07")).toBe("10/7");
+  });
+  it("期間は M/D〜M/D(0埋めしない)", () => {
+    expect(formatPeriodShort("2026-10-03", "2026-10-05")).toBe("10/3〜10/5");
+    expect(formatPeriodShort("2026-10-30", "2026-11-02")).toBe("10/30〜11/2");
+  });
+  it("終了が開始より前なら1日として扱う", () => {
+    expect(formatPeriodShort("2026-10-07", "2026-10-01")).toBe("10/7");
+  });
+});
+
+describe("formatCellAmount", () => {
+  it("¥なしの桁区切り、0や未定義は空", () => {
+    expect(formatCellAmount(2310)).toBe("2,310");
+    expect(formatCellAmount(1234567)).toBe("1,234,567");
+    expect(formatCellAmount(0)).toBe("");
+    expect(formatCellAmount(undefined)).toBe("");
+  });
+});
+
+describe("defaultSelectedDate", () => {
+  it("今日がその月なら今日、違えば月初", () => {
+    expect(defaultSelectedDate("2026-10", "2026-10-11")).toBe("2026-10-11");
+    expect(defaultSelectedDate("2026-09", "2026-10-11")).toBe("2026-09-01");
+  });
+});
+
+describe("txSubline", () => {
+  it("カテゴリと口座を「・」でつなぐ。無ければ省く", () => {
+    expect(txSubline({ category: "食費", account: "現金" })).toBe("食費・現金");
+    expect(txSubline({ category: "食費", account: null })).toBe("食費");
+    expect(txSubline({ category: null, account: null })).toBe("");
   });
 });
