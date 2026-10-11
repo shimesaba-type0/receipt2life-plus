@@ -14,7 +14,7 @@ export function registerTransactionTools(server: McpServer, db: D1Database): voi
         "支出(取引)を登録する。transactions は配列で、1枚のレシートにつき1件。",
         "1枚の写真に複数のレシートが写っていたら、別々の取引にして1回の呼び出しでまとめて送る。",
         "必須は amount(円・整数)だけ。読み取れなかった項目は省略してよい(店名かカテゴリが空だと needs_review になり、後で見直せる)。",
-        "category と account は既存の名前から選ぶ(カテゴリは list_categories 相当の値: 食費、日用品、交通・チャージ、娯楽、その他。口座: 現金、カード、Suica)。",
+        "category と account は既存の名前から選ぶ。選べる名前は list_categories で取れる(初期値 カテゴリ: 食費、日用品、交通・チャージ、娯楽、その他 / 口座: 現金、カード、Suica)。",
         "よく使う型の目安: 駐車場→交通・チャージ/現金、Suicaチャージ→交通・チャージ/Suica、自販機→食費/現金。",
         "同日・同額・同じ店の取引は重複として登録せず、既存IDを返す。実際に別の買い物なら allow_duplicate:true を付けて再送する。",
         "全件成功か全件失敗。エラーなら errors に index と項目名と理由が返るので、直して再送する。",

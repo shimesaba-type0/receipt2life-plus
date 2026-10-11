@@ -167,6 +167,7 @@ backup/
 *.sqlite3
 *.db
 
-# エージェントのローカル設定(共有ルールは AGENTS.md / CLAUDE.md に書く)
+# エージェントのローカル設定と、並列作業用の作業ツリー(共有ルールは AGENTS.md / CLAUDE.md に書く)
+.claude/worktrees/
 .claude/settings.local.json
 CLAUDE.local.md

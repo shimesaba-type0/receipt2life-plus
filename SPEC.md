@@ -252,3 +252,9 @@ backup/
 - フェーズ2(認証): `/healthz` も含め全ルートを認証の内側に置く。未認証・設定不足はどれも401(理由は返さず、ログにだけ出す)。JWTの署名アルゴリズムは RS256 のみ
 - テスト基盤: `@cloudflare/vitest-pool-workers` は非推奨(`@cloudflare/vitest-plugin` に改名)なので後者を使う。vitest 4 系。npmの依存解決エラー回避のため `.npmrc` に `legacy-peer-deps=true`
 - D1の `database_id` は wrangler.toml に書かない。デプロイ時の自動プロビジョニングに任せる想定(未確認。docs/setup.md)
+- フェーズ3(出来事): `update_event` は、更新する項目が1つも無い呼び出しをエラーにする。`start_date` だけを後ろにずらして既存の `end_date` より後になる場合もエラー(期間解除は `end_date: null` を同時に指定)。`end_date` が `start_date` と同じ日でもそのまま保存する。日付は形式と実在日だけを検証し、未来の日付も許可する(予定にも使うため)。`list_events` は指定期間と重なる出来事を、開始日の昇順で返す。`delete_event` は仕様にないので作っていない
+- フェーズ3(取引の修正・削除): `update_transaction` は、date / amount / source を null で空にできない。id だけの更新はエラー。更新のたびに dedup_hash と status(店名とカテゴリが両方あれば ok)を再計算し、他の取引と重複する場合は更新を止めず `warnings` で知らせる。空文字の店名・カテゴリはエラー(null で空にする)。`delete_transaction` は、写真(attachments)が紐づく取引を拒否する(写真の機能はフェーズ5)
+- フェーズ3(集計): `summarize` の期間省略は全期間。`percent` は小数第1位。`event_id` 集計は、1つの取引が複数の出来事に入る場合それぞれに数える(行の合計が全体を超えうる)。どの出来事にも入らない取引は「(出来事なし)」、カテゴリなしは「(未分類)」、店名なしは「(店名なし)」。rows の件数に上限は設けていない。`list_categories` は、カテゴリ(name と group_name)と口座名を返す
+- フェーズ3(エクスポート・インポート): JSONL のみ(写真のzipはフェーズ5、Markdownはフェーズ6)。`GET /export` はカテゴリと口座を名前で出す。`POST /import` は、JSONL または JSON 配列(先頭が `[`)を受け付け、行ごとに結果(ok / skipped_duplicate / skipped_exists / error)を返す。上限は 5MB または 5000 行(件)で、超えると 413、空は 400。取引の行が `id` と `created_at` の両方を持つ場合は、エクスポート由来のバックアップ行とみなして重複判定を飛ばす(allow_duplicate で登録した取引も復元で消えない)。どちらかが無い行は、従来どおり重複判定をする。エクスポートはページごとに読むため、読み出し中に書き換わると、テーブル間の整合は取れない
+- 運用: 並列作業の各ブランチ(`cc/phase3-...`)は、ユーザーの指示(並列で進めてよい)に基づいて作った
+
