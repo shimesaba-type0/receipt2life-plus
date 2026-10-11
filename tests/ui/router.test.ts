@@ -15,6 +15,12 @@ describe("parseRoute", () => {
     expect(parseRoute("/day/2026-10-11")).toEqual({ name: "day", date: "2026-10-11" });
     expect(parseRoute("/day/2026-1-1")).toEqual({ name: "notfound" });
   });
+  it("バックアップ画面は /backup(/export と /import はWorkerのAPIなので、SPAでは扱わない)", () => {
+    expect(parseRoute("/backup")).toEqual({ name: "backup" });
+    expect(parseRoute("/backup/")).toEqual({ name: "backup" });
+    expect(parseRoute("/export")).toEqual({ name: "notfound" });
+    expect(parseRoute("/import")).toEqual({ name: "notfound" });
+  });
   it("未知のパスは notfound", () => {
     expect(parseRoute("/nope")).toEqual({ name: "notfound" });
   });
