@@ -15,17 +15,34 @@ export interface FieldError {
 export type ApiError = { ok: false; errors: FieldError[] };
 export type ApiResult<T> = ({ ok: true } & T) | ApiError;
 
+// 明細(レシートの1行)。amount はマイナス(値引き)もある。0 は無い
+// category / tax_flag は行自身の値(実効ではない)。null の行は、取引の category / tax_flag に従う
+export interface ItemView {
+  id: string;
+  // 並び順(0 始まり)
+  position: number;
+  name: string;
+  amount: number;
+  category: string | null;
+  tax_flag: TaxFlag | null;
+  memo: string | null;
+}
+
 export interface TransactionView {
   id: string;
   date: string;
+  // 支払総額(正)。明細がある取引は、明細の amount の合計と一致する
   amount: number;
   merchant: string | null;
   category: string | null;
   account: string | null;
   memo: string | null;
   source: string;
+  // 店名が無い、または実効カテゴリの無い行が1つでもあれば needs_review
   status: string;
   tax_flag: TaxFlag | null;
+  // 明細(position の順)。明細なしは空配列
+  items: ItemView[];
 }
 
 export interface EventView {
@@ -100,7 +117,16 @@ export interface CalendarData {
   events: EventView[];
 }
 
-// GET /api/day/:date
+// GET /api/transactions/:id
+export interface TransactionDetailData {
+  transaction: TransactionView;
+  // この取引に紐づく写真・リンク(transaction_id が一致するもの)
+  photos: PhotoView[];
+  links: LinkView[];
+  counts: { items: number; photos: number; links: number };
+}
+
+// GET /api/day/:date(transactions の各取引に items が入る)
 export interface DayData {
   date: string;
   total: number;
@@ -153,7 +179,21 @@ export interface CategoryDeleted {
   message: string;
 }
 
+// 明細の入力(add_transactions / update_transaction の items の1行)
+export interface NewItem {
+  // 品名(100文字まで)
+  name: string;
+  // 円・整数。値引きはマイナス。0 は不可。絶対値は 10,000,000 以下
+  amount: number;
+  // 省略または null で取引のカテゴリに従う
+  category?: string | null;
+  // 省略または null で取引のフラグに従う
+  tax_flag?: TaxFlag | null;
+  memo?: string | null;
+}
+
 // POST /api/transactions の入力(add_transactions と同じ規則)
+// 戻りの registered の各取引は TransactionView に、同じ店の直近のカテゴリを使ったときだけ applied_default_category(カテゴリ名)が付く
 export interface NewTransaction {
   date?: string;
   amount: number;
@@ -164,6 +204,8 @@ export interface NewTransaction {
   source?: "receipt" | "manual" | "voice";
   // 省略または null でフラグなし
   tax_flag?: TaxFlag | null;
+  // 明細(50行まで)。合計は amount と一致させる(合わなければ 400、field: "items" で差額が返る)
+  items?: NewItem[];
   allow_duplicate?: boolean;
 }
 
@@ -178,6 +220,21 @@ export interface TransactionPatch {
   source?: "receipt" | "manual" | "voice";
   // null でフラグを外す
   tax_flag?: TaxFlag | null;
+  // 明細の全置換。省略または null で変えない、[] で明細を全部消す。明細があるときは合計 = amount(金額だけ変えるときも)
+  items?: NewItem[] | null;
+}
+
+// DELETE /api/transactions/:id(?delete_photos=1 で写真もいっしょに消す。無ければ写真つきの取引は 400)
+export interface TransactionDeleted {
+  deleted: {
+    // 削除前の内容
+    transaction: TransactionView;
+    // いっしょに消した件数
+    items: number;
+    photos: number;
+    links: number;
+  };
+  message: string;
 }
 
 // POST /api/events の入力

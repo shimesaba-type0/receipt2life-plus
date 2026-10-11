@@ -1,12 +1,17 @@
 import { z } from "zod";
 import { todayJst } from "../core/dates";
+import { needsReview } from "../core/items";
 import {
   eventInputSchema,
   isoDate,
+  itemInputSchema,
+  itemsTotalMismatch,
+  MAX_ITEMS,
   toFieldErrors,
   transactionInputSchema,
   type EventInput,
   type FieldError,
+  type ItemInput,
   type TransactionInput,
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
@@ -44,6 +49,12 @@ const EXPORT_TABLES: TableSpec[] = [
           WHERE t.id > ? ORDER BY t.id LIMIT ?`,
   },
   {
+    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.created_at
+          FROM transaction_items i
+          LEFT JOIN categories c ON c.id = i.category_id
+          WHERE i.id > ? ORDER BY i.id LIMIT ?`,
+  },
+  {
     sql: `SELECT 'attachment' AS type, id, r2_key, date, transaction_id, event_id, caption, created_at
           FROM attachments WHERE id > ? ORDER BY id LIMIT ?`,
   },
@@ -67,7 +78,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction → attachment → link の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -116,7 +127,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "attachment", "link"] as const;
+const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -133,6 +144,14 @@ const timestampField = z.iso.datetime({ error: "UTCの日時(例: 2026-10-11T03:
 const commonExtras = { id: idField.optional(), created_at: timestampField.optional(), updated_at: timestampField.optional() };
 const eventExtrasSchema = z.strictObject(commonExtras);
 const transactionExtrasSchema = z.strictObject({ ...commonExtras, status: z.enum(["ok", "needs_review"]).optional() });
+
+// 明細の行。取引の行(同じファイルの、id が transaction_id と一致するもの)といっしょに取り込む
+const itemLineSchema = itemInputSchema.extend({
+  id: idField.optional(),
+  transaction_id: idField,
+  position: z.number().int().min(0).max(MAX_ITEMS - 1).optional(),
+  created_at: timestampField.optional(),
+});
 
 const attachmentSchema = z
   .strictObject({
@@ -218,7 +237,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-async function existingIds(db: D1Database, table: "events" | "transactions" | "attachments" | "links", ids: string[]): Promise<Set<string>> {
+async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links", ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (const part of chunks([...new Set(ids)], IN_CHUNK)) {
     const { results } = await db
@@ -243,25 +262,51 @@ function splitExtras(record: Record<string, unknown>, keys: string[]) {
 interface Pending {
   entry: Entry;
   id: string;
-  statement: D1PreparedStatement;
+  // 1レコードぶんの文(取引なら、取引と明細の INSERT)。いっしょに成功するか、いっしょに失敗する
+  statements: D1PreparedStatement[];
+  // いっしょに書き込む子の行(取引の明細)。結果は親と同じになる
+  children?: { entry: Entry; id: string }[];
 }
 
 type Report = (entry: Entry, result: Omit<ImportResult, "line" | "type">) => void;
 
-// D1の batch で、上限を超えないよう分割して書き込む。batch が失敗したら1文ずつ試して、失敗した行だけをエラーにする
+// 文の数で、batch の上限を超えないよう分ける(1レコードが上限より多い文を持つときは、それだけで1つ)
+function batchesOf(pending: Pending[]): Pending[][] {
+  const out: Pending[][] = [];
+  let current: Pending[] = [];
+  let size = 0;
+  for (const p of pending) {
+    if (current.length > 0 && size + p.statements.length > BATCH_SIZE) {
+      out.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(p);
+    size += p.statements.length;
+  }
+  if (current.length > 0) out.push(current);
+  return out;
+}
+
+function reportPending(report: Report, p: Pending, result: Omit<ImportResult, "line" | "type" | "id">) {
+  report(p.entry, { ...result, ...(result.status === "ok" ? { id: p.id } : {}) });
+  for (const child of p.children ?? []) report(child.entry, { ...result, ...(result.status === "ok" ? { id: child.id } : {}) });
+}
+
+// D1の batch で、上限を超えないよう分割して書き込む。batch が失敗したら1レコードずつ試して、失敗したレコードだけをエラーにする
 async function insertAll(db: D1Database, pending: Pending[], report: Report): Promise<void> {
-  for (const part of chunks(pending, BATCH_SIZE)) {
+  for (const part of batchesOf(pending)) {
     try {
-      await db.batch(part.map((p) => p.statement));
-      for (const p of part) report(p.entry, { status: "ok", id: p.id });
+      await db.batch(part.flatMap((p) => p.statements));
+      for (const p of part) reportPending(report, p, { status: "ok" });
     } catch {
       for (const p of part) {
         try {
-          await p.statement.run();
-          report(p.entry, { status: "ok", id: p.id });
+          await db.batch(p.statements);
+          reportPending(report, p, { status: "ok" });
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err);
-          report(p.entry, { status: "error", message: `書き込みに失敗しました(${reason})` });
+          reportPending(report, p, { status: "error", message: `書き込みに失敗しました(${reason})` });
         }
       }
     }
@@ -295,9 +340,11 @@ async function importEvents(db: D1Database, entries: Entry[], report: Report, no
     pending.push({
       entry: v.entry,
       id: v.id,
-      statement: db
-        .prepare("INSERT INTO events (id, start_date, end_date, title, note, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(v.id, v.data.start_date, v.data.end_date ?? null, v.data.title, v.data.note ?? null, v.data.color, v.createdAt, v.updatedAt),
+      statements: [
+        db
+          .prepare("INSERT INTO events (id, start_date, end_date, title, note, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.data.start_date, v.data.end_date ?? null, v.data.title, v.data.note ?? null, v.data.color, v.createdAt, v.updatedAt),
+      ],
     });
   }
   await insertAll(db, pending, report);
@@ -314,13 +361,52 @@ const unknownName = (field: string, label: string, value: string, names: Map<str
 // バックアップの復元で、取り込み先に無いカテゴリを自動で作るときの大分類(行には大分類が入っていない)
 export const RESTORED_CATEGORY_GROUP = "その他";
 
-async function importTransactions(db: D1Database, entries: Entry[], report: Report, now: Date): Promise<void> {
-  if (entries.length === 0) return;
+interface ItemLine {
+  entry: Entry;
+  id: string;
+  given: boolean;
+  transactionId: string;
+  position: number | undefined;
+  order: number;
+  data: ItemInput;
+  createdAt: string | undefined;
+}
+
+// 明細の行を検証して、取引の id ごとにまとめる(並びは position、無ければファイルの順)
+function groupItemLines(itemEntries: Entry[], report: Report): Map<string, ItemLine[]> {
+  const byTx = new Map<string, ItemLine[]>();
+  itemEntries.forEach((entry, order) => {
+    const r = itemLineSchema.safeParse(entry.record);
+    if (!r.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
+      return;
+    }
+    const { id, transaction_id: transactionId, position, created_at: createdAt, ...data } = r.data;
+    const list = byTx.get(transactionId) ?? [];
+    list.push({ entry, id: id ?? crypto.randomUUID(), given: id !== undefined, transactionId, position, order, data, createdAt });
+    byTx.set(transactionId, list);
+  });
+  for (const list of byTx.values()) {
+    list.sort((a, b) => (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER) || a.order - b.order);
+  }
+  return byTx;
+}
+
+async function importTransactions(db: D1Database, entries: Entry[], itemEntries: Entry[], report: Report, now: Date): Promise<void> {
+  if (entries.length === 0 && itemEntries.length === 0) return;
   const nowIso = now.toISOString();
   const today = todayJst(now);
   const [categories, accounts] = await Promise.all([loadNames(db, "categories"), loadNames(db, "accounts")]);
   // バックアップ行(id と created_at がある)に出てきた、取り込み先に無いカテゴリ名 → 作るときの id
   const restoredCategories = new Map<string, string>();
+  const itemsByTx = groupItemLines(itemEntries, report);
+  // 取引の行に結びついた明細のまとまり(取引の id)。残ったものは、対応する取引の行が無い明細
+  const claimed = new Set<string>();
+
+  // 取り込めない取引の明細は、同じ理由でエラーにする
+  const failItems = (entry: Entry, lines: ItemLine[], reason: string) => {
+    for (const l of lines) report(l.entry, { status: "error", message: `取引の行(${entry.line}行目)を取り込めないため、この明細も取り込みませんでした: ${reason}` });
+  };
 
   const valid: {
     entry: Entry;
@@ -328,6 +414,7 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
     given: boolean;
     isBackup: boolean;
     item: TransactionInput;
+    lines: ItemLine[];
     date: string;
     status: string;
     createdAt: string;
@@ -337,28 +424,45 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
   for (const entry of entries) {
     const { extras, rest } = splitExtras(entry.record!, ["id", "status", "created_at", "updated_at"]);
     const e = transactionExtrasSchema.safeParse(extras);
+    const givenId = e.success ? e.data.id : undefined;
+    const lines = givenId !== undefined && !claimed.has(givenId) ? (itemsByTx.get(givenId) ?? []) : [];
+    if (givenId !== undefined) claimed.add(givenId);
+    if ("items" in rest) {
+      const reason = 'items: 明細は取引の行には書けません。type が "item" の行(transaction_id に取引の id)で書いてください';
+      report(entry, { status: "error", message: reason });
+      failItems(entry, lines, reason);
+      continue;
+    }
     const d = transactionInputSchema.safeParse(rest);
     if (!e.success || !d.success) {
       const errors = [...(e.success ? [] : toFieldErrors(e.error)), ...(d.success ? [] : toFieldErrors(d.error))];
       report(entry, { status: "error", message: joinMessages(errors) });
+      failItems(entry, lines, "取引の行の検証エラー");
       continue;
     }
     const item = d.data;
     const isBackup = e.data.id !== undefined && e.data.created_at !== undefined;
     const errors: string[] = [];
     if (item.date && item.date > today) errors.push(`date: 未来の日付(${item.date})は取り込めません。今日は ${today} です`);
-    if (item.category && !categories.has(item.category)) {
-      // 復元では、元のカテゴリを再現するために自動で作る。名前が規則(30文字・前後の空白なし)に合うものだけ
-      const restorable = isBackup && categoryNameField("category").safeParse(item.category).data === item.category;
+    // 取引と明細のカテゴリを確かめる。復元では、元のカテゴリを再現するために自動で作る。名前が規則(30文字・前後の空白なし)に合うものだけ
+    const checkCategory = (name: string, field: string) => {
+      if (categories.has(name)) return;
+      const restorable = isBackup && categoryNameField("category").safeParse(name).data === name;
       if (restorable) {
-        if (!restoredCategories.has(item.category)) restoredCategories.set(item.category, `cat_${crypto.randomUUID()}`);
+        if (!restoredCategories.has(name)) restoredCategories.set(name, `cat_${crypto.randomUUID()}`);
       } else {
-        errors.push(unknownName("category", "カテゴリ", item.category, categories));
+        errors.push(unknownName(field, "カテゴリ", name, categories));
       }
-    }
+    };
+    if (item.category) checkCategory(item.category, "category");
+    for (const l of lines) if (l.data.category) checkCategory(l.data.category, `items(${l.entry.line}行目).category`);
     if (item.account && !accounts.has(item.account)) errors.push(unknownName("account", "口座", item.account, accounts));
+    if (lines.length > MAX_ITEMS) errors.push(`items: 明細が${lines.length}行あります。1取引あたり${MAX_ITEMS}行までです`);
+    const mismatch = itemsTotalMismatch(item.amount, lines.map((l) => l.data));
+    if (mismatch) errors.push(`items: ${mismatch}`);
     if (errors.length > 0) {
       report(entry, { status: "error", message: errors.join(" / ") });
+      failItems(entry, lines, errors.join(" / "));
       continue;
     }
     const date = item.date ?? today;
@@ -370,15 +474,19 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
       // id と created_at の両方があるのは、エクスポート由来のバックアップ行
       isBackup,
       item,
+      lines,
       date,
-      status: e.data.status ?? (!item.merchant || !item.category ? "needs_review" : "ok"),
+      status: e.data.status ?? (needsReview(item.merchant, item.category, lines.map((l) => l.data)) ? "needs_review" : "ok"),
       createdAt,
       updatedAt: e.data.updated_at ?? createdAt,
       hash: await dedupHash(date, item.amount, item.merchant),
     });
   }
 
-  const existingIdSet = await existingIds(db, "transactions", valid.filter((v) => v.given).map((v) => v.id));
+  const [existingIdSet, existingItemIds] = await Promise.all([
+    existingIds(db, "transactions", valid.filter((v) => v.given).map((v) => v.id)),
+    existingIds(db, "transaction_items", [...itemsByTx.values()].flat().filter((l) => l.given).map((l) => l.id)),
+  ]);
   // 既存の取引の dedup_hash → 最も古い取引の id
   const existingHash = new Map<string, string>();
   for (const part of chunks([...new Set(valid.map((v) => v.hash))], IN_CHUNK)) {
@@ -390,13 +498,23 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
   }
 
   const seenIds = new Set<string>();
+  const seenItemIds = new Set<string>();
   const seenHash = new Map<string, string>();
   const pending: Pending[] = [];
   // 実際に取り込む行が使う、自動作成のカテゴリ(取り込まれない行のぶんは作らない)
   const createStatements = new Map<string, D1PreparedStatement>();
+  const useCategory = (name: string | undefined | null): string | null => {
+    if (!name) return null;
+    const restoredId = restoredCategories.get(name);
+    if (!categories.has(name) && restoredId && !createStatements.has(name)) {
+      createStatements.set(name, db.prepare("INSERT INTO categories (id, name, group_name) VALUES (?, ?, ?)").bind(restoredId, name, RESTORED_CATEGORY_GROUP));
+    }
+    return categories.get(name) ?? restoredId!;
+  };
   for (const v of valid) {
     if (existingIdSet.has(v.id) || seenIds.has(v.id)) {
       report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」の取引は既にあるためスキップしました` });
+      for (const l of v.lines) report(l.entry, { status: "skipped_exists", id: l.id, message: `取引「${v.id}」が既にあるため、この明細もスキップしました` });
       continue;
     }
     if (!v.item.allow_duplicate && !v.isBackup) {
@@ -407,50 +525,81 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
           id: dupOf,
           message: `同じ日付・金額・店名の取引(id「${dupOf}」)があるため重複としてスキップしました。別の買い物なら allow_duplicate:true を付けてください`,
         });
+        for (const l of v.lines) report(l.entry, { status: "skipped_duplicate", id: dupOf, message: "取引が重複としてスキップされたため、この明細もスキップしました" });
         continue;
       }
     }
-    seenIds.add(v.id);
-    if (!seenHash.has(v.hash)) seenHash.set(v.hash, v.id);
-    const restoredId = v.item.category ? restoredCategories.get(v.item.category) : undefined;
-    if (v.item.category && restoredId && !createStatements.has(v.item.category)) {
-      createStatements.set(
-        v.item.category,
-        db.prepare("INSERT INTO categories (id, name, group_name) VALUES (?, ?, ?)").bind(restoredId, v.item.category, RESTORED_CATEGORY_GROUP),
-      );
+    const takenItem = v.lines.find((l) => existingItemIds.has(l.id) || seenItemIds.has(l.id));
+    if (takenItem) {
+      const reason = `明細の id「${takenItem.id}」が既にあります。明細の id を変えるか省いてください`;
+      report(v.entry, { status: "error", message: reason });
+      failItems(v.entry, v.lines, reason);
+      continue;
     }
+    seenIds.add(v.id);
+    for (const l of v.lines) seenItemIds.add(l.id);
+    if (!seenHash.has(v.hash)) seenHash.set(v.hash, v.id);
+    const categoryId = useCategory(v.item.category);
     pending.push({
       entry: v.entry,
       id: v.id,
-      statement: db
-        .prepare(
-          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          v.id,
-          v.date,
-          v.item.amount,
-          v.item.merchant ?? null,
-          v.item.category ? (categories.get(v.item.category) ?? restoredCategories.get(v.item.category)!) : null,
-          v.item.account ? accounts.get(v.item.account)! : null,
-          v.item.memo ?? null,
-          v.item.source,
-          v.status,
-          v.hash,
-          v.createdAt,
-          v.updatedAt,
-          v.item.tax_flag ?? null,
+      children: v.lines.map((l) => ({ entry: l.entry, id: l.id })),
+      statements: [
+        db
+          .prepare(
+            `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            v.id,
+            v.date,
+            v.item.amount,
+            v.item.merchant ?? null,
+            categoryId,
+            v.item.account ? accounts.get(v.item.account)! : null,
+            v.item.memo ?? null,
+            v.item.source,
+            v.status,
+            v.hash,
+            v.createdAt,
+            v.updatedAt,
+            v.item.tax_flag ?? null,
+          ),
+        // 明細は、取引と同じ batch で書く(取引だけ・明細だけが残らない)。position は並べ直した順(0 始まり)
+        ...v.lines.map((l, position) =>
+          db
+            .prepare(
+              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt),
         ),
+      ],
     });
   }
+
+  // 取引の行が見つからない明細。同じ id の明細が既にあれば(同じバックアップを2回戻したなど)スキップ、無ければエラー
+  for (const [txId, lines] of itemsByTx) {
+    if (claimed.has(txId)) continue;
+    for (const l of lines) {
+      if (l.given && existingItemIds.has(l.id)) {
+        report(l.entry, { status: "skipped_exists", id: l.id, message: `id「${l.id}」の明細は既にあるためスキップしました` });
+      } else {
+        report(l.entry, {
+          status: "error",
+          message: `transaction_id: 「${txId}」の取引の行がこのファイルにありません。明細は、取引の行(type: "transaction"、同じ id)といっしょに取り込みます`,
+        });
+      }
+    }
+  }
+
   // カテゴリを先に作る(取引の外部キーのため)。同じ名前が同時に作られて失敗したら、この回は取引ごとエラーにする
   if (createStatements.size > 0) {
     try {
       await db.batch([...createStatements.values()]);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      for (const p of pending) report(p.entry, { status: "error", message: `カテゴリを作成できませんでした(${reason})` });
+      for (const p of pending) reportPending(report, p, { status: "error", message: `カテゴリを作成できませんでした(${reason})` });
       return;
     }
   }
@@ -498,9 +647,11 @@ async function importAttachments(db: D1Database, entries: Entry[], report: Repor
     pending.push({
       entry: v.entry,
       id: v.id,
-      statement: db
-        .prepare("INSERT INTO attachments (id, r2_key, date, transaction_id, event_id, caption, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(v.id, v.data.r2_key, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.caption ?? null, v.data.created_at ?? nowIso),
+      statements: [
+        db
+          .prepare("INSERT INTO attachments (id, r2_key, date, transaction_id, event_id, caption, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.data.r2_key, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.caption ?? null, v.data.created_at ?? nowIso),
+      ],
     });
   }
   await insertAll(db, pending, report);
@@ -575,9 +726,11 @@ async function importLinks(db: D1Database, entries: Entry[], report: Report, now
     pending.push({
       entry: v.entry,
       id: v.id,
-      statement: db
-        .prepare("INSERT INTO links (id, url, kind, title, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
+      statements: [
+        db
+          .prepare("INSERT INTO links (id, url, kind, title, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
+      ],
     });
   }
   await insertAll(db, pending, report);
@@ -585,7 +738,7 @@ async function importLinks(db: D1Database, entries: Entry[], report: Report, now
 
 /**
  * JSONL(または JSON 配列)を取り込む。行ごとに結果を返し、一部の行がエラーでも他の行は取り込む。
- * 順序はファイル内の順に関係なく event → transaction → attachment → link(外部キーの都合)。結果は元の行の順。
+ * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link(外部キーの都合)。結果は元の行の順。
  */
 export async function importRecords(db: D1Database, text: string, options: ImportOptions = {}): Promise<ImportResponse> {
   if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
@@ -601,7 +754,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], attachment: [], link: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -630,7 +783,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
 
   const nowIso = now.toISOString();
   await importEvents(db, byType.event, report, nowIso);
-  await importTransactions(db, byType.transaction, report, now);
+  await importTransactions(db, byType.transaction, byType.item, report, now);
   await importAttachments(db, byType.attachment, report, nowIso);
   await importLinks(db, byType.link, report, nowIso);
 
