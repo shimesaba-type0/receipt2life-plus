@@ -1,4 +1,5 @@
-import type { CategoriesData, LinkView } from "../../../src/api/contract";
+import type { CategoriesData, LinkView, TaxFlag } from "../../../src/api/contract";
+import { UI_TAX_FLAG_LABELS } from "../taxFlags";
 
 // 「大分類・カテゴリ」を1つのチップ文言にする。大分類が分からない・同名ならカテゴリ名だけ。未設定は null
 export function categoryChipLabel(category: string | null, cats: CategoriesData): string | null {
@@ -38,4 +39,22 @@ export function isSafeLinkHref(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+// ---- 税金のフラグ ----
+
+// 選択肢(先頭は「なし」。value が空文字のものがフラグなし)
+export const TAX_FLAG_OPTIONS: { value: "" | TaxFlag; label: string }[] = [
+  { value: "", label: "なし" },
+  ...(Object.keys(UI_TAX_FLAG_LABELS) as TaxFlag[]).map((value) => ({ value, label: UI_TAX_FLAG_LABELS[value] })),
+];
+
+// select の値を API に送る値にする。空や知らない値はフラグなし(null)
+export function parseTaxFlagField(value: string): TaxFlag | null {
+  return Object.prototype.hasOwnProperty.call(UI_TAX_FLAG_LABELS, value) ? (value as TaxFlag) : null;
+}
+
+// 支出の行に出すチップの文言。フラグなしは null
+export function taxFlagChipLabel(flag: TaxFlag | null | undefined): string | null {
+  return flag ? (UI_TAX_FLAG_LABELS[flag] ?? null) : null;
 }

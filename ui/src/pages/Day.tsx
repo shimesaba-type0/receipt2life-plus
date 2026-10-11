@@ -21,7 +21,7 @@ import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-que
 import { LinkCard } from "../components/LinkCard";
 import { PhotoUploader } from "../components/PhotoUploader";
 import { Link } from "../router";
-import { categoryChipLabel } from "./dayLogic";
+import { TAX_FLAG_OPTIONS, categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
 import "./Day.css";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -146,7 +146,7 @@ export function Day(props: { date: string }) {
       return false;
     }
     const ok = await guarded(
-      async () => failOf(await run(() => updateTransaction(id, { amount, merchant: nullable(form.merchant), category: nullable(form.category), account: nullable(form.account), memo: nullable(form.memo) }))),
+      async () => failOf(await run(() => updateTransaction(id, { amount, merchant: nullable(form.merchant), category: nullable(form.category), account: nullable(form.account), memo: nullable(form.memo), tax_flag: parseTaxFlagField(form.tax_flag) }))),
       "支出を保存しました。",
     );
     if (ok) setEditingTx(null);
@@ -169,7 +169,7 @@ export function Day(props: { date: string }) {
       async () =>
         failOf(
           await run(() =>
-            addTransactions([{ date, amount, merchant: optional(form.merchant), category: optional(form.category), account: optional(form.account), memo: optional(form.memo), source: "manual", allow_duplicate: true }]),
+            addTransactions([{ date, amount, merchant: optional(form.merchant), category: optional(form.category), account: optional(form.account), memo: optional(form.memo), tax_flag: parseTaxFlagField(form.tax_flag), source: "manual", allow_duplicate: true }]),
           ),
         ),
       "支出を追加しました。",
@@ -312,12 +312,13 @@ export function Day(props: { date: string }) {
             <ul class="day__list day__txlist">
               {data.transactions.map((tx) => {
                 const chip = categoryChipLabel(tx.category, cats);
+                const taxChip = taxFlagChipLabel(tx.tax_flag);
                 return (
                 <li key={tx.id} class="day__item">
                   {editingTx === tx.id ? (
                     <TxFormView
                       title="支出を編集"
-                      initial={{ amount: String(tx.amount), merchant: tx.merchant ?? "", category: tx.category ?? "", account: tx.account ?? "", memo: tx.memo ?? "" }}
+                      initial={{ amount: String(tx.amount), merchant: tx.merchant ?? "", category: tx.category ?? "", account: tx.account ?? "", memo: tx.memo ?? "", tax_flag: tx.tax_flag ?? "" }}
                       cats={cats}
                       busy={busy}
                       onSubmit={(f) => saveTx(tx.id, f)}
@@ -334,6 +335,7 @@ export function Day(props: { date: string }) {
                         <span class="day__tags">
                           {chip && <span class="chip">{chip}</span>}
                           {tx.account && <span class="day__account muted">{tx.account}</span>}
+                          {taxChip && <span class="chip day__taxflag">{taxChip}</span>}
                         </span>
                         {tx.memo && <span class="muted day__memo">{tx.memo}</span>}
                       </span>
@@ -706,8 +708,10 @@ interface TxForm {
   category: string;
   account: string;
   memo: string;
+  // "" がフラグなし
+  tax_flag: string;
 }
-const emptyTx: TxForm = { amount: "", merchant: "", category: "", account: "", memo: "" };
+const emptyTx: TxForm = { amount: "", merchant: "", category: "", account: "", memo: "", tax_flag: "" };
 
 function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesData; busy: boolean; onSubmit: (f: TxForm) => Promise<boolean>; onCancel: () => void; onDelete?: () => void }) {
   const { initial, cats, busy } = props;
@@ -752,6 +756,14 @@ function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesDat
         {cats.accounts.map((a) => (
           <option value={a} key={a}>
             {a}
+          </option>
+        ))}
+      </select>
+      <label for={`${id}-taxflag`}>税金のフラグ</label>
+      <select id={`${id}-taxflag`} value={f.tax_flag} onChange={set("tax_flag")}>
+        {TAX_FLAG_OPTIONS.map((o) => (
+          <option value={o.value} key={o.value}>
+            {o.label}
           </option>
         ))}
       </select>
