@@ -15,6 +15,7 @@
 
 - 1行1レコードで、`type` が `event` → `transaction` → `item` → `attachment` → `link` の順に並ぶ(`item` はレシートの明細の行。`id`, `transaction_id`, `position`, `name`, `amount`, `category`, `tax_flag`, `memo`, `created_at`。`category` と `tax_flag` は行自身の値で、`null` は取引の値に従う。`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`)
 - カテゴリと口座は、名前で書き出される
+- `transaction` の行には、レシートの情報 `paid_time` / `merchant_phone` / `merchant_address` / `invoice_number` / `clerk_name` / `receipt_no`(なしは `null`)も入る
 - `transaction` の行には `tax_flag`(税金の控除用フラグ。`medical` / `self_medication` / `donation`、なしは `null`)が入る
 - 写真の実体は含まれない(zip でまとめて書き出す機能は未実装。今後の候補)
 
@@ -41,6 +42,7 @@
 - エクスポートした行(`id` と `created_at` がある取引)は、重複判定を飛ばして、そのまま戻る
 - `id` か `created_at` が無い行は、重複判定をする(同日・同額・同じ店はスキップ)
 - `tax_flag` が無い古いバックアップも、そのまま取り込める(フラグなしになる)。`tax_flag` に未知の値がある行は、その行だけエラー
+- レシートの情報(`paid_time` など6項目)が無い古いバックアップも、そのまま取り込める(項目は空になる)。値があれば登録時と同じ規則で検証・正規化し(例: `invoice_number` は `T` + 数字13桁に正規化、合わなければその行だけエラー)、重複判定は `paid_time` があれば時刻も含める
 - 明細(`item` の行)は、同じファイルの取引の行(`id` が `transaction_id` と一致)といっしょに取り込む。取引と明細は一度に書くので、片方だけが残ることはない
   - 明細の合計が取引の `amount` と合わないときは、その取引と明細の行がエラー(差額が出る)。明細のカテゴリが未知(エクスポートした行では自動で作る)、1取引50行を超える、明細の `id` が既にある場合も同じ
   - 取引が `skipped_exists`(同じ id がある)・`skipped_duplicate` なら、明細の行も同じ結果になる。バックアップを同じDBに何度戻しても増えない
