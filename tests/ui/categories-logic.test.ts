@@ -21,9 +21,9 @@ const sample = [cat("食費", "食費", 3), cat("日用品", "生活", 1), cat("
 describe("groupCategories", () => {
   it("大分類ごとにまとめる(大分類は最初に現れた順、中は元の順)", () => {
     expect(groupCategories(sample)).toEqual([
-      { group_name: "食費", categories: [{ name: "食費", usage: 3 }, { name: "外食", usage: 0 }] },
-      { group_name: "生活", categories: [{ name: "日用品", usage: 1 }] },
-      { group_name: "住まい", categories: [{ name: "光熱費", usage: 0 }] },
+      { group_name: "食費", categories: [{ name: "食費", icon: null, usage: 3 }, { name: "外食", icon: null, usage: 0 }] },
+      { group_name: "生活", categories: [{ name: "日用品", icon: null, usage: 1 }] },
+      { group_name: "住まい", categories: [{ name: "光熱費", icon: null, usage: 0 }] },
     ]);
   });
   it("空なら空", () => {

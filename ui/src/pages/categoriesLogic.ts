@@ -46,8 +46,8 @@ export type PatchCheck = { ok: true; patch: CategoryPatch } | { ok: false; error
 // 編集フォームの値から、変えた項目だけの PATCH 本文を作る
 export function buildCategoryPatch(
   categories: CategoryView[],
-  current: { name: string; group_name: string },
-  form: { name: string; group: string },
+  current: { name: string; group_name: string; icon?: CategoryIconKey | null },
+  form: { name: string; group: string; icon?: CategoryIconKey | null },
 ): PatchCheck {
   const v = validateName(form.name, "名前", MAX_CATEGORY_NAME);
   if (!v.ok) return v;
@@ -57,6 +57,8 @@ export function buildCategoryPatch(
     patch.new_name = v.value;
   }
   if (form.group !== current.group_name) patch.group_name = form.group;
+  // アイコンは、フォームが値を持つ(undefined でない)ときだけ比べる。null は外す
+  if (form.icon !== undefined && form.icon !== (current.icon ?? null)) patch.icon = form.icon;
   return Object.keys(patch).length === 0 ? { ok: false, error: "変更がありません" } : { ok: true, patch };
 }
 

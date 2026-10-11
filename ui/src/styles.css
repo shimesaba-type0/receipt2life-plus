@@ -60,6 +60,8 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
 .muted { color: var(--muted); }
 .num { font-variant-numeric: tabular-nums; }
 .chip { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); }
+.chip--cat { display: inline-flex; align-items: center; gap: 4px; }
+.cat-icon { flex: none; }
 .chip--warn { background: var(--warn-soft); }
 /* 祝日: 色だけに頼らず名称の文字を出す。薄い背景ではなく文字色と薄い枠 */
 .chip--holiday { background: transparent; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
