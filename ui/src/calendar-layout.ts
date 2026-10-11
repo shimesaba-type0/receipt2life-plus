@@ -70,3 +70,25 @@ export function layoutWeekBands(week: string[], events: EventView[]): Band[] {
 export function laneCount(bands: Band[]): number {
   return bands.reduce((max, b) => Math.max(max, b.lane + 1), 0);
 }
+
+// 出来事の期間の短い表記。"10/3〜10/5"、1日なら "10/7"
+export function formatPeriodShort(start: string, end: string | null): string {
+  const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  const last = eventEnd({ start_date: start, end_date: end });
+  return last === start ? md(start) : `${md(start)}〜${md(last)}`;
+}
+
+// 日セルの金額。¥なしで狭い幅でも収まる。0・未定義は空
+export function formatCellAmount(total: number | undefined): string {
+  return total ? total.toLocaleString("ja-JP") : "";
+}
+
+// 右ペインの既定の選択日: 今日がその月なら今日、違えば月初
+export function defaultSelectedDate(month: string, today: string): string {
+  return today.slice(0, 7) === month ? today : monthRange(month).from;
+}
+
+// 支出行の2行目(カテゴリ・口座)
+export function txSubline(tx: { category: string | null; account: string | null }): string {
+  return [tx.category, tx.account].filter(Boolean).join("・");
+}

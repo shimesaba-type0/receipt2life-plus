@@ -1,19 +1,45 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { CalendarData, EventView, FieldError } from "../../../src/api/contract";
 import { getCalendar } from "../api";
-import { buildMonthGrid, eventEnd, laneCount, layoutWeekBands } from "../calendar-layout";
+import { buildMonthGrid, defaultSelectedDate, eventEnd, formatCellAmount, formatPeriodShort, laneCount, layoutWeekBands } from "../calendar-layout";
 import { addMonths, formatDateJa, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
+import { DayPane } from "../components/DayPane";
 import { MonthPicker } from "../components/MonthPicker";
-import { Link } from "../router";
+import { Link, navigate } from "../router";
 import "./Calendar.css";
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 type State = { status: "loading" } | { status: "error"; errors: FieldError[] } | { status: "ready"; data: CalendarData };
 
+// 読み上げ用の期間(長い表記)。画面の表示は formatPeriodShort
 function periodText(e: EventView): string {
   const end = eventEnd(e);
   return end === e.start_date ? formatDateJa(e.start_date) : `${formatDateJa(e.start_date)} 〜 ${formatDateJa(end)}`;
+}
+
+// PC幅(2ペイン)かどうか。900px は styles.css の左メニューの切り替えと同じ
+const WIDE_QUERY = "(min-width: 900px)";
+function useWide(): boolean {
+  const [wide, setWide] = useState(() => typeof matchMedia === "function" && matchMedia(WIDE_QUERY).matches);
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const mq = matchMedia(WIDE_QUERY);
+    const onChange = () => setWide(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
+
+function ChevronIcon(props: { dir: "left" | "right" | "down" }) {
+  const d = props.dir === "left" ? "M15 6l-6 6 6 6" : props.dir === "right" ? "M9 6l6 6-6 6" : "M7 10l5 5 5-5";
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
 }
 
 export function Calendar(props: { month: string | null }) {
@@ -22,6 +48,11 @@ export function Calendar(props: { month: string | null }) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const wide = useWide();
+  const [picked, setPicked] = useState<string | null>(null);
+  // 月を移動したら、選択日は既定(今日か月初)に戻す
+  useEffect(() => setPicked(null), [month]);
+  const selected = picked ?? defaultSelectedDate(month, today);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,22 +79,26 @@ export function Calendar(props: { month: string | null }) {
   return (
     <section class="page cal">
       <header class="cal__head">
-        <Link class="cal__nav" href={`/calendar?month=${addMonths(month, -1)}`} aria-label="前の月">
-          ‹
-        </Link>
-        <div class="cal__title">
-          <h1 class="page__title">
+        <div class="cal__sum">
+          <span class="cal__sum-label">{Number(month.slice(5))}月の合計</span>
+          <span class="cal__total num" aria-live="polite">
+            {data ? formatYen(data.total) : "—"}
+          </span>
+        </div>
+        <div class="cal__nav-group">
+          <Link class="cal__nav" href={`/calendar?month=${addMonths(month, -1)}`} aria-label="前の月">
+            <ChevronIcon dir="left" />
+          </Link>
+          <h1 class="cal__title">
             <button class="cal__pick" type="button" aria-label="年月を選んで移動" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}>
-              {formatMonthJa(month)} <span aria-hidden="true">▾</span>
+              {formatMonthJa(month)}
+              <ChevronIcon dir="down" />
             </button>
           </h1>
-          <p class="cal__total num" aria-live="polite">
-            {data ? `合計 ${formatYen(data.total)}` : "合計 —"}
-          </p>
+          <Link class="cal__nav" href={`/calendar?month=${addMonths(month, 1)}`} aria-label="次の月">
+            <ChevronIcon dir="right" />
+          </Link>
         </div>
-        <Link class="cal__nav" href={`/calendar?month=${addMonths(month, 1)}`} aria-label="次の月">
-          ›
-        </Link>
       </header>
 
       {pickerOpen && <MonthPicker month={month} todayMonth={monthOf(today)} onClose={() => setPickerOpen(false)} />}
@@ -82,6 +117,8 @@ export function Calendar(props: { month: string | null }) {
       )}
       {state.status === "loading" && <p class="muted" role="status">読み込み中…</p>}
 
+      <div class="cal__layout">
+      <div class="cal__main">
       <div class="cal__grid card" aria-busy={state.status === "loading"}>
         <div class="cal__weekdays" aria-hidden="true">
           {WEEKDAY_LABELS.map((w, i) => (
@@ -100,11 +137,25 @@ export function Calendar(props: { month: string | null }) {
                 const cls = ["cal__day", col === 0 ? "is-sun" : col === 6 ? "is-sat" : "", monthOf(date) !== month ? "is-out" : "", date === today ? "is-today" : ""]
                   .filter(Boolean)
                   .join(" ");
+                const onClick = (e: MouseEvent) => {
+                  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  // PC幅は右ペインの選択を切り替え、モバイルは日のページへ移動する
+                  if (wide) setPicked(date);
+                  else navigate(`/day/${date}`);
+                };
                 return (
-                  <Link key={date} href={`/day/${date}`} class={cls} aria-label={`${formatDateJa(date)}${day ? ` ${formatYen(day.total)}(${day.count}件)` : ""}`}>
+                  <a
+                    key={date}
+                    href={`/day/${date}`}
+                    class={`${cls}${wide && date === selected ? " is-selected" : ""}`}
+                    onClick={onClick}
+                    aria-current={wide && date === selected ? "date" : undefined}
+                    aria-label={`${formatDateJa(date)}${day ? ` ${formatYen(day.total)}(${day.count}件)` : ""}`}
+                  >
                     <span class="cal__date num">{Number(date.slice(8))}</span>
-                    <span class="cal__amount num">{day ? formatYen(day.total) : ""}</span>
-                  </Link>
+                    <span class="cal__amount num">{formatCellAmount(day?.total)}</span>
+                  </a>
                 );
               })}
               {bands.map((b) => (
@@ -123,27 +174,37 @@ export function Calendar(props: { month: string | null }) {
         })}
       </div>
 
-      <div class="card cal__events">
+      <section class="cal__events" aria-label="今月の出来事">
         <h2 class="cal__events-title">今月の出来事</h2>
-        {state.status === "ready" && state.data.events.length === 0 && <p class="muted">この月の出来事はありません。</p>}
+        {state.status === "ready" && state.data.events.length === 0 && <p class="muted cal__empty">この月の出来事はありません。</p>}
         {data && data.events.length > 0 && (
           <ul class="cal__list">
             {[...data.events]
               .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.id.localeCompare(b.id))
               .map((e) => (
                 <li key={e.id}>
-                  <Link class="cal__item" href={`/day/${e.start_date}`}>
+                  <Link class="cal__item" href={`/day/${e.start_date}`} aria-label={`${e.title}(${periodText(e)})`}>
                     <span class={`cal__dot cal__dot--${e.color}`} aria-hidden="true" />
                     <span class="cal__item-title">{e.title}</span>
-                    <span class="cal__item-period muted">{periodText(e)}</span>
+                    <span class="cal__item-period muted num">{formatPeriodShort(e.start_date, e.end_date)}</span>
                   </Link>
                 </li>
               ))}
           </ul>
         )}
-        <Link class="btn cal__add" href={`/day/${addDate}`}>
+        <Link class="cal__add" href={`/day/${addDate}`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
           出来事を追加
         </Link>
+      </section>
+      </div>
+      {wide && (
+        <div class="cal__side">
+          <DayPane date={selected} />
+        </div>
+      )}
       </div>
     </section>
   );

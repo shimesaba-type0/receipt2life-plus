@@ -1,48 +1,57 @@
-/* 月カレンダー専用 */
-.cal { --lane-h: 18px; --lane-gap: 2px; --date-h: 26px; }
-.cal__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.cal__title { text-align: center; }
-.cal__pick { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; border-radius: 22px; background: transparent; font: inherit; font-weight: 700; color: inherit; cursor: pointer; }
-.cal__pick:hover { background: var(--accent-soft); }
-.cal__total { margin: 2px 0 0; font-size: 15px; color: var(--muted); }
-.cal__nav { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); font-size: 24px; line-height: 1; }
+/* 月カレンダー専用。数値はデザイン案(Calendar.dc.html / Desktop.dc.html)に合わせる */
+.cal { --lane-h: 17px; --lane-gap: 2px; --cell-h: 78px; --band-top: 34px; --date-size: 26px; --other: #a7b0ac; }
+.cal__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 4px; }
+.cal__sum { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal__sum-label { font-size: 13px; color: var(--muted); }
+.cal__total { font-size: 26px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.cal__nav-group { display: flex; align-items: center; flex: none; }
+.cal__nav { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; background: transparent; color: var(--ink); border-radius: 22px; }
+.cal__nav:hover { background: var(--accent-soft); color: var(--ink); }
+.cal__title { margin: 0; font-size: inherit; }
+.cal__pick { display: flex; align-items: center; justify-content: center; gap: 2px; min-height: 44px; padding: 0 8px; border: 0; border-radius: 22px; background: var(--accent-soft); font: inherit; font-size: 17px; font-weight: 700; color: var(--ink); cursor: pointer; }
+.cal__pick svg { width: 18px; height: 18px; color: var(--accent); }
 
-.cal__grid { padding: 8px; }
+.cal__layout { display: flex; flex-direction: column; gap: 16px; }
+.cal__main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cal__side { min-width: 0; }
+
+.cal__grid { padding: 8px 4px 4px; }
 .cal__weekdays, .cal__week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
-.cal__wd { text-align: center; font-size: 12px; padding: 4px 0; color: var(--muted); }
+.cal__weekdays { padding-bottom: 4px; }
+.cal__wd { text-align: center; font-size: 12px; padding: 6px 0; color: var(--muted); }
 .cal__week { position: relative; border-top: 1px solid var(--line-soft); }
 
-.cal__day { display: flex; flex-direction: column; align-items: center; min-height: calc(var(--date-h) + var(--lanes, 0) * (var(--lane-h) + var(--lane-gap)) + 28px); padding: 2px 1px 4px; }
+/* 日セル: 日付が上、金額が下。帯が増えたぶんだけ高くなる */
+.cal__day { display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; min-height: calc(var(--cell-h) + max(var(--lanes, 0) - 1, 0) * (var(--lane-h) + var(--lane-gap))); padding: 4px 0 6px; }
 .cal__day:hover { background: var(--accent-soft); color: inherit; }
-.cal__date { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-bottom: calc(var(--date-h) - 24px + var(--lanes, 0) * (var(--lane-h) + var(--lane-gap))); border-radius: 12px; font-size: 13px; }
-.cal__amount { font-size: 10px; line-height: 1.2; color: var(--muted); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.is-sun, .is-sun .cal__date { color: #c0392b; }
-.is-sat, .is-sat .cal__date { color: #2f62b5; }
-.cal__wd.is-sun { color: #c0392b; }
-.cal__wd.is-sat { color: #2f62b5; }
-.cal__day.is-out { opacity: 0.4; }
-.cal__day.is-today .cal__date { background: var(--accent); color: #fff; font-weight: 700; }
+.cal__date { display: inline-flex; align-items: center; justify-content: center; width: var(--date-size); height: var(--date-size); border-radius: calc(var(--date-size) / 2); font-size: 14px; font-weight: 500; }
+.cal__amount { font-size: 11px; line-height: 14px; min-height: 14px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; }
+.cal__wd.is-sun, .cal__day.is-sun .cal__date { color: var(--danger); }
+.cal__wd.is-sat, .cal__day.is-sat .cal__date { color: var(--sat); }
+/* 前後の月の日は、薄くせず文字色を変える(金額も) */
+.cal__day.is-out .cal__date, .cal__day.is-out .cal__amount { color: var(--other); }
+.cal__day.is-today .cal__date { background: var(--accent); color: #fff; }
 
 /* 期間の帯: 日の枠の上に重ねる(タップは下の日に通す) */
 .cal__band {
   position: absolute;
-  top: calc(var(--date-h) + var(--lane) * (var(--lane-h) + var(--lane-gap)));
-  left: calc(var(--col) * 100% / 7 + 2px);
-  width: calc(var(--span) * 100% / 7 - 4px);
+  top: calc(var(--band-top) + var(--lane) * (var(--lane-h) + var(--lane-gap)));
+  left: calc(var(--col) * 100% / 7);
+  width: calc(var(--span) * 100% / 7);
   height: var(--lane-h);
   display: flex; align-items: center;
-  padding: 0 4px;
+  padding: 0 5px;
   border-left: 3px solid var(--band);
   background: var(--band-soft);
-  border-radius: 3px;
+  border-radius: 6px;
   color: var(--ink);
-  font-size: 11px; line-height: 1;
+  font-size: 11px; line-height: var(--lane-h);
   pointer-events: none;
   overflow: hidden;
 }
-.cal__band.is-cont-before { left: calc(var(--col) * 100% / 7); width: calc(var(--span) * 100% / 7 - 2px); border-radius: 0 3px 3px 0; }
-.cal__band.is-cont-after { border-radius: 3px 0 0 3px; width: calc(var(--span) * 100% / 7 - 2px); }
-.cal__band.is-cont-before.is-cont-after { width: calc(var(--span) * 100% / 7); border-radius: 0; }
+/* 続き側の辺は角を付けず、左端の線も付けない */
+.cal__band.is-cont-before { border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cal__band.is-cont-after { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .cal__band-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal__band--red, .cal__dot--red { --band: var(--event-red); --band-soft: var(--event-red-soft); }
 .cal__band--orange, .cal__dot--orange { --band: var(--event-orange); --band-soft: var(--event-orange-soft); }
@@ -50,16 +59,29 @@
 .cal__band--blue, .cal__dot--blue { --band: var(--event-blue); --band-soft: var(--event-blue-soft); }
 .cal__band--purple, .cal__dot--purple { --band: var(--event-purple); --band-soft: var(--event-purple-soft); }
 
-.cal__events-title { margin: 0 0 8px; font-size: 16px; }
-.cal__list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; }
-.cal__item { display: flex; align-items: center; gap: 10px; min-height: 44px; flex-wrap: wrap; }
+/* 今月の出来事: 見出しはカードの外、リストが1枚のカード */
+.cal__events { display: flex; flex-direction: column; gap: 8px; padding: 0 8px; }
+.cal__events-title { margin: 0; font-size: 16px; font-weight: 700; }
+.cal__empty { margin: 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-size: 14px; }
+.cal__list { list-style: none; margin: 0; padding: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.cal__list li { border-bottom: 1px solid var(--line-soft); }
+.cal__list li:last-child { border-bottom: 0; }
+.cal__item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 16px; }
 .cal__dot { width: 12px; height: 12px; border-radius: 6px; background: var(--band); flex: none; }
-.cal__item-title { font-weight: 500; }
-.cal__item-period { font-size: 13px; }
-.cal__add { display: inline-flex; align-items: center; justify-content: center; }
+.cal__item-title { flex: 1; min-width: 0; font-size: 15px; }
+.cal__item-period { flex: none; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cal__add { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border: 1px solid var(--accent); border-radius: 24px; color: var(--accent); font-size: 15px; font-weight: 500; }
 
-@media (max-width: 480px) {
-  .cal .page__title { font-size: 18px; }
-  .cal__grid { padding: 4px; }
-  .cal__amount { font-size: 9px; }
+/* PC幅: 左にカレンダー(3)、右に選択日の詳細(2) */
+@media (min-width: 900px) {
+  .cal { --lane-h: 20px; --cell-h: 96px; --band-top: 40px; --date-size: 28px; max-width: 1200px; }
+  .cal__layout { flex-direction: row; align-items: flex-start; gap: 20px; }
+  .cal__main { flex: 3 1 0; }
+  .cal__side { flex: 2 1 0; }
+  .cal__grid { padding: 12px 8px 8px; }
+  .cal__day { align-items: flex-start; padding: 6px 8px 8px; border-left: 1px solid var(--bg); }
+  .cal__amount { align-self: flex-end; font-size: 13px; line-height: 16px; min-height: 16px; }
+  .cal__day.is-selected { background: #f1f7f4; }
+  .cal__band { font-size: 12px; padding: 0 8px; }
+  .cal__events { padding: 0; }
 }

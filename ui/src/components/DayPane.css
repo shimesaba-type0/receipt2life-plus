@@ -1,0 +1,32 @@
+/* カレンダー右側の日の詳細(PC幅で表示。読み取り専用) */
+.dp { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dp__card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 24px; display: flex; flex-direction: column; gap: 10px; }
+.dp__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dp__date { margin: 0; font-size: 18px; font-weight: 700; }
+.dp__total { font-size: 20px; font-weight: 700; }
+.dp__count { margin: 0; font-size: 13px; }
+.dp__card p { margin: 0; }
+.dp__sub { margin: 0; font-size: 16px; font-weight: 700; }
+
+.dp__list, .dp__events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dp__tx { display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line-soft); }
+.dp__tx:last-child { border-bottom: 0; }
+.dp__tx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp__tx-name { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp__tx-sub { font-size: 12px; }
+.dp__tx-amount { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.dp__events { gap: 6px; }
+.dp__event { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; padding: 0 10px; border-left: 3px solid var(--c); border-radius: 6px; background: var(--c-soft); font-size: 14px; }
+.dp__event-period { font-size: 12px; flex: none; }
+.dp__event--red { --c: var(--event-red); --c-soft: var(--event-red-soft); }
+.dp__event--orange { --c: var(--event-orange); --c-soft: var(--event-orange-soft); }
+.dp__event--green { --c: var(--event-green); --c-soft: var(--event-green-soft); }
+.dp__event--blue { --c: var(--event-blue); --c-soft: var(--event-blue-soft); }
+.dp__event--purple { --c: var(--event-purple); --c-soft: var(--event-purple-soft); }
+
+.dp__photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.dp__photo { display: block; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: #dce4e0; }
+.dp__photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.dp__open { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 24px; }
