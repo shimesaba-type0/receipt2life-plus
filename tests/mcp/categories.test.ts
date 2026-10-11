@@ -1,0 +1,75 @@
+import { describe, expect, it } from "vitest";
+import { createApp } from "../../src/app";
+import { testEnv } from "../helpers";
+
+const env = () => ({ DB: testEnv().DB, AUTH_BYPASS: "1" });
+
+async function rpc(method: string, params?: unknown) {
+  const res = await createApp().request(
+    "http://localhost/mcp",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    },
+    env(),
+  );
+  return { status: res.status, body: (await res.json()) as any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+}
+
+const callTool = (name: string, args: unknown) => rpc("tools/call", { name, arguments: args });
+const text = (r: Awaited<ReturnType<typeof rpc>>) => JSON.parse(r.body.result.content[0].text);
+
+describe("MCP のカテゴリ管理", () => {
+  it("4つのツールがあり、説明に使いどころが日本語で書かれている", async () => {
+    const r = await rpc("tools/list");
+    const tools = r.body.result.tools as { name: string; description: string }[];
+    const names = tools.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["add_category", "update_category", "delete_category", "rename_group", "list_categories"]));
+    // 15個 + カテゴリ管理の4つ
+    expect(tools).toHaveLength(19);
+    const get = (n: string) => tools.find((t) => t.name === n)!.description;
+    expect(get("add_category")).toContain("大分類");
+    expect(get("add_category")).toContain("add_transactions");
+    expect(get("delete_category")).toContain("move_to");
+    expect(get("rename_group")).toContain("統合");
+    expect(get("list_categories")).toContain("usage");
+  });
+
+  it("追加 → 一覧(大分類のまとまりと usage)→ 登録に使う", async () => {
+    const added = await callTool("add_category", { name: "光熱費", group_name: "住まい" });
+    expect(text(added)).toMatchObject({ ok: true, category: { name: "光熱費", group_name: "住まい" }, created_group: true });
+
+    const tx = await callTool("add_transactions", { transactions: [{ amount: 8000, merchant: "電力会社", category: "光熱費" }] });
+    expect(text(tx)).toMatchObject({ ok: true, registered: [{ category: "光熱費", status: "ok" }] });
+
+    const list = text(await callTool("list_categories", {}));
+    expect(list.groups.at(-1)).toEqual({ group_name: "住まい", categories: [{ name: "光熱費", usage: 1 }] });
+    expect(list.categories.find((c: { name: string }) => c.name === "光熱費")).toEqual({ name: "光熱費", group_name: "住まい", usage: 1 });
+  });
+
+  it("重複はエラー(isError)", async () => {
+    const r = await callTool("add_category", { name: "食費", group_name: "食費" });
+    expect(r.body.result.isError).toBe(true);
+    expect(text(r)).toMatchObject({ ok: false, errors: [{ field: "name" }] });
+  });
+
+  it("update_category / rename_group / delete_category(使用中は move_to が必要)", async () => {
+    await callTool("add_transactions", { transactions: [{ amount: 300, merchant: "A店", category: "娯楽" }] });
+    expect(text(await callTool("update_category", { name: "娯楽", new_name: "趣味" }))).toMatchObject({ ok: true, category: { name: "趣味", usage: 1 } });
+    expect(text(await callTool("rename_group", { group: "娯楽", new_name: "遊び" }))).toMatchObject({ ok: true, updated: 1 });
+
+    const refused = await callTool("delete_category", { name: "趣味" });
+    expect(refused.body.result.isError).toBe(true);
+    expect(text(refused).errors[0].message).toContain("move_to");
+
+    expect(text(await callTool("delete_category", { name: "趣味", move_to: "その他" }))).toMatchObject({ ok: true, moved: 1, move_to: "その他" });
+  });
+
+  it("未知の項目・空の入力はエラーになる", async () => {
+    const r = await callTool("update_category", { name: "食費" });
+    expect(r.body.result.isError).toBe(true);
+    const bad = await callTool("add_category", { name: "", group_name: "食費" });
+    expect(bad.body.result.isError).toBe(true);
+  });
+});
