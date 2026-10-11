@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { receiptDetailPatchShape, RECEIPT_DETAIL_KEYS } from "./receipt-details";
 import { isoDate, itemsSchema, MAX_AMOUNT, MAX_ITEMS, SOURCES } from "./schema";
 import { TAX_FLAG_DESCRIPTION, taxFlagSchema } from "./tax-flags";
 
@@ -20,6 +21,7 @@ export const updateTransactionFieldsSchema = z.strictObject({
   account: z.string().min(1).nullable().optional().describe("支払方法(口座)名。既存の名前から選ぶ。null で空にする"),
   memo: z.string().max(500).nullable().optional().describe("メモ。null で空にする"),
   source: z.enum(SOURCES).optional().describe("入力経路。receipt / manual / voice"),
+  ...receiptDetailPatchShape,
   tax_flag: taxFlagSchema.nullable().optional().describe(`${TAX_FLAG_DESCRIPTION}null で解除する`),
   items: itemsSchema
     .nullable()
@@ -29,7 +31,7 @@ export const updateTransactionFieldsSchema = z.strictObject({
     ),
 });
 
-const EDITABLE = ["date", "amount", "merchant", "category", "account", "memo", "source", "tax_flag", "items"] as const;
+const EDITABLE = ["date", "amount", "merchant", "category", "account", "memo", "source", ...RECEIPT_DETAIL_KEYS, "tax_flag", "items"] as const;
 
 // items は null も「変えない」なので、変更に数えない
 export const updateTransactionSchema = updateTransactionFieldsSchema.refine(

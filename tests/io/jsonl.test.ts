@@ -75,6 +75,12 @@ describe("exportJsonl", () => {
       source: "receipt",
       status: "ok",
       tax_flag: null,
+      paid_time: null,
+      merchant_phone: null,
+      merchant_address: null,
+      invoice_number: null,
+      clerk_name: null,
+      receipt_no: null,
       created_at: NOW.toISOString(),
       updated_at: NOW.toISOString(),
     });

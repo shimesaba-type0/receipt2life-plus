@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isRealDate } from "./dates";
+import { receiptDetailShape } from "./receipt-details";
 import { TAX_FLAG_DESCRIPTION, TAX_FLAG_FILTER_DESCRIPTION, TAX_FLAG_FILTERS, taxFlagSchema } from "./tax-flags";
 
 export const MAX_AMOUNT = 10_000_000;
@@ -86,6 +87,7 @@ export const transactionInputSchema = z
       ),
     account: z.string().min(1).optional().describe("支払方法(口座)名。現金・カード・Suica など。不明なら省略"),
     memo: z.string().max(500).optional().describe("メモ(任意)"),
+    ...receiptDetailShape,
     tax_flag: taxFlagSchema.nullable().optional().describe(TAX_FLAG_DESCRIPTION),
     items: itemsSchema.optional().describe(ITEMS_DESCRIPTION),
     source: z
@@ -127,6 +129,15 @@ export const listTransactionsSchema = z.strictObject({
     .enum(TAX_FLAG_FILTERS, { error: `tax_flag は ${TAX_FLAG_FILTERS.join(" / ")} のいずれかで指定してください` })
     .optional()
     .describe(`${TAX_FLAG_FILTER_DESCRIPTION}。明細のある取引は、行の実効フラグ(行のフラグ、無ければ取引のフラグ)のどれかが当てはまれば含める`),
+  keyword: z
+    .string()
+    .trim()
+    .min(1, "keyword は1文字以上で指定してください")
+    .max(100, "keyword は100文字以内にしてください")
+    .optional()
+    .describe(
+      "キーワードで絞り込む。店名・電話番号・住所・担当者名(clerk_name)・メモ・レシート番号・登録番号のどれかに部分一致(英字の大文字小文字は区別しない)。電話番号は、ハイフンや括弧の有無にかかわらず数字だけでも当たる(例: 0300000000)。後から店に問い合わせるときに、電話番号や担当者名から取引を探す用途",
+    ),
   limit: z.number().int().min(1).max(500).default(100).describe("最大件数(既定100、最大500)"),
   include_items: z.boolean().default(true).describe("true(既定)で各取引の明細(items)も返す。false で明細を省く(件数の多い一覧を軽くするとき)"),
 });

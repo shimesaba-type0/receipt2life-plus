@@ -55,6 +55,7 @@ export async function getCalendar(db: D1Database, month: string | undefined, opt
   return { ok: true, month: target, total: results.reduce((s, d) => s + d.total, 0), days: results, events: events.events };
 }
 
+// 取引は、決済時刻の昇順(時刻なしは末尾)。同じ時刻・時刻なしどうしは登録順
 export async function getDay(db: D1Database, date: string): Promise<DayResult> {
   if (!isRealDate(date)) {
     return { ok: false, errors: [{ field: "date", message: "date: YYYY-MM-DD 形式の実在する日付で指定してください(例: 2026-10-11)" }] };
@@ -67,7 +68,7 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
          LEFT JOIN categories c ON c.id = t.category_id
          LEFT JOIN accounts a ON a.id = t.account_id
          WHERE t.date = ?
-         ORDER BY t.created_at, t.id`,
+         ORDER BY (t.paid_time IS NULL), t.paid_time, t.created_at, t.id`,
       )
       .bind(date)
       .all<TransactionRow>(),

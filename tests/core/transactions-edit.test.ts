@@ -29,6 +29,12 @@ describe("updateTransaction", () => {
       source: "manual",
       status: "ok",
       tax_flag: null,
+      paid_time: null,
+      merchant_phone: null,
+      merchant_address: null,
+      invoice_number: null,
+      clerk_name: null,
+      receipt_no: null,
       items: [],
     });
     expect(res.warnings).toEqual([]);
