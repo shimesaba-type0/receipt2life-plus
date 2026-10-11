@@ -4,7 +4,7 @@ import { listEvents, type EventView } from "./events";
 import { listLinksOnDay, type LinkView } from "./links";
 import { listPhotosOnDay, photoOnDay, type PhotoView } from "./photos";
 import type { FieldError } from "./schema";
-import type { CoreOptions, TransactionView } from "./transactions";
+import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionView } from "./transactions";
 
 // カレンダーと日別の集計(読み取り専用)
 
@@ -61,7 +61,7 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
   const [txs, events, photos, links] = await Promise.all([
     db
       .prepare(
-        `SELECT t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status
+        `SELECT ${TX_VIEW_COLUMNS}
          FROM transactions t
          LEFT JOIN categories c ON c.id = t.category_id
          LEFT JOIN accounts a ON a.id = t.account_id

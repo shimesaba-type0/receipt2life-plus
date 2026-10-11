@@ -74,6 +74,7 @@ describe("exportJsonl", () => {
       memo: "昼ごはん",
       source: "receipt",
       status: "ok",
+      tax_flag: null,
       created_at: NOW.toISOString(),
       updated_at: NOW.toISOString(),
     });

@@ -36,7 +36,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   {
     sql: `SELECT 'transaction' AS type, t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account,
-                 t.memo, t.source, t.status, t.created_at, t.updated_at
+                 t.memo, t.source, t.status, t.tax_flag, t.created_at, t.updated_at
           FROM transactions t
           LEFT JOIN categories c ON c.id = t.category_id
           LEFT JOIN accounts a ON a.id = t.account_id
@@ -400,8 +400,8 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
       id: v.id,
       statement: db
         .prepare(
-          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           v.id,
@@ -416,6 +416,7 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
           v.hash,
           v.createdAt,
           v.updatedAt,
+          v.item.tax_flag ?? null,
         ),
     });
   }

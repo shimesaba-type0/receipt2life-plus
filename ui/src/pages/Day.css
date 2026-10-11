@@ -25,6 +25,7 @@
 .day__review { margin-left: 6px; font-weight: 400; }
 .day__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .day__account { font-size: 12px; padding: 2px 0; }
+.day__taxflag { background: var(--line-soft); border: 1px solid var(--line); color: var(--ink); }
 .day__memo { font-size: 13px; overflow-wrap: anywhere; }
 .day__amount { font-size: 16px; font-weight: 500; white-space: nowrap; }
 .day__chev { flex: none; color: #8a9792; }

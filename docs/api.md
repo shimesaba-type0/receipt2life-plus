@@ -28,6 +28,16 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `PATCH /api/transactions/:id` | `TransactionPatch`(`update_transaction` と同じ。null で空にできる) | `transaction`, `warnings`, `message` |
 | `DELETE /api/transactions/:id` | なし | `deleted`, `message`(写真が紐づく取引は 400 で拒否) |
 
+### 税金の控除用フラグ(`tax_flag`)
+
+確定申告の準備のため、支出に控除用のフラグを1つ付けられる。**金額の記録と集計だけ**で、控除の対象になるか・控除額・上限の判定はしない(利用者の責任)。
+
+- 値: `medical`(医療費控除)、`self_medication`(セルフメディケーション税制)、`donation`(寄附金控除)。フラグなしは `null`。ラベルは `src/core/tax-flags.ts` の `TAX_FLAG_LABELS` が正で、UI は `ui/src/taxFlags.ts` に同じ文言を持つ(テストで一致を確かめる)
+- `TransactionView.tax_flag`: 常に含まれる(なしは `null`)。`GET /api/day/:date` と `GET /api/home` の取引にも含まれる
+- `NewTransaction.tax_flag`: 省略または `null` でフラグなし。`TransactionPatch.tax_flag`: 省略は変更なし、`null` で解除
+- 不正な値は 400(`field: "tax_flag"`)。重複判定(`dedup_hash`)には含めない
+- 年ごとの合計は、MCP の `summarize`(`group_by: "tax_flag"` と `from` / `to`)で出す。Web UI の API には集計用の道は足していない
+
 ## 出来事(日付や期間のメモ)
 
 | メソッド・パス | 入力 | 戻り |

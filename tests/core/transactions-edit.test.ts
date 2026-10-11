@@ -28,6 +28,7 @@ describe("updateTransaction", () => {
       memo: null,
       source: "manual",
       status: "ok",
+      tax_flag: null,
     });
     expect(res.warnings).toEqual([]);
     expect(res.message).toBe("更新しました: A店 1,380円");

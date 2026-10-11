@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isoDate, MAX_AMOUNT, SOURCES } from "./schema";
+import { TAX_FLAG_DESCRIPTION, taxFlagSchema } from "./tax-flags";
 
 const id = z.string().min(1, "id は必須です").describe("対象の取引ID。list_transactions で確認する");
 
@@ -19,9 +20,10 @@ export const updateTransactionFieldsSchema = z.strictObject({
   account: z.string().min(1).nullable().optional().describe("支払方法(口座)名。既存の名前から選ぶ。null で空にする"),
   memo: z.string().max(500).nullable().optional().describe("メモ。null で空にする"),
   source: z.enum(SOURCES).optional().describe("入力経路。receipt / manual / voice"),
+  tax_flag: taxFlagSchema.nullable().optional().describe(`${TAX_FLAG_DESCRIPTION}null で解除する`),
 });
 
-const EDITABLE = ["date", "amount", "merchant", "category", "account", "memo", "source"] as const;
+const EDITABLE = ["date", "amount", "merchant", "category", "account", "memo", "source", "tax_flag"] as const;
 
 export const updateTransactionSchema = updateTransactionFieldsSchema.refine(
   (v) => EDITABLE.some((k) => v[k] !== undefined),

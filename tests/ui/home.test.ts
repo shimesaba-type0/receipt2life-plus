@@ -4,7 +4,7 @@ import { GROUP_COLORS, barSegments, formatPercent, groupColor, isEmptyHome, memo
 
 const row = (key: string, total: number, percent: number): SummaryRow => ({ key, label: key, count: 1, total, percent });
 const tx = (over: Partial<TransactionView>): TransactionView => ({
-  id: "t1", date: "2026-10-11", amount: 100, merchant: null, category: null, account: null, memo: null, source: "manual", status: "confirmed", ...over,
+  id: "t1", date: "2026-10-11", amount: 100, merchant: null, category: null, account: null, memo: null, source: "manual", status: "confirmed", tax_flag: null, ...over,
 });
 const home = (over: Partial<HomeData> = {}): HomeData => ({
   today: { date: "2026-10-11", total: 0, count: 0 },
