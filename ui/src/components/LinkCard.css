@@ -1,0 +1,9 @@
+/* リンクカード(日の詳細) */
+.link { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.link__open { display: flex; align-items: center; gap: 12px; min-height: 44px; color: var(--ink); text-decoration: none; }
+.link__icon { flex: none; color: var(--muted); }
+.link__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.link__title { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.link__kind { font-size: 12px; }
+.link__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.link__form { padding: 0; }
