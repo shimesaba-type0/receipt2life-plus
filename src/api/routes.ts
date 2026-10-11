@@ -6,6 +6,7 @@ import { getHome } from "../core/home";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, updateTransaction } from "../core/transactions";
 import type { AppEnv } from "../env";
+import { noStoreJson, requireJson, sameOriginOnly, shortIdOnly } from "./guards";
 import type { FieldError } from "../core/schema";
 
 type Ctx = Context<AppEnv>;
@@ -37,6 +38,10 @@ const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSON�
 
 // Web UI 用のAPI(/api/*)。docs/api.md の契約に沿って、核(core)の関数を呼んで実装する
 export function registerApiRoutes(app: Hono<AppEnv>): void {
+  app.use("/api/*", noStoreJson, sameOriginOnly);
+  app.use("/api/:kind/:id", shortIdOnly);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id"]) app.use(path, requireJson);
+
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
   app.get("/api/calendar", async (c) => respond(c, await getCalendar(c.env.DB, c.req.query("month") || undefined)));
@@ -82,8 +87,13 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.post("/api/photos", async (c) => {
     const tooBig = () => fail(c, 413, [{ field: "file", message: "file: 写真が大きすぎます(上限は5MB)。縮小してから送ってください" }]);
     // 大きな本文は、読み込む前に Content-Length で断る
-    const length = Number(c.req.header("content-length"));
-    if (Number.isFinite(length) && length > MAX_PHOTO_BYTES + MULTIPART_OVERHEAD) return tooBig();
+    const rawLength = c.req.header("content-length");
+    if (rawLength === undefined) {
+      // チャンク転送だと大きさが分からないまま読み込むことになるので断る
+      return c.json({ ok: false as const, errors: [{ field: "body", message: "body: Content-Length が必要です。ファイルの大きさが分かる形で送ってください" }] }, 411);
+    }
+    const length = Number(rawLength);
+    if (!Number.isFinite(length) || length > MAX_PHOTO_BYTES + MULTIPART_OVERHEAD) return tooBig();
 
     let form: FormData;
     try {
@@ -119,6 +129,7 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
         "x-content-type-options": "nosniff",
         "cache-control": "private, max-age=31536000, immutable",
         "content-disposition": "inline",
+        "cross-origin-resource-policy": "same-origin",
         "content-security-policy": "default-src 'none'; sandbox",
       },
     });

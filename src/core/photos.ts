@@ -125,7 +125,10 @@ export async function savePhoto(
       .bind(id, key, m.date ?? null, m.transaction_id ?? null, m.event_id ?? null, m.caption ?? null, createdAt)
       .run();
   } catch (e) {
-    await bucket.delete(key).catch(() => undefined);
+    await bucket.delete(key).catch((err: unknown) => {
+      // 値・キー・IDは出さない。失敗の種類だけ
+      console.error("photo: R2 cleanup failed", err instanceof Error ? err.name : typeof err);
+    });
     throw e;
   }
   const photo = toPhotoView({
@@ -139,8 +142,8 @@ export async function savePhoto(
   return { ok: true, photo, message: "写真を保存しました" };
 }
 
-const idParam = z.string().min(1).max(100);
-const notFound = (id: string) => fail(404, "id", `id: 「${id}」という写真はありません`);
+const idParam = z.string().min(1).max(64);
+const notFound = (id: string) => fail(404, "id", `id: 「${id.slice(0, 64)}」という写真はありません`);
 
 export async function getPhoto(db: D1Database, bucket: R2Bucket, id: string): Promise<GetPhotoResult> {
   if (!idParam.safeParse(id).success) return notFound(id);

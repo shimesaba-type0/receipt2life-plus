@@ -13,11 +13,18 @@ const send = (method: string, path: string, body?: unknown) =>
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 
-function upload(bytes: Uint8Array, fields: Record<string, string>, name = "x.jpg", type = "image/jpeg") {
+// ブラウザと同じく、Content-Length つきの multipart を作る
+async function multipart(form: FormData): Promise<RequestInit> {
+  const res = new Response(form);
+  const body = await res.arrayBuffer();
+  return { method: "POST", body, headers: { "content-type": res.headers.get("content-type")!, "content-length": String(body.byteLength) } };
+}
+
+async function upload(bytes: Uint8Array, fields: Record<string, string>, name = "x.jpg", type = "image/jpeg") {
   const form = new FormData();
   form.set("file", new File([bytes.slice()], name, { type }));
   for (const [k, v] of Object.entries(fields)) form.set(k, v);
-  return call("/api/photos", { method: "POST", body: form });
+  return call("/api/photos", await multipart(form));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,7 +71,7 @@ describe("取引", () => {
   });
 
   it("壊れたJSON・配列は400", async () => {
-    const bad = await call("/api/transactions", { method: "POST", body: "{not json" });
+    const bad = await call("/api/transactions", { method: "POST", body: "{not json", headers: { "content-type": "application/json" } });
     expect(bad.status).toBe(400);
     expect(await json(bad)).toMatchObject({ ok: false, errors: [{ field: "body" }] });
     expect((await send("POST", "/api/transactions", [])).status).toBe(400);
@@ -183,8 +190,80 @@ describe("写真", () => {
     expect((await upload(JPEG, { date: "2026-13-01" })).status).toBe(400);
     const noFile = new FormData();
     noFile.set("date", "2026-10-10");
-    expect((await call("/api/photos", { method: "POST", body: noFile })).status).toBe(400);
-    expect((await call("/api/photos", { method: "POST", body: "plain" })).status).toBe(400);
+    expect((await call("/api/photos", await multipart(noFile))).status).toBe(400);
+    expect((await call("/api/photos", { method: "POST", body: "plain", headers: { "content-length": "5" } })).status).toBe(400);
     expect((await testEnv().PHOTOS.list()).objects).toHaveLength(0);
+  });
+});
+
+describe("書き込みの保護(CSRF・Content-Type)", () => {
+  const body = JSON.stringify({ title: "出張", start_date: "2026-10-03" });
+  const jsonH = { "content-type": "application/json" };
+  const post = (headers: Record<string, string>, path = "/api/events") => call(path, { method: "POST", body, headers });
+
+  it("Origin が別なら403、同じなら通る", async () => {
+    expect((await post({ ...jsonH, origin: "https://evil.example" })).status).toBe(403);
+    expect((await post({ ...jsonH, origin: "null" })).status).toBe(403);
+    expect((await post({ ...jsonH, origin: "http://localhost" })).status).toBe(200);
+  });
+
+  it("Origin が無ければ Sec-Fetch-Site を見る(same-origin / none 以外は403)", async () => {
+    expect((await post({ ...jsonH, "sec-fetch-site": "cross-site" })).status).toBe(403);
+    expect((await post({ ...jsonH, "sec-fetch-site": "same-site" })).status).toBe(403);
+    expect((await post({ ...jsonH, "sec-fetch-site": "same-origin" })).status).toBe(200);
+    expect((await post({ ...jsonH, "sec-fetch-site": "none" })).status).toBe(200);
+  });
+
+  it("PATCH / DELETE / 写真 / import も同じ検査を受ける", async () => {
+    const evil = { origin: "https://evil.example" };
+    expect((await call("/api/events/x", { method: "DELETE", headers: evil })).status).toBe(403);
+    expect((await call("/api/events/x", { method: "PATCH", body: "{}", headers: { ...jsonH, ...evil } })).status).toBe(403);
+    expect((await call("/api/photos/x", { method: "DELETE", headers: evil })).status).toBe(403);
+    expect((await call("/import", { method: "POST", body: "", headers: evil })).status).toBe(403);
+    expect((await call("/import", { method: "POST", body: "", headers: { "sec-fetch-site": "cross-site" } })).status).toBe(403);
+    const form = new FormData();
+    form.set("file", new File([JPEG.slice()], "a.jpg"));
+    form.set("date", "2026-10-10");
+    const init = await multipart(form);
+    expect((await call("/api/photos", { ...init, headers: { ...(init.headers as object), ...evil } })).status).toBe(403);
+    // 読み取りは対象外
+    expect((await call("/api/home", { headers: evil })).status).toBe(200);
+  });
+
+  it("JSON のルートは application/json 以外だと415(charset つきは可)", async () => {
+    expect((await post({})).status).toBe(415);
+    expect((await post({ "content-type": "text/plain" })).status).toBe(415);
+    expect((await post({ "content-type": "application/x-www-form-urlencoded" }, "/api/transactions")).status).toBe(415);
+    expect((await call("/api/events/x", { method: "PATCH", body: "{}", headers: { "content-type": "text/plain" } })).status).toBe(415);
+    expect((await post({ "content-type": "application/json; charset=utf-8" })).status).toBe(200);
+  });
+
+  it("MCP は対象外(Origin が違っても403にならない)", async () => {
+    const res = await call("/mcp", { method: "POST", body: "{}", headers: { ...jsonH, origin: "https://client.example", accept: "application/json, text/event-stream" } });
+    expect(res.status).not.toBe(403);
+  });
+
+  it("Content-Length が無い写真アップロードは411", async () => {
+    const form = new FormData();
+    form.set("file", new File([JPEG.slice()], "a.jpg"));
+    form.set("date", "2026-10-10");
+    const init = await multipart(form);
+    const res = await call("/api/photos", { method: "POST", body: init.body, headers: { "content-type": (init.headers as Record<string, string>)["content-type"]! } });
+    expect(res.status).toBe(411);
+    expect((await testEnv().PHOTOS.list()).objects).toHaveLength(0);
+  });
+
+  it("JSON応答は no-store、写真の配信には CORP がつく。長い id は64文字までしか出さない", async () => {
+    expect((await call("/api/home")).headers.get("cache-control")).toBe("private, no-store");
+    expect((await call("/api/nothing")).headers.get("cache-control")).toBe("private, no-store");
+    const { photo } = await json(await upload(JPEG, { date: "2026-10-10" }));
+    const got = await call(photo.url);
+    expect(got.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(got.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
+    const long = "a".repeat(200);
+    const res = await call("/api/photos/" + long);
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(await res.json())).not.toContain("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect((await call("/api/photos/missing")).headers.get("cache-control")).toBe("private, no-store");
   });
 });

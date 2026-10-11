@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { accessAuth, type KeyResolver } from "./auth/access";
 import type { AppEnv } from "./env";
 import { registerIoRoutes } from "./api/io";
+import { sameOriginOnly } from "./api/guards";
 import { registerApiRoutes } from "./api/routes";
 import { createMcpServer } from "./mcp/server";
 
@@ -19,6 +20,8 @@ export function createApp(options: AppOptions = {}) {
 
   app.get("/healthz", (c) => c.json({ ok: true }));
 
+  // 画面からの書き込み(インポート)は、同一オリジンのものだけ受ける
+  app.use("/import", sameOriginOnly);
   registerIoRoutes(app);
 
   // MCP(Streamable HTTP、ステートレス): リクエストごとにサーバーとトランスポートを作る
