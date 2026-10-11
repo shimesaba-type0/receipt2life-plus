@@ -12,11 +12,10 @@ import {
   photoUrl,
   updateEvent,
   updateTransaction,
-  uploadPhoto,
 } from "../api";
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
-import { DELETE_CONCURRENCY, UPLOAD_CONCURRENCY, type UploadStatus, planUploads, runWithLimit, statusLabel, summarizeResults } from "../photo-queue";
-import { resizePhoto } from "../photo-resize-browser";
+import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-queue";
+import { PhotoUploader } from "../components/PhotoUploader";
 import { Link } from "../router";
 import "./Day.css";
 
@@ -376,27 +375,19 @@ export function Day(props: { date: string }) {
   );
 }
 
-interface UploadItem {
-  id: number;
-  name: string;
-  status: UploadStatus;
-  error: string | null;
-}
-
-// 写真エリア。複数アップロード(選択・ドラッグ&ドロップ)と複数削除(選択モード)
+// 写真エリア。複数アップロード(PhotoUploader)と複数削除(選択モード)
 function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolean; onView: (p: PhotoView) => void; onChanged: () => Promise<void> }) {
   const { date, photos, disabled } = props;
-  const fileRef = useRef<HTMLInputElement>(null);
-  const workingRef = useRef(false);
-  const [working, setWorking] = useState(false);
-  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const deletingRef = useRef(false);
+  const [deleting, setDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [clearSignal, setClearSignal] = useState(0);
   const [resultMsg, setResultMsg] = useState<string | null>(null);
   const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
-  const [dragOver, setDragOver] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
-  const off = disabled || working;
+  const off = disabled || uploading || deleting;
 
   // 再読み込みで無くなった写真は選択から外す
   useEffect(() => {
@@ -406,72 +397,6 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
       return next.size === cur.size ? cur : next;
     });
   }, [photos]);
-
-  function begin(): boolean {
-    if (workingRef.current) return false;
-    workingRef.current = true;
-    setWorking(true);
-    setResultMsg(null);
-    setFailures([]);
-    return true;
-  }
-  function end() {
-    workingRef.current = false;
-    setWorking(false);
-  }
-
-  async function upload(files: File[]) {
-    if (files.length === 0 || disabled || !begin()) return;
-    setSelecting(false);
-    setConfirming(false);
-    setSelected(new Set());
-    const plan = planUploads(files);
-    const accepted = new Set<File>(plan.accepted);
-    let r = 0;
-    const items: UploadItem[] = files.map((f, id) => {
-      if (accepted.has(f)) return { id, name: f.name, status: "waiting", error: null };
-      return { id, name: f.name, status: "failed", error: plan.rejected[r++]?.reason ?? "追加できません。" };
-    });
-    setUploads(items);
-    const patch = (id: number, p: Partial<UploadItem>) => setUploads((cur) => cur.map((u) => (u.id === id ? { ...u, ...p } : u)));
-    const final = new Map<number, string | null>();
-    try {
-      const targets = items.filter((it) => it.status === "waiting");
-      await runWithLimit(targets, UPLOAD_CONCURRENCY, async (it) => {
-        const file = files[it.id] as File;
-        let error: string | null = null;
-        try {
-          patch(it.id, { status: "resizing" });
-          const blob = await resizePhoto(file);
-          patch(it.id, { status: "uploading" });
-          const res = await run(() => uploadPhoto(blob, { date }));
-          if (!res.ok) error = res.message;
-        } catch (err) {
-          error = err instanceof Error ? err.message : "画像を処理できませんでした。";
-        }
-        patch(it.id, error ? { status: "failed", error } : { status: "done" });
-        final.set(it.id, error);
-      });
-      const summary = summarizeResults(
-        "追加",
-        items.map((it) => ({ name: it.name, error: it.status === "failed" ? it.error : (final.get(it.id) ?? null) })),
-      );
-      setResultMsg(summary.message);
-      setFailures(summary.failures);
-      await props.onChanged();
-    } finally {
-      end();
-    }
-  }
-
-  function onPick(e: Event) {
-    const input = e.currentTarget as HTMLInputElement;
-    const files = Array.from(input.files ?? []);
-    input.value = "";
-    void upload(files);
-  }
-
-  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
   function toggle(id: string) {
     setSelected((cur) => {
@@ -490,9 +415,13 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
 
   async function deleteSelected() {
     const targets = photos.map((p, i) => ({ p, label: p.caption || `写真${i + 1}` })).filter((x) => selected.has(x.p.id));
-    if (targets.length === 0 || disabled || !begin()) return;
+    if (targets.length === 0 || disabled || uploading || deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    setResultMsg(null);
+    setFailures([]);
     setConfirming(false);
-    setUploads([]);
+    setClearSignal((n) => n + 1);
     try {
       const settled = await runWithLimit(targets, DELETE_CONCURRENCY, async (t) => {
         const res = await run(() => deletePhoto(t.p.id));
@@ -511,63 +440,36 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
       if (failedIds.size === 0) setSelecting(false);
       await props.onChanged();
     } finally {
-      end();
+      deletingRef.current = false;
+      setDeleting(false);
     }
   }
 
   return (
-    <div
-      class={`card day__drop${dragOver ? " is-over" : ""}`}
-      onDragEnter={(e) => {
-        if (hasFiles(e)) {
-          e.preventDefault();
-          setDragOver(true);
-        }
+    <PhotoUploader
+      meta={{ date }}
+      title="写真"
+      disabled={disabled || deleting}
+      clearSignal={clearSignal}
+      onBusyChange={setUploading}
+      onStart={() => {
+        setSelecting(false);
+        setConfirming(false);
+        setSelected(new Set());
+        setResultMsg(null);
+        setFailures([]);
       }}
-      onDragOver={(e) => {
-        if (hasFiles(e)) e.preventDefault();
-      }}
-      onDragLeave={(e) => {
-        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) setDragOver(false);
-      }}
-      onDrop={(e) => {
-        if (!hasFiles(e)) return;
-        e.preventDefault();
-        setDragOver(false);
-        void upload(Array.from(e.dataTransfer?.files ?? []));
-      }}
-    >
-      <div class="day__row-head">
-        <h2 class="day__h">写真</h2>
-        <div class="day__photo-tools">
-          {photos.length > 0 && (
-            <button type="button" class="btn" disabled={off} aria-pressed={selecting} onClick={() => (selecting ? leaveSelect() : setSelecting(true))}>
-              {selecting ? "選択をやめる" : "選択"}
-            </button>
-          )}
-          <button type="button" class="btn" disabled={off} onClick={() => fileRef.current?.click()}>
-            写真を追加
+      onDone={() => props.onChanged()}
+      tools={
+        photos.length > 0 && (
+          <button type="button" class="btn" disabled={off} aria-pressed={selecting} onClick={() => (selecting ? leaveSelect() : setSelecting(true))}>
+            {selecting ? "選択をやめる" : "選択"}
           </button>
-          <input ref={fileRef} type="file" class="sr-only" accept="image/jpeg,image/png,image/webp" multiple tabIndex={-1} onChange={onPick} aria-label="写真のファイル" />
-        </div>
-      </div>
-      <p class="muted day__hint">複数まとめて追加できます(1回20枚まで)。パソコンでは、この枠に画像をドラッグ&ドロップしても追加できます。</p>
-
-      <div class="day__progress" role="status">
-        {uploads.length > 0 && (
-          <ul class="day__queue">
-            {uploads.map((u) => (
-              <li key={u.id} class={`day__queue-item is-${u.status}`}>
-                <span class="day__queue-name">{u.name}</span>
-                <span class="day__queue-state">{statusLabel(u.status)}</span>
-                {u.status === "failed" && u.error && <span class="day__queue-error">{u.error}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-        {resultMsg && <p class="day__result">{resultMsg}</p>}
-      </div>
-      {uploads.length === 0 && failures.length > 0 && (
+        )
+      }
+      status={resultMsg && <p class="day__result">{resultMsg}</p>}
+    >
+      {failures.length > 0 && (
         <ul class="day__queue" aria-label="失敗した写真">
           {failures.map((f, i) => (
             <li key={i} class="day__queue-item is-failed">
@@ -606,7 +508,7 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
         </div>
       )}
 
-      {working && uploads.length === 0 && <p class="muted">処理中…</p>}
+      {deleting && <p class="muted">処理中…</p>}
       {photos.length === 0 && <p class="muted">この日の写真はありません。</p>}
       <ul class="day__photos">
         {photos.map((p) => {
@@ -632,7 +534,7 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
           );
         })}
       </ul>
-    </div>
+    </PhotoUploader>
   );
 }
 

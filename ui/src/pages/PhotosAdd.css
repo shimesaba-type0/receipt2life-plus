@@ -1,0 +1,9 @@
+/* 写真の追加画面専用。色は styles.css のトークンを使う */
+.photos-add__target { margin: 0; font-size: 16px; font-weight: 500; }
+.photos-add__caption { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.photos-add__btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 24px; text-decoration: none; }
+.photos-add__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.photos-add__error { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.photos-add__error p { margin: 0; color: var(--danger); }
+.photos-add__done-msg { margin: 0; font-size: 18px; font-weight: 700; }
+a.btn--primary.photos-add__btn:hover { color: #fff; }

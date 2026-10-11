@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRoute } from "../../ui/src/route";
+import { parsePhotosAddQuery, parseRoute } from "../../ui/src/route";
 
 describe("parseRoute", () => {
   it("ホーム", () => {
@@ -17,5 +17,53 @@ describe("parseRoute", () => {
   });
   it("未知のパスは notfound", () => {
     expect(parseRoute("/nope")).toEqual({ name: "notfound" });
+  });
+});
+
+describe("parsePhotosAddQuery", () => {
+  it("date だけ", () => {
+    expect(parsePhotosAddQuery("?date=2026-10-11")).toEqual({ ok: true, target: { date: "2026-10-11" } });
+  });
+  it("取引・出来事・キャプションを読む(前後の空白は除く)", () => {
+    expect(parsePhotosAddQuery("?date=2026-10-11&transaction_id=tx1&event_id=ev1&caption=%20%E3%83%AC%E3%82%B7%E3%83%BC%E3%83%88%20")).toEqual({
+      ok: true,
+      target: { date: "2026-10-11", transaction_id: "tx1", event_id: "ev1", caption: "レシート" },
+    });
+  });
+  it("空の任意項目は無いものとして扱う", () => {
+    expect(parsePhotosAddQuery("?date=2026-10-11&transaction_id=&caption=%20")).toEqual({ ok: true, target: { date: "2026-10-11" } });
+  });
+  it("date が無い・形式が違う・実在しない日付は不正", () => {
+    expect(parsePhotosAddQuery("").ok).toBe(false);
+    expect(parsePhotosAddQuery("?transaction_id=tx1").ok).toBe(false);
+    expect(parsePhotosAddQuery("?date=2026-1-1").ok).toBe(false);
+    expect(parsePhotosAddQuery("?date=2026-02-30").ok).toBe(false);
+    expect(parsePhotosAddQuery("?date=2026-13-01").ok).toBe(false);
+    expect(parsePhotosAddQuery("?date=abc").ok).toBe(false);
+  });
+  it("うるう日は実在日だけ通す", () => {
+    expect(parsePhotosAddQuery("?date=2028-02-29").ok).toBe(true);
+    expect(parsePhotosAddQuery("?date=2027-02-29").ok).toBe(false);
+  });
+  it("長すぎる値は不正", () => {
+    expect(parsePhotosAddQuery(`?date=2026-10-11&transaction_id=${"a".repeat(101)}`).ok).toBe(false);
+    expect(parsePhotosAddQuery(`?date=2026-10-11&caption=${"a".repeat(201)}`).ok).toBe(false);
+  });
+});
+
+describe("parseRoute /photos/add", () => {
+  it("正しいクエリ", () => {
+    expect(parseRoute("/photos/add", "?date=2026-10-11&event_id=ev1")).toEqual({
+      name: "photosAdd",
+      target: { date: "2026-10-11", event_id: "ev1" },
+    });
+    expect(parseRoute("/photos/add/", "?date=2026-10-11")).toEqual({ name: "photosAdd", target: { date: "2026-10-11" } });
+  });
+  it("不正なクエリは target が null", () => {
+    expect(parseRoute("/photos/add", "")).toEqual({ name: "photosAdd", target: null });
+    expect(parseRoute("/photos/add", "?date=2026-02-30")).toEqual({ name: "photosAdd", target: null });
+  });
+  it("/photos だけは notfound", () => {
+    expect(parseRoute("/photos")).toEqual({ name: "notfound" });
   });
 });
