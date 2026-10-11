@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerEventTools } from "./tools/events";
+import { registerLinkTools } from "./tools/links";
 import { registerPhotoTools } from "./tools/photos";
 import { registerReportTools } from "./tools/reports";
 import { registerTransactionTools } from "./tools/transactions";
@@ -11,5 +12,6 @@ export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string
   registerEventTools(server, db);
   registerReportTools(server, db);
   registerPhotoTools(server, db, bucket, origin);
+  registerLinkTools(server, db);
   return server;
 }

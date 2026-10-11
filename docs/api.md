@@ -17,7 +17,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | --- | --- |
 | `GET /api/home` | `HomeData`: 今日と今月の合計、大分類別(`summarize` の group)、メモ付き支出の割合、要確認の件数、最近の取引5件 |
 | `GET /api/calendar?month=YYYY-MM` | `CalendarData`: その月の日別の合計・件数・写真枚数(取引のある日だけ)、その月と重なる出来事。`month` 省略は今月 |
-| `GET /api/day/:date` | `DayData`: その日の合計・取引一覧・重なる出来事・写真 |
+| `GET /api/day/:date` | `DayData`: その日の合計・取引一覧・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの) |
 | `GET /api/categories` | `CategoriesData`: カテゴリ(name, group_name)と口座名 |
 
 ## 取引
@@ -37,6 +37,25 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `DELETE /api/events/:id` | なし | `deleted`, `message`(紐づく写真があれば 400 で拒否) |
 
 出来事の削除は、MCP には無い(UI 専用)。`core` に `deleteEvent` を足して使う。
+
+## リンク(Xの投稿・YouTubeの動画)
+
+日付・取引・出来事に、外部リンクを付ける。Worker から外のサイトへは取りに行かない(タイトル取得も埋め込みもしない)。URLの検証と正規化は `src/core/links.ts`。
+
+| メソッド・パス | 入力 | 戻り |
+| --- | --- | --- |
+| `POST /api/links` | `NewLink`(`url` 必須、`title?`、`date?` / `transaction_id?` / `event_id?` のうち1つ以上) | `link: LinkView`, `duplicate`, `message` |
+| `PATCH /api/links/:id` | `LinkPatch`(`title` のみ。null で消去) | `link`, `duplicate: false`, `message` |
+| `DELETE /api/links/:id` | なし | `deleted`, `message` |
+
+- `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube`), `title`, `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)
+- URL: https のみ。`user:pass@` と、443 以外のポートは不可。最大2048文字。ホストは完全一致の許可リスト
+  - X(`kind=x`): `x.com` / `www.x.com` / `mobile.x.com` / `twitter.com` / `www.twitter.com` / `mobile.twitter.com`。パスは `/<ユーザー名>/status/<数字>`(投稿)か `/<ユーザー名>`(プロフィール)
+  - YouTube(`kind=youtube`): `youtube.com` / `www.youtube.com` / `m.youtube.com` / `music.youtube.com`(`/watch?v=<ID>`、`/shorts/<ID>`、`/live/<ID>`、`/playlist?list=<ID>`)と `youtu.be/<ID>`
+- 正規化: `#` 以降を消す、`utm_*` / `si` / `fbclid` / `feature` を消す(Xは `s` / `t` も消す。YouTubeの `t`(開始位置)は残す)、ホストは小文字(入力のホストのまま保存)
+- 重複: 同じ紐づけ先(date・transaction_id・event_id が全部同じ)に同じ正規化URLがあれば、登録せず既存のリンクを `duplicate: true` で返す(200)
+- 紐づけ先の取引・出来事が存在しなければ 400。存在しないリンクの id は 404
+- 取引・出来事を削除すると、紐づくリンクもいっしょに消える(リンクがあっても削除は拒否しない)。MCP には `add_link` / `list_links` / `delete_link`
 
 ## 写真
 

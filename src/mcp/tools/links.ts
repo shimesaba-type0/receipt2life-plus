@@ -1,0 +1,51 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { addLink, deleteLink, deleteLinkSchema, linkFieldsSchema, listLinks, listLinksFieldsSchema } from "../../core/links";
+import { toResult } from "../result";
+
+// 外部リンクのツール: add_link / list_links / delete_link
+export function registerLinkTools(server: McpServer, db: D1Database): void {
+  server.registerTool(
+    "add_link",
+    {
+      title: "リンクを登録する",
+      description: [
+        "Xの投稿やYouTubeの動画のリンクを、その日の記録・取引・出来事に付けて残す。例: 旅行の出来事に動画のリンクを付ける、ライブの日に感想の投稿を残す、買い物の取引に紹介動画を付ける。",
+        "url は必須。対応しているのは https のURLだけで、Xの投稿(x.com / twitter.com の /<ユーザー名>/status/<数字>。ユーザーのプロフィールも可)と、YouTubeの動画(youtube.com の watch?v=<動画ID>、/shorts/<動画ID>、/live/<動画ID>、/playlist?list=<ID>、youtu.be/<動画ID>)。",
+        "許可リスト以外のサイト、http、ポート番号、user:pass@ の付いたURLはエラーになる(errors に対応サイトと直し方が返る)。URLは正規化して保存する(#以降と、utm_* などの追跡用の項目は消える。YouTubeの t=開始秒 は残る)。",
+        "date(YYYY-MM-DD)、transaction_id(取引のid)、event_id(出来事のid)のうち1つ以上が必須。存在しない id はエラーになる。title は任意の表題(200文字まで)。外のサイトには取りに行かないので、タイトルは自動では付かない。",
+        "同じ紐づけ先に同じURLが既にあれば、登録せずに既存のリンクを返す(duplicate: true)。",
+        "成功すると、登録したリンク(id つき)が返る。",
+      ].join("\n"),
+      inputSchema: linkFieldsSchema.shape,
+    },
+    async (args) => toResult(await addLink(db, args)),
+  );
+
+  server.registerTool(
+    "list_links",
+    {
+      title: "リンクを一覧する",
+      description: [
+        "登録済みのリンク(Xの投稿・YouTubeの動画)を返す。各要素は id、url、kind(x / youtube)、title、date、transaction_id、event_id、created_at。",
+        "date、transaction_id、event_id のうち1つ以上が必須。複数を指定したら、どれかに当てはまるリンクをまとめて返す(重複なし)。",
+        "date を指定すると、その日の詳細画面と同じ範囲になる。その日の日付に付いたリンクに加えて、その日の取引に付いたリンクと、その日を含む期間の出来事に付いたリンクも含まれる。",
+        "使いどころ: 「この日に残したリンクを見せて」と頼まれたとき、または delete_link に渡す id を調べるとき。存在しない id はエラーになる。",
+      ].join("\n"),
+      inputSchema: listLinksFieldsSchema.shape,
+    },
+    async (args) => toResult(await listLinks(db, args)),
+  );
+
+  server.registerTool(
+    "delete_link",
+    {
+      title: "リンクを削除する",
+      description: [
+        "リンクを1件削除する。id は必須(list_links で分かる)。登録しまちがえたURLや、いらなくなったリンクを消すときに使う。取引や出来事そのものは消えない。",
+        "存在しない id はエラーになる。取引や出来事を削除すると、それに付いたリンクもいっしょに消える。",
+      ].join("\n"),
+      inputSchema: deleteLinkSchema.shape,
+    },
+    async (args) => toResult(await deleteLink(db, args)),
+  );
+}

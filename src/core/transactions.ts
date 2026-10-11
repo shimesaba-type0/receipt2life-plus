@@ -345,6 +345,7 @@ export async function deleteTransaction(db: D1Database, input: unknown): Promise
     };
   }
 
-  await db.prepare("DELETE FROM transactions WHERE id = ?").bind(id).run();
+  // リンク(外部リンク)は軽いので、取引といっしょに消す
+  await db.batch([db.prepare("DELETE FROM links WHERE transaction_id = ?").bind(id), db.prepare("DELETE FROM transactions WHERE id = ?").bind(id)]);
   return { ok: true, deleted: current, message: `削除しました: ${label(current)}` };
 }
