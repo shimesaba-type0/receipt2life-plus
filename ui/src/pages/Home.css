@@ -1,0 +1,50 @@
+/* ホーム画面専用。色は styles.css のトークン(背景 #f3f5f4 / 文字 #18211d / 主色 #1f5c4b / 枠 #dde3e0) */
+.home { gap: 16px; }
+.home__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.home__title { margin: 0; font-size: 20px; font-weight: 700; }
+.home__date { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.home__export { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--accent); border-radius: 22px; color: var(--accent); font-weight: 500; font-size: 14px; background: var(--surface); }
+.home__export:hover { background: var(--accent-soft); }
+
+.home__status { margin: 0; color: var(--muted); text-align: center; padding: 24px 0; }
+.home__status.card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.home__status .error { margin: 0; }
+.home__empty { text-align: center; }
+.home__empty-title { margin: 0 0 4px; font-weight: 700; }
+.home__empty .muted { margin: 0; }
+
+.home .card { border-radius: 24px; display: flex; flex-direction: column; gap: 6px; }
+.home .card p { margin: 0; }
+.home__label { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted); }
+.home__big { font-size: 44px; line-height: 1.15; font-weight: 700; color: var(--accent); }
+.home__mid { font-size: 28px; line-height: 1.2; font-weight: 700; }
+
+.home__review { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 20px; border: 1px solid #e3c98f; border-radius: 24px; background: var(--warn-soft); font-weight: 500; }
+.home__review > span:nth-child(2) { flex: 1; }
+.home__review-count { font-weight: 700; font-size: 18px; }
+
+.home__stack { display: flex; height: 16px; border-radius: 8px; overflow: hidden; background: var(--line-soft); margin: 6px 0 10px; }
+.home__stack-seg { display: block; height: 100%; min-width: 2px; }
+.home__list { list-style: none; margin: 0; padding: 0; }
+.home__row { display: flex; align-items: center; gap: 10px; min-height: 44px; border-top: 1px solid var(--line-soft); }
+.home__row:first-child { border-top: 0; }
+.home__swatch { flex: none; width: 12px; height: 12px; border-radius: 4px; }
+.home__row-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.home__row-pct { color: var(--muted); font-size: 14px; }
+.home__row-amount { min-width: 5.5em; text-align: right; font-weight: 500; }
+
+.home__meter { height: 12px; border-radius: 6px; background: var(--line-soft); overflow: hidden; margin: 6px 0; }
+.home__meter-fill { display: block; height: 100%; background: var(--accent); }
+
+.home__recent { list-style: none; margin: 0; padding: 0; }
+.home__recent li { border-top: 1px solid var(--line-soft); }
+.home__recent li:first-child { border-top: 0; }
+.home__recent-link { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 0; }
+.home__recent-date { flex: none; width: 3.2em; color: var(--muted); font-size: 14px; }
+.home__recent-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.home__chip { margin-left: 8px; }
+.home__recent-amount { flex: none; font-weight: 500; }
+
+@media (max-width: 380px) {
+  .home__big { font-size: 38px; }
+}
