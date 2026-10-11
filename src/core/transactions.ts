@@ -7,6 +7,7 @@ import {
   type FieldError,
   type TransactionInput,
 } from "./schema";
+import { deleteTransactionSchema, updateTransactionSchema } from "./transaction-edit-schema";
 
 export interface CoreOptions {
   now?: Date;
@@ -230,4 +231,120 @@ export async function listTransactions(db: D1Database, input: unknown): Promise<
     .all<TransactionView>();
 
   return { ok: true, transactions: results, count: results.length };
+}
+
+export interface DuplicateWarning {
+  duplicate_of: string;
+  message: string;
+}
+
+export type UpdateResult =
+  | { ok: true; transaction: TransactionView; warnings: DuplicateWarning[]; message: string }
+  | { ok: false; errors: FieldError[] };
+
+export type DeleteResult =
+  | { ok: true; deleted: TransactionView; message: string }
+  | { ok: false; errors: FieldError[] };
+
+const VIEW_SELECT = `SELECT t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status
+       FROM transactions t
+       LEFT JOIN categories c ON c.id = t.category_id
+       LEFT JOIN accounts a ON a.id = t.account_id
+       WHERE t.id = ?`;
+
+const notFound = (id: string): FieldError[] => [
+  { field: "id", message: `id: 「${id}」という取引はありません。list_transactions で id を確認してください` },
+];
+
+export async function updateTransaction(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<UpdateResult> {
+  const parsed = updateTransactionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const patch = parsed.data;
+
+  const current = await db.prepare(VIEW_SELECT).bind(patch.id).first<TransactionView>();
+  if (!current) return { ok: false, errors: notFound(patch.id) };
+
+  const now = options.now ?? new Date();
+  const today = todayJst(now);
+  const errors: FieldError[] = [];
+  const [categories, accounts] = await Promise.all([loadNames(db, "categories"), loadNames(db, "accounts")]);
+  if (patch.date && patch.date > today) {
+    errors.push({ field: "date", message: `date: 未来の日付(${patch.date})は登録できません。今日は ${today} です` });
+  }
+  if (patch.category && !categories.has(patch.category)) {
+    errors.push({ field: "category", message: unknownName("category", "カテゴリ", patch.category, categories) });
+  }
+  if (patch.account && !accounts.has(patch.account)) {
+    errors.push({ field: "account", message: unknownName("account", "口座", patch.account, accounts) });
+  }
+  if (errors.length > 0) return { ok: false, errors };
+
+  // undefined は「変えない」、null は「空にする」
+  const next: TransactionView = {
+    ...current,
+    date: patch.date ?? current.date,
+    amount: patch.amount ?? current.amount,
+    merchant: patch.merchant === undefined ? current.merchant : patch.merchant,
+    category: patch.category === undefined ? current.category : patch.category,
+    account: patch.account === undefined ? current.account : patch.account,
+    memo: patch.memo === undefined ? current.memo : patch.memo,
+    source: patch.source ?? current.source,
+  };
+  next.status = next.merchant && next.category ? "ok" : "needs_review";
+  const hash = await dedupHash(next.date, next.amount, next.merchant ?? undefined);
+
+  await db
+    .prepare(
+      `UPDATE transactions
+       SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(
+      next.date,
+      next.amount,
+      next.merchant,
+      next.category ? categories.get(next.category)! : null,
+      next.account ? accounts.get(next.account)! : null,
+      next.memo,
+      next.source,
+      next.status,
+      hash,
+      now.toISOString(),
+      next.id,
+    )
+    .run();
+
+  // 更新は止めない。同じ日・金額・店の別の取引があれば、警告として知らせる
+  const { results: dups } = await db
+    .prepare("SELECT id FROM transactions WHERE dedup_hash = ? AND id != ? ORDER BY created_at, id")
+    .bind(hash, next.id)
+    .all<{ id: string }>();
+  const warnings = dups.map((d) => ({
+    duplicate_of: d.id,
+    message: `取引 ${d.id} と同じ日・金額・店です。重複登録の可能性があります。重複なら delete_transaction で片方を削除してください`,
+  }));
+
+  const message = `更新しました: ${label(next)}${warnings.length > 0 ? `。重複の疑いが${warnings.length}件あります` : ""}`;
+  return { ok: true, transaction: next, warnings, message };
+}
+
+export async function deleteTransaction(db: D1Database, input: unknown): Promise<DeleteResult> {
+  const parsed = deleteTransactionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const { id } = parsed.data;
+
+  const current = await db.prepare(VIEW_SELECT).bind(id).first<TransactionView>();
+  if (!current) return { ok: false, errors: notFound(id) };
+
+  // 写真(フェーズ5)が紐づく取引は、外部キーで落ちる前に、分かる文章で断る
+  const photos = await db.prepare("SELECT COUNT(*) AS n FROM attachments WHERE transaction_id = ?").bind(id).first<{ n: number }>();
+  if (photos && photos.n > 0) {
+    return {
+      ok: false,
+      errors: [{ field: "id", message: `id: 写真が${photos.n}枚紐づいているため削除できません(${label(current)})` }],
+    };
+  }
+
+  await db.prepare("DELETE FROM transactions WHERE id = ?").bind(id).run();
+  return { ok: true, deleted: current, message: `削除しました: ${label(current)}` };
 }
