@@ -1,6 +1,16 @@
 // 明細ページ(/tx/:id)の純粋な部分(DOMに触れない。テストする)
 import type { FieldError, ItemView, NewItem, TaxFlag, TransactionPatch, TransactionView } from "../../../src/api/contract";
 import { formatYen } from "../format";
+import {
+  MAX_ADDRESS,
+  MAX_CLERK,
+  MAX_RECEIPT_NO,
+  parseInvoiceNumber,
+  parsePaidTime,
+  parsePhone,
+  parseText,
+  type FieldResult,
+} from "../receiptDetails";
 import { parseTaxFlagField } from "./dayLogic";
 
 export const MAX_ITEMS = 50;
@@ -69,6 +79,13 @@ export interface TxFormValues {
   memo: string;
   // "" がフラグなし
   tax_flag: string;
+  // レシートの情報(空欄は値なし)
+  paid_time: string;
+  merchant_phone: string;
+  merchant_address: string;
+  invoice_number: string;
+  clerk_name: string;
+  receipt_no: string;
 }
 
 export interface ItemRow {
@@ -82,8 +99,40 @@ export interface ItemRow {
   memo: string;
 }
 
+export function emptyTxForm(date: string): TxFormValues {
+  return {
+    date,
+    amount: "",
+    merchant: "",
+    category: "",
+    account: "",
+    memo: "",
+    tax_flag: "",
+    paid_time: "",
+    merchant_phone: "",
+    merchant_address: "",
+    invoice_number: "",
+    clerk_name: "",
+    receipt_no: "",
+  };
+}
+
 export function txFormFromView(tx: TransactionView): TxFormValues {
-  return { date: tx.date, amount: String(tx.amount), merchant: tx.merchant ?? "", category: tx.category ?? "", account: tx.account ?? "", memo: tx.memo ?? "", tax_flag: tx.tax_flag ?? "" };
+  return {
+    date: tx.date,
+    amount: String(tx.amount),
+    merchant: tx.merchant ?? "",
+    category: tx.category ?? "",
+    account: tx.account ?? "",
+    memo: tx.memo ?? "",
+    tax_flag: tx.tax_flag ?? "",
+    paid_time: tx.paid_time ?? "",
+    merchant_phone: tx.merchant_phone ?? "",
+    merchant_address: tx.merchant_address ?? "",
+    invoice_number: tx.invoice_number ?? "",
+    clerk_name: tx.clerk_name ?? "",
+    receipt_no: tx.receipt_no ?? "",
+  };
 }
 
 export function itemRowsFromView(items: ItemView[]): ItemRow[] {
@@ -185,6 +234,26 @@ export function buildItems(rows: ItemRow[]): BuildResult<NewItem[]> {
   return { ok: true, value: out };
 }
 
+type DetailsPatch = Pick<TransactionPatch, "paid_time" | "merchant_phone" | "merchant_address" | "invoice_number" | "clerk_name" | "receipt_no">;
+
+// レシートの情報の入力を、正規化・検証して API の入力にする(規則はサーバーと同じ。空欄は null = 空にする)
+export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
+  const checks: [keyof DetailsPatch, FieldResult][] = [
+    ["paid_time", parsePaidTime(form.paid_time)],
+    ["merchant_phone", parsePhone(form.merchant_phone)],
+    ["merchant_address", parseText(form.merchant_address, MAX_ADDRESS, "住所")],
+    ["invoice_number", parseInvoiceNumber(form.invoice_number)],
+    ["clerk_name", parseText(form.clerk_name, MAX_CLERK, "対応した人")],
+    ["receipt_no", parseText(form.receipt_no, MAX_RECEIPT_NO, "レシート番号")],
+  ];
+  const out: DetailsPatch = {};
+  for (const [key, r] of checks) {
+    if (!r.ok) return { ok: false, error: r.error };
+    out[key] = r.value;
+  }
+  return { ok: true, value: out };
+}
+
 // 編集フォーム → PATCH の入力。明細が0行のとき、元々明細があれば [](全消し)、なければ items を省略する
 export function buildPatch(form: TxFormValues, rows: ItemRow[], hadItems: boolean): BuildResult<TransactionPatch> {
   const amount = parseAmount(form.amount);
@@ -192,7 +261,10 @@ export function buildPatch(form: TxFormValues, rows: ItemRow[], hadItems: boolea
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return { ok: false, error: "日付を入力してください。" };
   const items = buildItems(rows);
   if (!items.ok) return items;
+  const details = buildDetails(form);
+  if (!details.ok) return details;
   const patch: TransactionPatch = {
+    ...details.value,
     date: form.date,
     amount,
     merchant: nullable(form.merchant),

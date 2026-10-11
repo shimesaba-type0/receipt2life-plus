@@ -13,6 +13,7 @@ import {
   effectiveCategory,
   effectiveTaxFlag,
   emptyItemRow,
+  emptyTxForm,
   formatSignedYen,
   isNotFoundErrors,
   itemRowsFromView,
@@ -48,7 +49,7 @@ const tx = (p: Partial<TransactionView> = {}): TransactionView => ({
   ...p,
 });
 const row = (p: Partial<ItemRow>): ItemRow => ({ ...emptyItemRow("k"), ...p });
-const form = (p: Partial<TxFormValues> = {}): TxFormValues => ({ date: "2026-10-11", amount: "300", merchant: "ダミー商店", category: "食費", account: "", memo: "", tax_flag: "", ...p });
+const form = (p: Partial<TxFormValues> = {}): TxFormValues => ({ ...emptyTxForm("2026-10-11"), amount: "300", merchant: "ダミー商店", category: "食費", ...p });
 
 describe("金額", () => {
   it("parseAmount はマイナス可、カンマ可、小数・空は null", () => {
@@ -101,7 +102,7 @@ describe("dayItemsSub", () => {
 
 describe("フォームの初期値", () => {
   it("取引と明細(position順)をフォームの文字列にする", () => {
-    expect(txFormFromView(tx({ merchant: null, tax_flag: "medical" }))).toEqual({ date: "2026-10-11", amount: "300", merchant: "", category: "食費", account: "", memo: "", tax_flag: "medical" });
+    expect(txFormFromView(tx({ merchant: null, tax_flag: "medical" }))).toEqual({ ...emptyTxForm("2026-10-11"), amount: "300", category: "食費", tax_flag: "medical" });
     const rows = itemRowsFromView([item({ id: "b", position: 1, name: "B", amount: -10 }), item({ id: "a", position: 0, name: "A", amount: 310, category: "日用品" })]);
     expect(rows.map((r) => [r.key, r.name, r.amount, r.category])).toEqual([
       ["a", "A", "310", "日用品"],

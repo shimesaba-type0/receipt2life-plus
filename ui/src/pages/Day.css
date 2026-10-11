@@ -97,3 +97,7 @@
 
 .day__links { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .day__links .day__item + .day__item { border-top: 0; }
+.day__time { margin-left: 8px; font-size: 12px; font-weight: 400; }
+.day__details { margin: 12px 0 0; padding: 12px 0 0; min-width: 0; border: 0; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 6px; }
+.day__details legend { padding: 0; }
+.day__fielderr { margin: 0; font-size: 13px; }

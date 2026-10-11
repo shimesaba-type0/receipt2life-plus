@@ -60,3 +60,12 @@
   .tx__bulk-row label { flex: none; width: 14em; }
   .tx__bulk-row select { flex: 1; }
 }
+
+.tx__time { display: inline-flex; align-items: baseline; gap: 4px; }
+.tx__time-value { font-weight: 500; }
+.tx__shop dd { overflow-wrap: anywhere; }
+.tx__tel { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 500; text-decoration: underline; }
+.copyval { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.copyval__text { min-width: 0; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
+.copyval__btn { min-height: 44px; }
+.copyval__msg { flex-basis: 100%; font-size: 12px; }
