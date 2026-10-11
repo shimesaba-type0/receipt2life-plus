@@ -147,3 +147,26 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# --- receipt2life+ 固有: 公開リポジトリに上げないもの ---
+
+# 秘密・ローカル設定(例だけコミットする)
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+
+# Cloudflare Wrangler のローカル状態(ローカルD1など)
+.wrangler/
+
+# 実データ(支出・写真・バックアップ)。テスト用はダミーを tests/fixtures に置く
+exports/
+photos/
+backup/
+*.sqlite
+*.sqlite3
+*.db
+
+# エージェントのローカル設定(共有ルールは AGENTS.md / CLAUDE.md に書く)
+.claude/settings.local.json
+CLAUDE.local.md

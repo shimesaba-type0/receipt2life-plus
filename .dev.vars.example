@@ -1,0 +1,6 @@
+# コピーして .dev.vars にする(.dev.vars はコミットしない)
+# ローカルの動作確認でだけ認証を素通りにする(localhostのときのみ有効にする予定。本番には置かない)
+AUTH_BYPASS=1
+# Cloudflare Access のJWT検証用(フェーズ2で使う。空だと全リクエストを拒否する)
+ACCESS_TEAM_DOMAIN=
+ACCESS_AUD=
