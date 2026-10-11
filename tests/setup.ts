@@ -10,4 +10,7 @@ beforeEach(async () => {
   await e.DB.exec("DELETE FROM attachments");
   await e.DB.exec("DELETE FROM events");
   await e.DB.exec("DELETE FROM transactions");
+  // 写真の実体(R2)も空にする
+  const { objects } = await e.PHOTOS.list();
+  if (objects.length > 0) await e.PHOTOS.delete(objects.map((o) => o.key));
 });
