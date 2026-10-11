@@ -294,6 +294,45 @@ describe("importRecords", () => {
   });
 });
 
+describe("バックアップ行(id と created_at がある transaction)の重複判定", () => {
+  const backup = (over: Record<string, unknown> = {}) => tx({ created_at: "2026-10-01T00:00:00.000Z", ...over });
+
+  it("allow_duplicate で登録した同日・同額・同店の2件が、export → 全削除 → import で2件とも戻る", async () => {
+    await seedTransaction();
+    await seedTransaction({ allow_duplicate: true });
+    expect(await count("transactions")).toBe(2);
+    const before = await exportText();
+    await db().exec("DELETE FROM transactions");
+
+    const res = await doImport(before);
+    expect(res.summary).toEqual({ total: 2, ok: 2, skipped: 0, errors: 0 });
+    expect(await exportText()).toBe(before);
+  });
+
+  it("入力内・既存との重複判定を飛ばす", async () => {
+    await seedTransaction();
+    const res = await doImport(jsonl(backup({ id: "b1" }), backup({ id: "b2" })));
+    expect(res.results.map((r) => r.status)).toEqual(["ok", "ok"]);
+  });
+
+  it("id と created_at の片方が無い行は、従来どおり重複でスキップされる", async () => {
+    await seedTransaction();
+    const res = await doImport(jsonl(tx({ id: "n1" }), backup({ id: undefined }), tx({ id: "n2", created_at: undefined })));
+    expect(res.results.map((r) => r.status)).toEqual(["skipped_duplicate", "skipped_duplicate", "skipped_duplicate"]);
+  });
+
+  it("バックアップ行でも、id が既存なら skipped_exists", async () => {
+    await doImport(jsonl(backup()));
+    const res = await doImport(jsonl(backup()));
+    expect(res.results[0]!.status).toBe("skipped_exists");
+  });
+
+  it("バックアップ行の後に出た、手書きの同じ取引は重複になる", async () => {
+    const res = await doImport(jsonl(backup({ id: "b1" }), tx({ id: "n1" })));
+    expect(res.results.map((r) => r.status)).toEqual(["ok", "skipped_duplicate"]);
+  });
+});
+
 describe("往復(export → 空にする → import)", () => {
   it("同じ内容に戻る", async () => {
     const t1 = await seedTransaction();

@@ -298,6 +298,7 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
     entry: Entry;
     id: string;
     given: boolean;
+    isBackup: boolean;
     item: TransactionInput;
     date: string;
     status: string;
@@ -329,6 +330,8 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
       entry,
       id: e.data.id ?? crypto.randomUUID(),
       given: e.data.id !== undefined,
+      // id と created_at の両方があるのは、エクスポート由来のバックアップ行
+      isBackup: e.data.id !== undefined && e.data.created_at !== undefined,
       item,
       date,
       status: e.data.status ?? (!item.merchant || !item.category ? "needs_review" : "ok"),
@@ -357,7 +360,7 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
       report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」の取引は既にあるためスキップしました` });
       continue;
     }
-    if (!v.item.allow_duplicate) {
+    if (!v.item.allow_duplicate && !v.isBackup) {
       const dupOf = existingHash.get(v.hash) ?? seenHash.get(v.hash);
       if (dupOf) {
         report(v.entry, {
