@@ -42,5 +42,16 @@ export function createApp(options: AppOptions = {}) {
     return c.env.ASSETS.fetch(c.req.raw);
   });
 
+  // 想定外の例外は、ログに種類と文面だけ残し(値は出さない)、/api/* にはJSONで返す
+  app.onError((err, c) => {
+    const name = err instanceof Error ? err.name : "Error";
+    const reason = (err instanceof Error ? err.message : String(err)).slice(0, 200);
+    console.error(`error: ${name}: ${reason}`);
+    if (new URL(c.req.url).pathname.startsWith("/api/")) {
+      return c.json({ ok: false, errors: [{ field: "server", message: `サーバーでエラーが起きました(${reason})` }] }, 500);
+    }
+    return c.text("Internal Server Error", 500);
+  });
+
   return app;
 }
