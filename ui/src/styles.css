@@ -48,7 +48,8 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
   .nav__brand { display: block; font-size: 17px; font-weight: 700; padding: 0 12px 20px; }
   .nav__item { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
   .nav__item.is-active { background: var(--accent-soft); }
-  .nav__export { display: flex; margin-top: auto; }
+  .nav__export { display: flex; }
+  .nav__item--mobile { display: none; }
 }
 
 /* ページの共通部品 */
