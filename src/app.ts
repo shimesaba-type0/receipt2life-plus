@@ -26,7 +26,7 @@ export function createApp(options: AppOptions = {}) {
 
   // MCP(Streamable HTTP、ステートレス): リクエストごとにサーバーとトランスポートを作る
   app.all("/mcp", async (c) => {
-    const server = createMcpServer(c.env.DB);
+    const server = createMcpServer(c.env.DB, c.env.PHOTOS, new URL(c.req.url).origin);
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);
