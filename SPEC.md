@@ -195,7 +195,7 @@ JSONLの例:
 ## 10. ライセンスと公開方針
 
 - ライセンスは GNU Affero General Public License v3.0(AGPL-3.0)。`LICENSE` はGitHubの作成画面で入る
-- プルリクエストは受けない(GitHubの設定で無効化)。READMEにも書く。Issueは受ける
+- 外部からのプルリクエストは受けない(GitHubの設定で、PRの作成をコラボレーターだけに制限する。PR自体を無効化すると、自分のPRでCI/CDを回せなくなる)。READMEにも書く。Issueは受ける
 - 脆弱性は、private vulnerability reportingで受ける。`SECURITY.md` に書く
 - `.gitignore`(Nodeテンプレートに追記)
 
@@ -223,7 +223,7 @@ backup/
 
 ## 12. 人間が行う作業(エージェントは手順を docs/setup.md に書く)
 
-1. GitHubのリポジトリ作成(Public、AGPL-3.0、Node)、Pull requestsの無効化、private vulnerability reportingの有効化
+1. GitHubのリポジトリ作成(Public、AGPL-3.0、Node)、PR作成のコラボレーター限定、mainのルールセット作成、private vulnerability reportingの有効化
 2. `wrangler login`、D1とR2の作成(ステージングと本番)、シークレットの設定
 3. Accessのアプリ作成(ステージングはService Authのポリシー)、Managed OAuthの有効化、DCRの許可リストにClaudeとChatGPTのコールバックURLを登録
 4. Claude.aiとChatGPTからのコネクタ接続の検証

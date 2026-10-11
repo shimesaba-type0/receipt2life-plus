@@ -5,10 +5,10 @@
 
 ## スマホでできる(ブラウザだけ)
 
-1. GitHub: Settings → General → Features で **Pull requests を無効化**
+1. GitHub: Settings → General で、PRの作成を **コラボレーター(自分)だけに制限**する(Pull requests 自体を無効化しない。このリポジトリは自分のPRでCI/CDを回すため、無効化するとPRが作れなくなる)
 2. GitHub: Settings → Advanced Security → **Private vulnerability reporting を有効化**
 3. GitHub: Settings → Environments で `staging` と `production` を作る(`production` には承認者を付ける)
-4. GitHub: Settings → Branches で main を保護し、`test` を必須チェックにする
+4. GitHub: Settings → Rules → Rulesets で main 用のルールセットを新規作成し、「PR必須」「`test` を必須チェック」「force push と削除を禁止」を有効にする
 5. Cloudflare ダッシュボードで D1 と R2 を作る(ステージングと本番を別々に)
 6. Cloudflare ダッシュボードで API トークンを作る(ステージング用と本番用を分ける)
    → GitHub の各 Environment に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` を登録
