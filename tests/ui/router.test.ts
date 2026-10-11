@@ -15,6 +15,16 @@ describe("parseRoute", () => {
     expect(parseRoute("/day/2026-10-11")).toEqual({ name: "day", date: "2026-10-11" });
     expect(parseRoute("/day/2026-1-1")).toEqual({ name: "notfound" });
   });
+  it("明細ページは /tx/:id", () => {
+    expect(parseRoute("/tx/abc123")).toEqual({ name: "transaction", id: "abc123" });
+    expect(parseRoute("/tx/abc123/")).toEqual({ name: "transaction", id: "abc123" });
+    expect(parseRoute("/tx/a%20b")).toEqual({ name: "transaction", id: "a b" });
+    expect(parseRoute("/tx")).toEqual({ name: "notfound" });
+    expect(parseRoute("/tx/")).toEqual({ name: "notfound" });
+    expect(parseRoute("/tx/a/b")).toEqual({ name: "notfound" });
+    expect(parseRoute("/tx/%E0%A4%A")).toEqual({ name: "notfound" });
+    expect(parseRoute(`/tx/${"a".repeat(65)}`)).toEqual({ name: "notfound" });
+  });
   it("バックアップ画面は /backup(/export と /import はWorkerのAPIなので、SPAでは扱わない)", () => {
     expect(parseRoute("/backup")).toEqual({ name: "backup" });
     expect(parseRoute("/backup/")).toEqual({ name: "backup" });

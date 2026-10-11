@@ -18,6 +18,8 @@ import type {
   NewTransaction,
   PhotoMeta,
   PhotoView,
+  TransactionDeleted,
+  TransactionDetailData,
   TransactionPatch,
   TransactionView,
 } from "../../src/api/contract";
@@ -72,7 +74,10 @@ export const addTransactions = (transactions: NewTransaction[]) =>
   request<{ registered: TransactionView[]; skipped_duplicates: unknown[]; message: string }>("POST", "/api/transactions", { transactions });
 export const updateTransaction = (id: string, patch: TransactionPatch) =>
   request<{ transaction: TransactionView; warnings: unknown[]; message: string }>("PATCH", `/api/transactions/${encodeURIComponent(id)}`, patch);
-export const deleteTransaction = (id: string) => request<{ deleted: TransactionView; message: string }>("DELETE", `/api/transactions/${encodeURIComponent(id)}`);
+export const getTransaction = (id: string) => request<TransactionDetailData>("GET", `/api/transactions/${encodeURIComponent(id)}`);
+// 写真つきの取引は、deletePhotos: true(?delete_photos=1)でないと 400 で断られる
+export const deleteTransaction = (id: string, opts: { deletePhotos?: boolean } = {}) =>
+  request<TransactionDeleted>("DELETE", `/api/transactions/${encodeURIComponent(id)}${opts.deletePhotos ? "?delete_photos=1" : ""}`);
 
 export const addEvent = (event: NewEvent) => request<{ event: EventView; message: string }>("POST", "/api/events", event);
 export const updateEvent = (id: string, patch: EventPatch) => request<{ event: EventView; message: string }>("PATCH", `/api/events/${encodeURIComponent(id)}`, patch);

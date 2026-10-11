@@ -195,7 +195,7 @@ function HomeBody(props: { data: HomeData }) {
                 const sub = recentSub(t);
                 return (
                   <li key={t.id}>
-                    <Link href={`/day/${t.date}`} class="home__recent-link" aria-label={`${formatDateJa(t.date)} ${m.title} ${t.amount}円。この日を開く`}>
+                    <Link href={`/tx/${encodeURIComponent(t.id)}`} class="home__recent-link" aria-label={`${formatDateJa(t.date)} ${m.title} ${t.amount}円。明細を開く`}>
                       <span class="home__recent-date num">{shortDate(t.date)}</span>
                       <span class="home__recent-main">
                         <span class="home__recent-title">
