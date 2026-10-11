@@ -44,14 +44,25 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 
 | ツール | 役割 |
 | --- | --- |
-| `add_transactions` / `list_transactions` / `update_transaction` / `delete_transaction` | 取引の登録・一覧・修正・削除 |
-| `summarize` / `list_categories` | 集計、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
+| `add_transactions` / `list_transactions` / `update_transaction` / `delete_transaction` | 取引の登録・一覧・修正・削除。明細(レシートの行)つきで登録・修正できる。削除は `delete_photos` で写真もいっしょに |
+| `summarize` / `list_categories` | 集計(明細があれば行ごとのカテゴリ・フラグで数える)、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
 | `add_category` / `update_category` / `delete_category` / `rename_group` | カテゴリの管理。Zaim のように大分類の下にサブカテゴリを作る・名前や大分類を変える・削除(使用中は `move_to` で支出を移す)・大分類の名前を変える |
 | `add_event` / `update_event` / `list_events` | 日付や期間のメモ(出来事) |
 | `create_photo_upload_link` | 写真のアップロード用リンクを作る |
 | `list_photos` | 写真のメタ情報(id、日付、紐づけ先、説明、種類、サイズ)の一覧 |
 | `get_photos` | 写真の画像そのものを取得する(1回に1〜4枚、合計約6MBまで) |
 | `add_link` / `list_links` / `delete_link` | Xの投稿・YouTubeの動画のリンクを、日付・取引・出来事に付けて残す・一覧・削除(URLだけ保存。タイトル取得や埋め込みはしない) |
+
+## レシートの明細(行ごとの記録)
+
+1枚のレシートを、品名・金額の行ごとに記録できます。行ごとに別のカテゴリや税金のフラグを付けられるので、スーパーのレシートの中の日用品や、ドラッグストアのレシートの中の薬だけを分けて集計できます。
+
+- 登録: レシートの写真を貼って「明細ごとに登録して」と頼む。AI が `add_transactions` の `items` に、品名と金額の行をそのまま入れる(値引きはマイナスの行)。明細の合計はレシートの合計(`amount`)と一致している必要があり、合わなければエラーと差額が返るので、AI が読み直して送り直す
+- カテゴリ: 全部同じカテゴリなら取引のカテゴリだけを付ける。違う行(例: 洗剤=日用品)にだけ行のカテゴリを付ける。行のカテゴリ・フラグが空の行は、取引の値に従う
+- カテゴリを省略すると、同じ店の直近の支出のカテゴリが自動で使われる(結果の `applied_default_category` に出る。違えば「カテゴリを直して」と頼む)
+- 修正: 「さっきのレシートの明細を直して」→ `update_transaction` の `items` で明細を丸ごと置き換える(`[]` で明細を消す)。金額だけを変えるときも、明細の合計と合っている必要がある
+- 見返し: `list_transactions` の各取引に `items` が付く。`summarize` は明細の行ごとに数える(`rows` の `count` は行の数。`count` はレシートの数、`lines` は行の数)
+- 明細は任意。読み取れないレシートや1品だけの支出は、今までどおり合計だけで登録してよい
 
 ## 確定申告用の「税金のフラグ」
 
@@ -64,7 +75,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 | `donation` | 寄附金控除(ふるさと納税など) |
 
 - 登録・修正: `add_transactions` / `update_transaction` の `tax_flag`。「この薬局のレシートは医療費控除に」「さっきの取引のフラグを外して」(`null` で解除)のように頼む。薬局のレシートは `medical` か `self_medication` のどちらにするかを、AI が聞いてくることがある
-- 明細: `list_transactions` の `tax_flag`(値を指定、または `any` で何かのフラグが付いたもの全部)。年の範囲(`from` / `to`)と組み合わせる
+- 明細: `list_transactions` の `tax_flag`(値を指定、または `any` で何かのフラグが付いたもの全部)。年の範囲(`from` / `to`)と組み合わせる。レシートの明細の行ごとにもフラグを付けられ(例: ドラッグストアのレシートの薬の行だけ `self_medication`)、行のどれかが当てはまる取引が出る
 - 年ごとの合計: `summarize` の `group_by: "tax_flag"` に、年の範囲を付ける。例: 「2026年のセルフメディケーションの合計を出して」。行名は日本語のラベル、フラグなしは「(フラグなし)」
 - 画面(日の詳細)でも、支出の追加・編集の「税金のフラグ」で付け外しできる
 
@@ -89,7 +100,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 - `list_photos`: 読み取りだけ
 - `get_photos`: 読み取りだけ
 
-`list_transactions` / `list_events` / `list_categories` / `summarize` も読み取りだけです。データを変える・消すもの(`add_transactions`、`update_transaction`、`delete_transaction`、`add_event`、`update_event`、`add_category`、`update_category`、`delete_category`、`rename_group`)は、内容を見て許可するのがおすすめです。特に `delete_transaction` と `delete_category` は取り消せません。削除系は、毎回確認が出てかまいません(「常に許可」にしない)。
+`list_transactions` / `list_events` / `list_categories` / `summarize` も読み取りだけです。データを変える・消すもの(`add_transactions`、`update_transaction`、`delete_transaction`(`delete_photos` を付けると写真も消える)、`add_event`、`update_event`、`add_category`、`update_category`、`delete_category`、`rename_group`)は、内容を見て許可するのがおすすめです。特に `delete_transaction` と `delete_category` は取り消せません。削除系は、毎回確認が出てかまいません(「常に許可」にしない)。
 
 ## カテゴリを増やす
 

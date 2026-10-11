@@ -55,7 +55,7 @@ describe("MCP update_transaction / delete_transaction", () => {
 
     const deleted = await callTool("delete_transaction", { id });
     expect(deleted.body.result.isError).toBeFalsy();
-    expect(text(deleted)).toMatchObject({ ok: true, deleted: { id, amount: 1380 }, message: "削除しました: A店 1,380円" });
+    expect(text(deleted)).toMatchObject({ ok: true, deleted: { transaction: { id, amount: 1380 } }, message: "削除しました: A店 1,380円" });
 
     const after = await callTool("list_transactions", {});
     expect(text(after).transactions).toEqual([]);

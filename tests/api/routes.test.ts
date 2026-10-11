@@ -60,7 +60,7 @@ describe("取引", () => {
     expect(day).toMatchObject({ ok: true, date, total: 900, count: 1 });
 
     const del = await send("DELETE", `/api/transactions/${id}`);
-    expect(await json(del)).toMatchObject({ ok: true, deleted: { id } });
+    expect(await json(del)).toMatchObject({ ok: true, deleted: { transaction: { id }, items: 0, photos: 0, links: 0 } });
     expect((await send("DELETE", `/api/transactions/${id}`)).status).toBe(404);
   });
 

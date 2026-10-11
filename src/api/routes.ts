@@ -5,7 +5,7 @@ import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { getHome } from "../core/home";
 import { addLink, deleteLink, updateLink } from "../core/links";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
-import { addTransactions, deleteTransaction, updateTransaction } from "../core/transactions";
+import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import type { AppEnv } from "../env";
 import { noStoreJson, requireJson, sameOriginOnly, shortIdOnly } from "./guards";
 import type { FieldError } from "../core/schema";
@@ -86,13 +86,23 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
     return respond(c, await addTransactions(c.env.DB, body.value));
   });
 
+  // 1件の取引(明細・写真・リンクつき)
+  app.get("/api/transactions/:id", async (c) => respond(c, await getTransaction(c.env.DB, c.req.param("id"))));
+
   app.patch("/api/transactions/:id", async (c) => {
     const body = await readJson(c);
     if (!body) return badJson(c);
     return respond(c, await updateTransaction(c.env.DB, { ...body.value, id: c.req.param("id") }));
   });
 
-  app.delete("/api/transactions/:id", async (c) => respond(c, await deleteTransaction(c.env.DB, { id: c.req.param("id") })));
+  // ?delete_photos=1 で、紐づく写真(R2の実体も)をいっしょに消す。無ければ写真つきの取引は 400 で断る
+  app.delete("/api/transactions/:id", async (c) => {
+    const flag = c.req.query("delete_photos");
+    if (flag !== undefined && flag !== "0" && flag !== "1") {
+      return fail(c, 400, [{ field: "delete_photos", message: "delete_photos: 1(写真もいっしょに削除)か 0 で指定してください" }]);
+    }
+    return respond(c, await deleteTransaction(c.env.DB, { id: c.req.param("id"), delete_photos: flag === "1" }, { bucket: c.env.PHOTOS }));
+  });
 
   // 出来事
   app.post("/api/events", async (c) => {

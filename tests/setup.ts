@@ -9,6 +9,7 @@ beforeEach(async () => {
   // 外部キーの順(子から先に)で、データを空にする。口座の初期データは残す
   await e.DB.exec("DELETE FROM links");
   await e.DB.exec("DELETE FROM attachments");
+  await e.DB.exec("DELETE FROM transaction_items");
   await e.DB.exec("DELETE FROM events");
   await e.DB.exec("DELETE FROM transactions");
   // カテゴリは、テストで増減・改名するので初期データに戻す(口座は変わらない)
