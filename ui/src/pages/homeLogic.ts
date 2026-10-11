@@ -1,11 +1,14 @@
 // ホーム画面の表示ロジック(DOMに触れない純関数。テストする)
 import type { HomeData, SummaryRow, TransactionView } from "../../../src/api/contract";
 
-// 積み上げバーの色(白い背景・隣同士で見分けがつく順)
-export const GROUP_COLORS = ["#1f5c4b", "#3b73c9", "#d9822b", "#7c5bb5", "#c94b3f", "#3e9b68", "#5b6762"] as const;
+// 内訳バーの色。主色の濃淡 → 砂色 → 灰。出来事の色(赤橙緑青紫)と混ざらないようにする
+export const GROUP_COLORS = ["#1F5C4B", "#5E9C86", "#A9CDBF", "#C9B27A", "#B8BEBB", "#9CA5A1"] as const;
+const GRAYS = ["#B8BEBB", "#9CA5A1"] as const;
 
+// 7番目以降は灰系を交互に使う
 export function groupColor(index: number): string {
-  return GROUP_COLORS[index % GROUP_COLORS.length] as string;
+  if (index < GROUP_COLORS.length) return GROUP_COLORS[index] as string;
+  return GRAYS[index % GRAYS.length] as string;
 }
 
 // 割合の表示。小数1桁までに丸め、整数なら小数を出さない。範囲は0〜100に収める
@@ -51,6 +54,9 @@ export interface MemoView {
   total: number;
   percent: number;
   text: string;
+  // 「38%」(整数に丸める)と「11 / 29件」
+  percentText: string;
+  ratioText: string;
 }
 
 // メモ付き支出の割合。percent が不正でも件数から計算し直す
@@ -60,6 +66,8 @@ export function memoView(memo: HomeData["memo"]): MemoView {
     withMemo: memo.with_memo,
     total: memo.total,
     percent,
+    percentText: `${Math.round(percent)}%`,
+    ratioText: `${memo.with_memo} / ${memo.total}件`,
     text: memo.total > 0 ? `${memo.total}件中 ${memo.with_memo}件にメモがあります(${formatPercent(percent)})` : "まだ支出がありません",
   };
 }
@@ -76,12 +84,29 @@ export function reviewHref(data: Pick<HomeData, "recent" | "month">): string {
 }
 
 export function reviewLabel(count: number): string {
-  return `要確認の支出が${count}件あります`;
+  return `要確認の記録が${count}件あります`;
 }
 
-// 最近の記録1行の見出し(店名がなければカテゴリ、それもなければ「支出」)
-export function recentTitle(t: TransactionView): string {
-  return t.merchant?.trim() || t.category?.trim() || "支出";
+// 最近の記録1行の店名。無ければ「店名なし」(要確認チップを添える目印にする)
+export function recentMerchant(t: TransactionView): { title: string; missing: boolean } {
+  const name = t.merchant?.trim();
+  return name ? { title: name, missing: false } : { title: "店名なし", missing: true };
+}
+
+// サブ行「食費・現金」(カテゴリ・口座。無い方は省く)
+export function recentSub(t: TransactionView): string {
+  return [t.category?.trim(), t.account?.trim()].filter((x): x is string => !!x).join("・");
+}
+
+// 今月の範囲「10月1日〜11日」。終わりは今日(今月の外なら月末)
+export function monthRangeLabel(from: string, today: string): string {
+  const [, m, d1] = from.split("-");
+  const [y, mo] = from.split("-").map(Number) as [number, number];
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const inMonth = today.slice(0, 7) === from.slice(0, 7);
+  const end = inMonth ? Number(today.split("-")[2]) : last;
+  const start = Number(d1);
+  return end > start ? `${Number(m)}月${start}日〜${end}日` : `${Number(m)}月${start}日`;
 }
 
 // 日付 "2026-10-11" を "10/11" にする
