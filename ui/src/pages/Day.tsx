@@ -17,6 +17,7 @@ import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
 import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-queue";
 import { PhotoUploader } from "../components/PhotoUploader";
 import { Link } from "../router";
+import { categoryChipLabel } from "./dayLogic";
 import "./Day.css";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -224,7 +225,9 @@ export function Day(props: { date: string }) {
     <section class="page day">
       <header class="day__head">
         <Link href={`/calendar?month=${month}`} class="day__back" aria-label="カレンダーに戻る">
-          ‹ 戻る
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
         </Link>
         <h1 class="page__title day__title">{formatShort(date)}</h1>
         <Link href={`/day/${today}`} class="day__today">
@@ -252,12 +255,14 @@ export function Day(props: { date: string }) {
       {data && (
         <>
           <div class="card day__total">
-            <span class="muted">この日の合計</span>
-            <strong class="num day__total-amount">{formatYen(data.total)}</strong>
-            <span class="muted">{data.count}件</span>
+            <div class="day__total-main">
+              <span class="day__total-label muted">この日の合計</span>
+              <strong class="num day__total-amount">{formatYen(data.total)}</strong>
+            </div>
+            <span class="day__total-count muted">{data.count}件</span>
           </div>
 
-          <div class="card">
+          <section class="day__section" aria-label="支出">
             <div class="day__row-head">
               <h2 class="day__h">支出</h2>
               {!adding && (
@@ -266,10 +271,17 @@ export function Day(props: { date: string }) {
                 </button>
               )}
             </div>
-            {adding && <TxFormView title="支出を追加" initial={emptyTx} cats={cats} busy={busy} onSubmit={addTx} onCancel={() => setAdding(false)} />}
+            {adding && (
+              <div class="card">
+                <TxFormView title="支出を追加" initial={emptyTx} cats={cats} busy={busy} onSubmit={addTx} onCancel={() => setAdding(false)} />
+              </div>
+            )}
             {data.transactions.length === 0 && !adding && <p class="muted">この日の支出はありません。</p>}
-            <ul class="day__list">
-              {data.transactions.map((tx) => (
+            {data.transactions.length > 0 && (
+            <ul class="day__list day__txlist">
+              {data.transactions.map((tx) => {
+                const chip = categoryChipLabel(tx.category, cats);
+                return (
                 <li key={tx.id} class="day__item">
                   {editingTx === tx.id ? (
                     <TxFormView
@@ -284,25 +296,28 @@ export function Day(props: { date: string }) {
                   ) : (
                     <button type="button" class="day__tx" onClick={() => setEditingTx(tx.id)} aria-label={`${tx.merchant ?? "店名なし"} ${formatYen(tx.amount)} を編集`}>
                       <span class="day__tx-main">
-                        <span class="day__merchant">{tx.merchant ?? "(店名なし)"}</span>
+                        <span class="day__merchant">
+                          {tx.merchant ?? "店名なし"}
+                          {tx.status === "needs_review" && <span class="chip chip--warn day__review">要確認</span>}
+                        </span>
                         <span class="day__tags">
-                          {categoryTags(tx.category, cats).map((t) => (
-                            <span class="chip" key={t}>
-                              {t}
-                            </span>
-                          ))}
-                          {tx.account && <span class="chip">{tx.account}</span>}
-                          {tx.status === "needs_review" && <span class="chip chip--warn">要確認</span>}
+                          {chip && <span class="chip">{chip}</span>}
+                          {tx.account && <span class="day__account muted">{tx.account}</span>}
                         </span>
                         {tx.memo && <span class="muted day__memo">{tx.memo}</span>}
                       </span>
                       <span class="num day__amount">{formatYen(tx.amount)}</span>
+                      <svg class="day__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
-          </div>
+            )}
+          </section>
 
           <div class="card">
             <div class="day__row-head">
@@ -449,6 +464,7 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
     <PhotoUploader
       meta={{ date }}
       title="写真"
+      subtitle="半券・チケット・レシートなど"
       disabled={disabled || deleting}
       clearSignal={clearSignal}
       onBusyChange={setUploading}
@@ -469,6 +485,8 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
       }
       status={resultMsg && <p class="day__result">{resultMsg}</p>}
     >
+      {(openPicker: () => void, pickerOff: boolean) => (
+      <>
       {failures.length > 0 && (
         <ul class="day__queue" aria-label="失敗した写真">
           {failures.map((f, i) => (
@@ -533,16 +551,22 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
             </li>
           );
         })}
+        {!selecting && (
+          <li class="day__photo">
+            <button type="button" class="day__addtile" disabled={pickerOff} onClick={openPicker}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              写真を追加
+            </button>
+          </li>
+        )}
       </ul>
+      <p class="day__note muted">追加する写真は、端末で自動的に小さくしてから保存します。</p>
+      </>
+      )}
     </PhotoUploader>
   );
-}
-
-// 「大分類 › カテゴリ」をタグにする。大分類が分からなければカテゴリ名だけ
-function categoryTags(category: string | null, cats: CategoriesData): string[] {
-  if (!category) return [];
-  const found = cats.categories.find((c) => c.name === category);
-  return found && found.group_name !== category ? [found.group_name, category] : [category];
 }
 
 interface TxForm {

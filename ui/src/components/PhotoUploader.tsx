@@ -24,14 +24,16 @@ export interface PhotoUploaderProps {
   disabled?: boolean;
   // 見出し(省略すると出さない)
   title?: string;
+  // 見出しの右に出す副題
+  subtitle?: string;
   addLabel?: string;
   hint?: string;
   // 「写真を追加」ボタンの隣に並べる操作(Day の「選択」など)
   tools?: ComponentChildren;
   // 進行状況の欄に足す表示(Day の削除結果など)
   status?: ComponentChildren;
-  // 枠の中、進行状況の下に出す内容(写真の一覧など)
-  children?: ComponentChildren;
+  // 枠の中、進行状況の下に出す内容(写真の一覧など)。関数なら、ファイル選択を開く関数と操作不可かどうかを受け取る
+  children?: ComponentChildren | ((openPicker: () => void, off: boolean) => ComponentChildren);
   // 1回のアップロードを始めたとき
   onStart?: () => void;
   // 1回のアップロードが終わったとき(成功・失敗の枚数)
@@ -139,8 +141,9 @@ export function PhotoUploader(props: PhotoUploaderProps) {
         void upload(Array.from(e.dataTransfer?.files ?? []));
       }}
     >
-      <div class="day__row-head">
+      <div class={`day__row-head${props.subtitle ? " day__row-head--sub" : ""}`}>
         {props.title ? <h2 class="day__h">{props.title}</h2> : <span />}
+        {props.subtitle && <span class="muted day__sub">{props.subtitle}</span>}
         <div class="day__photo-tools">
           {props.tools}
           <button type="button" class="btn" disabled={off} onClick={() => fileRef.current?.click()}>
@@ -166,7 +169,7 @@ export function PhotoUploader(props: PhotoUploaderProps) {
         {resultMsg && <p class="day__result">{resultMsg}</p>}
         {props.status}
       </div>
-      {props.children}
+      {typeof props.children === "function" ? props.children(() => fileRef.current?.click(), off) : props.children}
     </div>
   );
 }
