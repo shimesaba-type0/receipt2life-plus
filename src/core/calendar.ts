@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isRealDate, todayJst } from "./dates";
 import { listEvents, type EventView } from "./events";
+import { listLinksOnDay, type LinkView } from "./links";
 import { listPhotosOnDay, photoOnDay, type PhotoView } from "./photos";
 import type { FieldError } from "./schema";
 import type { CoreOptions, TransactionView } from "./transactions";
@@ -19,7 +20,7 @@ export type CalendarResult =
   | { ok: false; errors: FieldError[] };
 
 export type DayResult =
-  | { ok: true; date: string; total: number; count: number; transactions: TransactionView[]; events: EventView[]; photos: PhotoView[] }
+  | { ok: true; date: string; total: number; count: number; transactions: TransactionView[]; events: EventView[]; photos: PhotoView[]; links: LinkView[] }
   | { ok: false; errors: FieldError[] };
 
 const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
@@ -57,7 +58,7 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
   if (!isRealDate(date)) {
     return { ok: false, errors: [{ field: "date", message: "date: YYYY-MM-DD 形式の実在する日付で指定してください(例: 2026-10-11)" }] };
   }
-  const [txs, events, photos] = await Promise.all([
+  const [txs, events, photos, links] = await Promise.all([
     db
       .prepare(
         `SELECT t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status
@@ -71,8 +72,9 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
       .all<TransactionView>(),
     listEvents(db, { from: date, to: date, limit: 500 }),
     listPhotosOnDay(db, date),
+    listLinksOnDay(db, date),
   ]);
   if (!events.ok) return events;
   const total = txs.results.reduce((s, t) => s + t.amount, 0);
-  return { ok: true, date, total, count: txs.results.length, transactions: txs.results, events: events.events, photos };
+  return { ok: true, date, total, count: txs.results.length, transactions: txs.results, events: events.events, photos, links };
 }

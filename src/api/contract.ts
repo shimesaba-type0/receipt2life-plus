@@ -44,6 +44,18 @@ export interface PhotoView {
   created_at: string;
 }
 
+export interface LinkView {
+  id: string;
+  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画)。タイトルの取得や埋め込みはしない
+  url: string;
+  kind: "x" | "youtube";
+  title: string | null;
+  date: string | null;
+  transaction_id: string | null;
+  event_id: string | null;
+  created_at: string;
+}
+
 export interface SummaryRow {
   key: string;
   label: string;
@@ -94,6 +106,8 @@ export interface DayData {
   events: EventView[];
   // その日の写真(日付、その日の取引、その日と重なる出来事に紐づくもの)
   photos: PhotoView[];
+  // その日のリンク(日付、その日の取引、その日と重なる出来事に紐づくもの)
+  links: LinkView[];
 }
 
 // GET /api/categories
@@ -149,4 +163,19 @@ export interface PhotoMeta {
   transaction_id?: string;
   event_id?: string;
   caption?: string;
+}
+
+// POST /api/links の入力(date・transaction_id・event_id のうち1つ以上が必要)。
+// 戻りは link と duplicate(同じ紐づけ先に同じ正規化URLがあれば true で、登録せず既存のものを返す)
+export interface NewLink {
+  url: string;
+  title?: string;
+  date?: string;
+  transaction_id?: string;
+  event_id?: string;
+}
+
+// PATCH /api/links/:id の入力(表題だけ変えられる。null で消去)
+export interface LinkPatch {
+  title: string | null;
 }

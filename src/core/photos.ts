@@ -169,9 +169,12 @@ export async function deletePhoto(db: D1Database, bucket: R2Bucket, id: string):
 
 // その日に紐づく写真かどうかの条件(col は日付の列。a は attachments)
 // 日付そのもの、その日の取引、その日と重なる出来事のいずれか
-export const photoOnDay = (col: string) => `(a.date = ${col}
-  OR a.transaction_id IN (SELECT id FROM transactions WHERE date = ${col})
-  OR a.event_id IN (SELECT id FROM events WHERE start_date <= ${col} AND COALESCE(end_date, start_date) >= ${col}))`;
+// alias は attachments / links などの別名。リンク(links)も同じ条件を使う
+export const onDay = (alias: string, col: string) => `(${alias}.date = ${col}
+  OR ${alias}.transaction_id IN (SELECT id FROM transactions WHERE date = ${col})
+  OR ${alias}.event_id IN (SELECT id FROM events WHERE start_date <= ${col} AND COALESCE(end_date, start_date) >= ${col}))`;
+
+export const photoOnDay = (col: string) => onDay("a", col);
 
 export async function listPhotosOnDay(db: D1Database, date: string): Promise<PhotoView[]> {
   const { results } = await db
@@ -247,7 +250,7 @@ export type GetPhotosResult =
     };
 
 // 参照先(取引・出来事)が存在するかを確かめて、無いものをエラーにする
-async function checkRefs(db: D1Database, m: { transaction_id?: string; event_id?: string }): Promise<FieldError[]> {
+export async function checkRefs(db: D1Database, m: { transaction_id?: string; event_id?: string }): Promise<FieldError[]> {
   const errors: FieldError[] = [];
   if (m.transaction_id) {
     const row = await db.prepare("SELECT id FROM transactions WHERE id = ?").bind(m.transaction_id).first();

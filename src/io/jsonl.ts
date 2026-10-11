@@ -9,6 +9,7 @@ import {
   type FieldError,
   type TransactionInput,
 } from "../core/schema";
+import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
 import { dedupHash } from "../core/transactions";
 
 // ---- 上限 ----
@@ -45,6 +46,10 @@ const EXPORT_TABLES: TableSpec[] = [
     sql: `SELECT 'attachment' AS type, id, r2_key, date, transaction_id, event_id, caption, created_at
           FROM attachments WHERE id > ? ORDER BY id LIMIT ?`,
   },
+  {
+    sql: `SELECT 'link' AS type, id, url, kind, title, date, transaction_id, event_id, created_at
+          FROM links WHERE id > ? ORDER BY id LIMIT ?`,
+  },
 ];
 
 async function* exportChunks(db: D1Database): AsyncGenerator<string> {
@@ -61,7 +66,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction → attachment の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction → attachment → link の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -110,7 +115,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "attachment"] as const;
+const RECORD_TYPES = ["event", "transaction", "attachment", "link"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -139,6 +144,23 @@ const attachmentSchema = z
     created_at: timestampField.optional(),
   })
   .refine((a) => a.date || a.transaction_id || a.event_id, {
+    message: "date / transaction_id / event_id のうち1つ以上を指定してください",
+    path: ["transaction_id"],
+  });
+
+// url は core と同じ検証で正規化して保存する。kind はエクスポートが出す項目で、あれば URL から決まる値と一致が必要
+const linkSchema = z
+  .strictObject({
+    id: idField.optional(),
+    url: z.string().max(MAX_URL_LENGTH, `${MAX_URL_LENGTH}文字までにしてください`),
+    kind: z.enum(["x", "youtube"]).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    date: isoDate.optional(),
+    transaction_id: z.string().min(1).optional(),
+    event_id: z.string().min(1).optional(),
+    created_at: timestampField.optional(),
+  })
+  .refine((l) => l.date || l.transaction_id || l.event_id, {
     message: "date / transaction_id / event_id のうち1つ以上を指定してください",
     path: ["transaction_id"],
   });
@@ -195,7 +217,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-async function existingIds(db: D1Database, table: "events" | "transactions" | "attachments", ids: string[]): Promise<Set<string>> {
+async function existingIds(db: D1Database, table: "events" | "transactions" | "attachments" | "links", ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (const part of chunks([...new Set(ids)], IN_CHUNK)) {
     const { results } = await db
@@ -449,9 +471,86 @@ async function importAttachments(db: D1Database, entries: Entry[], report: Repor
   await insertAll(db, pending, report);
 }
 
+async function importLinks(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
+  if (entries.length === 0) return;
+  const valid: { entry: Entry; id: string; given: boolean; url: string; kind: string; data: z.infer<typeof linkSchema> }[] = [];
+  for (const entry of entries) {
+    const l = linkSchema.safeParse(entry.record);
+    if (!l.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(l.error)) });
+      continue;
+    }
+    const url = parseLinkUrl(l.data.url);
+    if (!url.ok) {
+      report(entry, { status: "error", message: `url: ${url.message}` });
+      continue;
+    }
+    if (l.data.kind && l.data.kind !== url.kind) {
+      report(entry, { status: "error", message: `kind: 「${l.data.kind}」はURLの種類(${url.kind})と合いません` });
+      continue;
+    }
+    valid.push({ entry, id: l.data.id ?? crypto.randomUUID(), given: l.data.id !== undefined, url: url.url, kind: url.kind, data: l.data });
+  }
+
+  const [existing, txIds, eventIds] = await Promise.all([
+    existingIds(db, "links", valid.filter((v) => v.given).map((v) => v.id)),
+    existingIds(db, "transactions", valid.flatMap((v) => (v.data.transaction_id ? [v.data.transaction_id] : []))),
+    existingIds(db, "events", valid.flatMap((v) => (v.data.event_id ? [v.data.event_id] : []))),
+  ]);
+  // 同じ紐づけ先に同じ正規化URLがあれば重複(id が違っても)。キー → 既存のリンクの id
+  const key = (url: string, date?: string | null, tx?: string | null, ev?: string | null) => JSON.stringify([url, date ?? null, tx ?? null, ev ?? null]);
+  const sameUrl = new Map<string, string>();
+  for (const part of chunks([...new Set(valid.map((v) => v.url))], IN_CHUNK)) {
+    const { results } = await db
+      .prepare(`SELECT id, url, date, transaction_id, event_id FROM links WHERE url IN (${part.map(() => "?").join(",")}) ORDER BY created_at, id`)
+      .bind(...part)
+      .all<{ id: string; url: string; date: string | null; transaction_id: string | null; event_id: string | null }>();
+    for (const r of results) {
+      const k = key(r.url, r.date, r.transaction_id, r.event_id);
+      if (!sameUrl.has(k)) sameUrl.set(k, r.id);
+    }
+  }
+
+  const seen = new Set<string>();
+  const pending: Pending[] = [];
+  for (const v of valid) {
+    if (existing.has(v.id) || seen.has(v.id)) {
+      report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」のリンクは既にあるためスキップしました` });
+      continue;
+    }
+    const errors: string[] = [];
+    if (v.data.transaction_id && !txIds.has(v.data.transaction_id)) {
+      errors.push(`transaction_id: 「${v.data.transaction_id}」という取引はありません。先に取引を取り込むか、id を確認してください`);
+    }
+    if (v.data.event_id && !eventIds.has(v.data.event_id)) {
+      errors.push(`event_id: 「${v.data.event_id}」という出来事はありません。先に出来事を取り込むか、id を確認してください`);
+    }
+    if (errors.length > 0) {
+      report(v.entry, { status: "error", message: errors.join(" / ") });
+      continue;
+    }
+    const k = key(v.url, v.data.date, v.data.transaction_id, v.data.event_id);
+    const dupOf = sameUrl.get(k);
+    if (dupOf) {
+      report(v.entry, { status: "skipped_duplicate", id: dupOf, message: `同じ紐づけ先に同じリンク(id「${dupOf}」)があるため重複としてスキップしました` });
+      continue;
+    }
+    seen.add(v.id);
+    sameUrl.set(k, v.id);
+    pending.push({
+      entry: v.entry,
+      id: v.id,
+      statement: db
+        .prepare("INSERT INTO links (id, url, kind, title, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
+    });
+  }
+  await insertAll(db, pending, report);
+}
+
 /**
  * JSONL(または JSON 配列)を取り込む。行ごとに結果を返し、一部の行がエラーでも他の行は取り込む。
- * 順序はファイル内の順に関係なく event → transaction → attachment(外部キーの都合)。結果は元の行の順。
+ * 順序はファイル内の順に関係なく event → transaction → attachment → link(外部キーの都合)。結果は元の行の順。
  */
 export async function importRecords(db: D1Database, text: string, options: ImportOptions = {}): Promise<ImportResponse> {
   if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
@@ -467,7 +566,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], attachment: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], attachment: [], link: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -498,6 +597,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
   await importEvents(db, byType.event, report, nowIso);
   await importTransactions(db, byType.transaction, report, now);
   await importAttachments(db, byType.attachment, report, nowIso);
+  await importLinks(db, byType.link, report, nowIso);
 
   const summary: ImportSummary = { total: results.length, ok: 0, skipped: 0, errors: 0 };
   for (const r of results) {

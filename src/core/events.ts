@@ -116,7 +116,8 @@ export async function deleteEvent(db: D1Database, input: unknown): Promise<Delet
   if (photos && photos.n > 0) {
     return { ok: false, errors: [{ field: "id", message: `id: 写真が${photos.n}枚紐づいているため削除できません(${current.title})` }] };
   }
-  await db.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
+  // リンク(外部リンク)は軽いので、出来事といっしょに消す
+  await db.batch([db.prepare("DELETE FROM links WHERE event_id = ?").bind(id), db.prepare("DELETE FROM events WHERE id = ?").bind(id)]);
   return { ok: true, deleted: current, message: `出来事を削除しました: ${current.title} ${period(current)}` };
 }
 
