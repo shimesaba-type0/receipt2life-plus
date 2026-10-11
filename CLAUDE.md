@@ -6,7 +6,7 @@
 - 個人用のローカル設定は `CLAUDE.local.md` と `.claude/settings.local.json`(どちらも gitignore 済み)
 ## 開発コマンド
 
-- `npm run check`: 型チェック → lint → vitest(完了条件。CIも同じものを実行する)
+- `npm run check`: 型チェック → lint → vitest → build(完了条件。CIも同じものを実行する)
 - `npm run typecheck` / `npm run lint` / `npm run test`: 個別実行
 - `npm run dev`: ローカル起動(wrangler dev)。デプロイ系のコマンドは手元で実行しない
 
