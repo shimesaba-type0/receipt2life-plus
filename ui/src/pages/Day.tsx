@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, TransactionView } from "../../../src/api/contract";
+import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView } from "../../../src/api/contract";
 import {
   UnauthorizedError,
   addEvent,
@@ -8,22 +8,21 @@ import {
   deleteEvent,
   deleteLink,
   deletePhoto,
-  deleteTransaction,
   getCategories,
   getDay,
   photoUrl,
   updateEvent,
   updateLink,
-  updateTransaction,
 } from "../api";
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
 import { holidayName } from "../holidays";
 import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-queue";
 import { LinkCard } from "../components/LinkCard";
 import { PhotoUploader } from "../components/PhotoUploader";
+import { TransactionFields } from "../components/TransactionFields";
 import { Link } from "../router";
-import { groupCategories } from "./categoriesLogic";
-import { TAX_FLAG_OPTIONS, categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
+import { categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
+import { dayItemsSub, parseAmount, type TxFormValues } from "./transactionLogic";
 import "./Day.css";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -58,14 +57,6 @@ async function run<T>(call: () => Promise<ApiResult<T>>): Promise<{ ok: true; va
 }
 
 const optional = (s: string): string | undefined => (s.trim() === "" ? undefined : s.trim());
-const nullable = (s: string): string | null => (s.trim() === "" ? null : s.trim());
-
-function parseAmount(s: string): number | null {
-  const t = s.trim().replace(/,/g, "");
-  if (!/^-?\d+$/.test(t)) return null;
-  const n = Number(t);
-  return Number.isSafeInteger(n) ? n : null;
-}
 
 export function Day(props: { date: string }) {
   const { date } = props;
@@ -76,7 +67,6 @@ export function Day(props: { date: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const [editingTx, setEditingTx] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingEvent, setEditingEvent] = useState<string | "new" | null>(null);
   const [viewPhoto, setViewPhoto] = useState<PhotoView | null>(null);
@@ -94,7 +84,6 @@ export function Day(props: { date: string }) {
 
   useEffect(() => {
     setData(null);
-    setEditingTx(null);
     setAdding(false);
     setEditingEvent(null);
     setNotice(null);
@@ -141,27 +130,7 @@ export function Day(props: { date: string }) {
 
   const failOf = (res: { ok: true; value: unknown } | { ok: false; message: string }) => (res.ok ? null : res.message);
 
-  async function saveTx(id: string, form: TxForm): Promise<boolean> {
-    const amount = parseAmount(form.amount);
-    if (amount === null) {
-      setError("金額は整数(円)で入力してください。");
-      return false;
-    }
-    const ok = await guarded(
-      async () => failOf(await run(() => updateTransaction(id, { amount, merchant: nullable(form.merchant), category: nullable(form.category), account: nullable(form.account), memo: nullable(form.memo), tax_flag: parseTaxFlagField(form.tax_flag) }))),
-      "支出を保存しました。",
-    );
-    if (ok) setEditingTx(null);
-    return ok;
-  }
-
-  async function removeTx(tx: TransactionView) {
-    if (!window.confirm(`${tx.merchant ?? "この支出"}(${formatYen(tx.amount)})を削除しますか?`)) return;
-    const ok = await guarded(async () => failOf(await run(() => deleteTransaction(tx.id))), "支出を削除しました。");
-    if (ok) setEditingTx(null);
-  }
-
-  async function addTx(form: TxForm): Promise<boolean> {
+  async function addTx(form: TxFormValues): Promise<boolean> {
     const amount = parseAmount(form.amount);
     if (amount === null) {
       setError("金額は整数(円)で入力してください。");
@@ -310,7 +279,7 @@ export function Day(props: { date: string }) {
             </div>
             {adding && (
               <div class="card">
-                <TxFormView title="支出を追加" initial={emptyTx} cats={cats} busy={busy} onSubmit={addTx} onCancel={() => setAdding(false)} />
+                <AddTxForm date={date} cats={cats} busy={busy} onSubmit={addTx} onCancel={() => setAdding(false)} />
               </div>
             )}
             {data.transactions.length === 0 && !adding && <p class="muted">この日の支出はありません。</p>}
@@ -319,38 +288,33 @@ export function Day(props: { date: string }) {
               {data.transactions.map((tx) => {
                 const chip = categoryChipLabel(tx.category, cats);
                 const taxChip = taxFlagChipLabel(tx.tax_flag);
+                const itemsSub = dayItemsSub(tx);
                 return (
                 <li key={tx.id} class="day__item">
-                  {editingTx === tx.id ? (
-                    <TxFormView
-                      title="支出を編集"
-                      initial={{ amount: String(tx.amount), merchant: tx.merchant ?? "", category: tx.category ?? "", account: tx.account ?? "", memo: tx.memo ?? "", tax_flag: tx.tax_flag ?? "" }}
-                      cats={cats}
-                      busy={busy}
-                      onSubmit={(f) => saveTx(tx.id, f)}
-                      onCancel={() => setEditingTx(null)}
-                      onDelete={() => removeTx(tx)}
-                    />
-                  ) : (
-                    <button type="button" class="day__tx" onClick={() => setEditingTx(tx.id)} aria-label={`${tx.merchant ?? "店名なし"} ${formatYen(tx.amount)} を編集`}>
-                      <span class="day__tx-main">
-                        <span class="day__merchant">
-                          {tx.merchant ?? "店名なし"}
-                          {tx.status === "needs_review" && <span class="chip chip--warn day__review">要確認</span>}
-                        </span>
-                        <span class="day__tags">
-                          {chip && <span class="chip">{chip}</span>}
-                          {tx.account && <span class="day__account muted">{tx.account}</span>}
-                          {taxChip && <span class="chip day__taxflag">{taxChip}</span>}
-                        </span>
-                        {tx.memo && <span class="muted day__memo">{tx.memo}</span>}
+                  <Link href={`/tx/${encodeURIComponent(tx.id)}`} class="day__tx" aria-label={`${tx.merchant ?? "店名なし"} ${formatYen(tx.amount)} の明細を開く`}>
+                    <span class="day__tx-main">
+                      <span class="day__merchant">
+                        {tx.merchant ?? "店名なし"}
+                        {tx.status === "needs_review" && <span class="chip chip--warn day__review">要確認</span>}
                       </span>
-                      <span class="num day__amount">{formatYen(tx.amount)}</span>
-                      <svg class="day__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M9 6l6 6-6 6" />
-                      </svg>
-                    </button>
-                  )}
+                      <span class="day__tags">
+                        {chip && <span class="chip">{chip}</span>}
+                        {itemsSub && (
+                          <span class="day__items muted">
+                            {itemsSub.count}
+                            {itemsSub.others && `・${itemsSub.others}`}
+                          </span>
+                        )}
+                        {tx.account && <span class="day__account muted">{tx.account}</span>}
+                        {taxChip && <span class="chip day__taxflag">{taxChip}</span>}
+                      </span>
+                      {tx.memo && <span class="muted day__memo">{tx.memo}</span>}
+                    </span>
+                    <span class="num day__amount">{formatYen(tx.amount)}</span>
+                    <svg class="day__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                  </Link>
                 </li>
                 );
               })}
@@ -708,25 +672,10 @@ function LinksCard(props: {
   );
 }
 
-interface TxForm {
-  amount: string;
-  merchant: string;
-  category: string;
-  account: string;
-  memo: string;
-  // "" がフラグなし
-  tax_flag: string;
-}
-const emptyTx: TxForm = { amount: "", merchant: "", category: "", account: "", memo: "", tax_flag: "" };
-
-function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesData; busy: boolean; onSubmit: (f: TxForm) => Promise<boolean>; onCancel: () => void; onDelete?: () => void }) {
-  const { initial, cats, busy } = props;
-  const [f, setF] = useState<TxForm>(initial);
-  const set = (k: keyof TxForm) => (e: Event) => setF({ ...f, [k]: (e.currentTarget as HTMLInputElement).value });
-  // 大分類ごとの optgroup(サーバーの並びのまま)
-  const groups = groupCategories(cats.categories);
-  const known = cats.categories.some((c) => c.name === f.category);
-  const accountKnown = cats.accounts.includes(f.account);
+// 支出の追加フォーム(新規登録用)。明細は、登録後にそのレシートの「明細」ページで編集する
+function AddTxForm(props: { date: string; cats: CategoriesData; busy: boolean; onSubmit: (f: TxFormValues) => Promise<boolean>; onCancel: () => void }) {
+  const { busy } = props;
+  const [f, setF] = useState<TxFormValues>({ date: props.date, amount: "", merchant: "", category: "", account: "", memo: "", tax_flag: "" });
   const id = useRef(`tx-${Math.random().toString(36).slice(2, 8)}`).current;
   return (
     <form
@@ -736,48 +685,9 @@ function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesDat
         void props.onSubmit(f);
       }}
     >
-      <h3 class="day__form-title">{props.title}</h3>
-      <label for={`${id}-amount`}>金額(円)</label>
-      <input id={`${id}-amount`} type="text" inputMode="numeric" required value={f.amount} onInput={set("amount")} />
-      <label for={`${id}-merchant`}>店名</label>
-      <input id={`${id}-merchant`} type="text" value={f.merchant} onInput={set("merchant")} />
-      <label for={`${id}-category`}>カテゴリ</label>
-      <select id={`${id}-category`} value={f.category} onChange={set("category")}>
-        <option value="">未設定</option>
-        {f.category && !known && <option value={f.category}>{f.category}</option>}
-        {groups.map((g) => (
-          <optgroup label={g.group_name} key={g.group_name}>
-            {g.categories.map((c) => (
-              <option value={c.name} key={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-      <Link href="/categories" class="day__catlink">
-        カテゴリを編集
-      </Link>
-      <label for={`${id}-account`}>口座</label>
-      <select id={`${id}-account`} value={f.account} onChange={set("account")}>
-        <option value="">未設定</option>
-        {f.account && !accountKnown && <option value={f.account}>{f.account}</option>}
-        {cats.accounts.map((a) => (
-          <option value={a} key={a}>
-            {a}
-          </option>
-        ))}
-      </select>
-      <label for={`${id}-taxflag`}>税金のフラグ</label>
-      <select id={`${id}-taxflag`} value={f.tax_flag} onChange={set("tax_flag")}>
-        {TAX_FLAG_OPTIONS.map((o) => (
-          <option value={o.value} key={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <label for={`${id}-memo`}>メモ</label>
-      <textarea id={`${id}-memo`} rows={2} value={f.memo} onInput={set("memo")} />
+      <h3 class="day__form-title">支出を追加</h3>
+      <TransactionFields idPrefix={id} values={f} cats={props.cats} onChange={(patch) => setF((cur) => ({ ...cur, ...patch }))} />
+      <p class="muted day__note">レシートの明細(品名ごとの金額)は、登録したあとに、その支出を開いて入力できます。</p>
       <div class="day__actions">
         <button type="submit" class="btn btn--primary" disabled={busy}>
           {busy ? "保存中…" : "保存"}
@@ -785,11 +695,6 @@ function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesDat
         <button type="button" class="btn" disabled={busy} onClick={props.onCancel}>
           キャンセル
         </button>
-        {props.onDelete && (
-          <button type="button" class="btn day__danger" disabled={busy} onClick={props.onDelete}>
-            削除
-          </button>
-        )}
       </div>
     </form>
   );

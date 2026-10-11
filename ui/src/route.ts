@@ -3,6 +3,7 @@ export type Route =
   | { name: "home" }
   | { name: "calendar"; month: string | null }
   | { name: "day"; date: string }
+  | { name: "transaction"; id: string }
   | { name: "photosAdd"; target: PhotosAddTarget | null }
   | { name: "backup" }
   | { name: "categories" }
@@ -39,6 +40,18 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/categories") return { name: "categories" };
   const day = /^\/day\/(\d{4}-\d{2}-\d{2})$/.exec(path);
   if (day?.[1] && DATE.test(day[1])) return { name: "day", date: day[1] };
+  // 1件の支出の明細ページ。API の /api/transactions とは衝突しない
+  const tx = /^\/tx\/([^/]+)$/.exec(path);
+  if (tx?.[1]) {
+    let id: string;
+    try {
+      id = decodeURIComponent(tx[1]);
+    } catch {
+      return { name: "notfound" };
+    }
+    // API側の上限(64文字)に合わせる
+    if (id.length > 0 && id.length <= 64) return { name: "transaction", id };
+  }
   return { name: "notfound" };
 }
 
