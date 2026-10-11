@@ -44,10 +44,10 @@ async function seedEvent(start: string, end?: string): Promise<string> {
 }
 
 describe("MCP 写真のツール", () => {
-  it("tools/list は15個で、写真の3ツールの説明が具体的", async () => {
+  it("tools/list は19個で、写真の3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string }[];
-    expect(tools).toHaveLength(15);
+    expect(tools).toHaveLength(19);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("create_photo_upload_link").description).toContain("リンク");
     expect(byName("create_photo_upload_link").description).toContain("ユーザー");

@@ -6,6 +6,7 @@
 .home__kicker { display: none; font-size: 13px; color: var(--muted); }
 .home__date { margin: 0; font-size: 20px; font-weight: 700; }
 .home__export { flex: none; width: 44px; height: 44px; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--ink); }
+.home__tools { flex: none; display: flex; gap: 8px; }
 .home__export:hover { background: var(--accent-soft); color: var(--ink); }
 .home__open-today { display: none; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 22px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; }
 .home__open-today:hover { color: #fff; opacity: 0.9; }
@@ -81,7 +82,7 @@
 /* PC幅(既存のブレークポイント 900px): 3枚のカード横並び → 要確認 → 内訳と最近の記録の2カラム */
 @media (min-width: 900px) {
   .home { max-width: 1120px; padding: 28px 32px 32px; gap: 20px; }
-  .home__brand, .home__export { display: none; }
+  .home__brand, .home__tools { display: none; }
   .home__kicker { display: block; }
   .home__date { font-size: 26px; }
   .home__open-today { display: inline-flex; }

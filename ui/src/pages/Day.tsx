@@ -22,6 +22,7 @@ import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-que
 import { LinkCard } from "../components/LinkCard";
 import { PhotoUploader } from "../components/PhotoUploader";
 import { Link } from "../router";
+import { groupCategories } from "./categoriesLogic";
 import { TAX_FLAG_OPTIONS, categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
 import "./Day.css";
 
@@ -722,8 +723,8 @@ function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesDat
   const { initial, cats, busy } = props;
   const [f, setF] = useState<TxForm>(initial);
   const set = (k: keyof TxForm) => (e: Event) => setF({ ...f, [k]: (e.currentTarget as HTMLInputElement).value });
-  const groups = new Map<string, string[]>();
-  for (const c of cats.categories) groups.set(c.group_name, [...(groups.get(c.group_name) ?? []), c.name]);
+  // 大分類ごとの optgroup(サーバーの並びのまま)
+  const groups = groupCategories(cats.categories);
   const known = cats.categories.some((c) => c.name === f.category);
   const accountKnown = cats.accounts.includes(f.account);
   const id = useRef(`tx-${Math.random().toString(36).slice(2, 8)}`).current;
@@ -744,16 +745,19 @@ function TxFormView(props: { title: string; initial: TxForm; cats: CategoriesDat
       <select id={`${id}-category`} value={f.category} onChange={set("category")}>
         <option value="">未設定</option>
         {f.category && !known && <option value={f.category}>{f.category}</option>}
-        {[...groups.entries()].map(([group, names]) => (
-          <optgroup label={group} key={group}>
-            {names.map((n) => (
-              <option value={n} key={n}>
-                {n}
+        {groups.map((g) => (
+          <optgroup label={g.group_name} key={g.group_name}>
+            {g.categories.map((c) => (
+              <option value={c.name} key={c.name}>
+                {c.name}
               </option>
             ))}
           </optgroup>
         ))}
       </select>
+      <Link href="/categories" class="day__catlink">
+        カテゴリを編集
+      </Link>
       <label for={`${id}-account`}>口座</label>
       <select id={`${id}-account`} value={f.account} onChange={set("account")}>
         <option value="">未設定</option>

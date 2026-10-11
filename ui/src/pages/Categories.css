@@ -1,0 +1,52 @@
+/* カテゴリ画面専用。色・角丸は styles.css のトークンに合わせる */
+.cat { gap: 16px; padding-top: 28px; }
+.cat__header { display: flex; flex-direction: column; gap: 4px; }
+.cat__title { margin: 0; font-size: 20px; font-weight: 700; }
+.cat__lead { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.7; }
+.cat__notice { margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; overflow-wrap: anywhere; }
+.cat__status { margin: 0; text-align: center; padding: 24px 0; }
+.cat__status.card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.cat__status .error { margin: 0; }
+
+.cat__grid { display: flex; flex-direction: column; gap: 16px; }
+.cat__card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 16px 20px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cat__card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.cat__group { margin: 0; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+
+.cat__list { list-style: none; margin: 0; padding: 0; }
+.cat__row { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--line-soft); }
+.cat__row.is-editing { display: block; padding: 8px 0 12px; }
+.cat__name { flex: 1; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.cat__usage { flex: none; font-size: 13px; color: var(--muted); }
+.cat__usage.is-zero { color: #6d7873; }
+
+/* 文字だけのボタン(タップ領域は44px) */
+.cat__link { flex: none; min-width: 44px; min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--accent); font-size: 14px; font-weight: 500; cursor: pointer; border-radius: 12px; }
+.cat__link:hover { background: var(--accent-soft); }
+.cat__add { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; margin-top: 4px; border: 1.5px dashed #8a9792; border-radius: 22px; background: transparent; color: var(--accent); font-size: 14px; font-weight: 500; cursor: pointer; }
+.cat__add:hover { background: var(--accent-soft); }
+.cat__add-group { align-self: flex-start; }
+
+/* フォーム */
+.cat__form { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.cat__card.cat__form { padding: 16px 20px; }
+.cat__form label { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.cat__form input, .cat__form select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.cat__hint { margin: 0; font-size: 12px; line-height: 1.6; }
+.cat__hint--warn { color: var(--ink); background: var(--warn-soft); padding: 6px 10px; border-radius: 10px; }
+.cat__error { margin: 4px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.cat__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.cat__delete { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
+.cat__delete .btn { align-self: flex-start; }
+.cat__danger { border-color: var(--danger); color: var(--danger); }
+.cat__confirm { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--danger); border-radius: 12px; }
+.cat__confirm p { margin: 0; font-size: 14px; line-height: 1.7; }
+.cat__confirm .cat__actions .btn { align-self: auto; }
+
+@media (min-width: 900px) {
+  .cat { max-width: 1100px; padding: 28px 32px 32px; }
+  .cat__title { font-size: 26px; }
+  .cat__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+  .cat__card { padding: 20px 28px; }
+  .cat__card.cat__form { max-width: 520px; padding: 20px 28px; }
+}

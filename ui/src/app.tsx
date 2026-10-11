@@ -1,6 +1,7 @@
 import { Nav } from "./components/Nav";
 import { Backup } from "./pages/Backup";
 import { Calendar } from "./pages/Calendar";
+import { Categories } from "./pages/Categories";
 import { Day } from "./pages/Day";
 import { Home } from "./pages/Home";
 import { PhotosAdd } from "./pages/PhotosAdd";
@@ -17,6 +18,7 @@ export function App() {
         {route.name === "day" && <Day date={route.date} />}
         {route.name === "photosAdd" && <PhotosAdd target={route.target} />}
         {route.name === "backup" && <Backup />}
+        {route.name === "categories" && <Categories />}
         {route.name === "notfound" && (
           <section class="page">
             <h1 class="page__title">ページが見つかりません</h1>

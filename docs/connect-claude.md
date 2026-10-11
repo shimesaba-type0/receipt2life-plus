@@ -40,12 +40,13 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 1. 「500円のコーヒーを、現金で、今日付けで登録して」 → 「1件登録しました: …」と返る
 2. 「今月の取引を一覧して」
 
-## 使えるツール(15個)
+## 使えるツール(19個)
 
 | ツール | 役割 |
 | --- | --- |
 | `add_transactions` / `list_transactions` / `update_transaction` / `delete_transaction` | 取引の登録・一覧・修正・削除 |
-| `summarize` / `list_categories` | 集計、カテゴリと口座の一覧 |
+| `summarize` / `list_categories` | 集計、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
+| `add_category` / `update_category` / `delete_category` / `rename_group` | カテゴリの管理。Zaim のように大分類の下にサブカテゴリを作る・名前や大分類を変える・削除(使用中は `move_to` で支出を移す)・大分類の名前を変える |
 | `add_event` / `update_event` / `list_events` | 日付や期間のメモ(出来事) |
 | `create_photo_upload_link` | 写真のアップロード用リンクを作る |
 | `list_photos` | 写真のメタ情報(id、日付、紐づけ先、説明、種類、サイズ)の一覧 |
@@ -88,7 +89,15 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 - `list_photos`: 読み取りだけ
 - `get_photos`: 読み取りだけ
 
-`list_transactions` / `list_events` / `list_categories` / `summarize` も読み取りだけです。データを変える・消すもの(`add_transactions`、`update_transaction`、`delete_transaction`、`add_event`、`update_event`)は、内容を見て許可するのがおすすめです。特に `delete_transaction` は取り消せません。
+`list_transactions` / `list_events` / `list_categories` / `summarize` も読み取りだけです。データを変える・消すもの(`add_transactions`、`update_transaction`、`delete_transaction`、`add_event`、`update_event`、`add_category`、`update_category`、`delete_category`、`rename_group`)は、内容を見て許可するのがおすすめです。特に `delete_transaction` と `delete_category` は取り消せません。削除系は、毎回確認が出てかまいません(「常に許可」にしない)。
+
+## カテゴリを増やす
+
+Zaim のように、大分類の下にサブカテゴリを作れます。例: 「大分類『住まい』の下に『光熱費』のカテゴリを作って」 → `add_category` で作ったあと、「電気代 8,000円を登録して」で `add_transactions` の `category` に使われます。
+
+- 名前(サブカテゴリ)は全体で一意(30文字まで)。大分類は20文字まで。既存の大分類でも、新しい名前でもよい
+- 整理: `update_category`(名前の変更・大分類の移動)、`rename_group`(大分類の名前の変更。既存の大分類と同名にすると統合)、`delete_category`(使っている支出があるときは `move_to` に移し先を指定する。AI は先に `list_categories` の `usage` を見る)
+- 画面の `/categories`(ナビの「カテゴリ」)でも同じことができます
 
 ## うまくいかないとき
 

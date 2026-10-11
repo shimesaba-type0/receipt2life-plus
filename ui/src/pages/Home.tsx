@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { HomeData } from "../../../src/api/contract";
 import { getHome } from "../api";
+import { CATEGORY_ICON } from "../components/Nav";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
 import { barSegments, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
@@ -39,13 +40,23 @@ export function Home() {
           <span class="home__kicker">今日</span>
           <h1 class="home__date">{formatDateJa(today)}</h1>
         </div>
-        <Link href="/backup" class="home__export" aria-label="エクスポート">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 4v11" />
-            <path d="M7 11l5 5 5-5" />
-            <path d="M5 20h14" />
-          </svg>
-        </Link>
+        {/* スマホだけ(PCは左メニューにある) */}
+        <div class="home__tools">
+          <Link href="/categories" class="home__export" aria-label="カテゴリ">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              {CATEGORY_ICON.map((d) => (
+                <path d={d} key={d} />
+              ))}
+            </svg>
+          </Link>
+          <Link href="/backup" class="home__export" aria-label="エクスポート">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 4v11" />
+              <path d="M7 11l5 5 5-5" />
+              <path d="M5 20h14" />
+            </svg>
+          </Link>
+        </div>
         <Link href={`/day/${today}`} class="home__open-today">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />

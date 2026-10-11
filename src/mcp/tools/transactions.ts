@@ -14,7 +14,7 @@ export function registerTransactionTools(server: McpServer, db: D1Database): voi
         "支出(取引)を登録する。transactions は配列で、1枚のレシートにつき1件。",
         "1枚の写真に複数のレシートが写っていたら、別々の取引にして1回の呼び出しでまとめて送る。",
         "必須は amount(円・整数)だけ。読み取れなかった項目は省略してよい(店名かカテゴリが空だと needs_review になり、後で見直せる)。",
-        "category と account は既存の名前から選ぶ。選べる名前は list_categories で取れる(初期値 カテゴリ: 食費、日用品、交通・チャージ、娯楽、その他 / 口座: 現金、カード、Suica)。",
+        "category と account は既存の名前から選ぶ。選べる名前は list_categories で取れる(初期値 カテゴリ: 食費、日用品、交通・チャージ、娯楽、その他 / 口座: 現金、カード、Suica。カテゴリは追加・変更されている場合がある)。合うカテゴリが本当に無ければ、add_category で作ってから使う。",
         "税金の控除用に分けたい支出には tax_flag を付ける(medical=医療費控除、self_medication=セルフメディケーション税制、donation=寄附金控除。1件に1つ、不要なら省略)。例: 薬局のレシートは medical か self_medication、ふるさと納税などの寄附は donation。どれにするか・控除の対象になるかは利用者が判断する(金額の記録と集計だけで、控除額の判定はしない)。迷ったら利用者に確認する。",
         "よく使う型の目安: 駐車場→交通・チャージ/現金、Suicaチャージ→交通・チャージ/Suica、自販機→食費/現金。",
         "同日・同額・同じ店の取引は重複として登録せず、既存IDを返す。実際に別の買い物なら allow_duplicate:true を付けて再送する。",

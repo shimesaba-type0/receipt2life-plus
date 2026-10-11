@@ -2,12 +2,17 @@ import type {
   ApiResult,
   CalendarData,
   CategoriesData,
+  CategoryDeleted,
+  CategoryPatch,
+  CategoryView,
   DayData,
+  GroupRename,
   EventPatch,
   EventView,
   HomeData,
   LinkPatch,
   LinkView,
+  NewCategory,
   NewEvent,
   NewLink,
   NewTransaction,
@@ -52,6 +57,16 @@ export const getHome = () => request<HomeData>("GET", "/api/home");
 export const getCalendar = (month?: string) => request<CalendarData>("GET", `/api/calendar${month ? `?month=${encodeURIComponent(month)}` : ""}`);
 export const getDay = (date: string) => request<DayData>("GET", `/api/day/${encodeURIComponent(date)}`);
 export const getCategories = () => request<CategoriesData>("GET", "/api/categories");
+
+// カテゴリの管理。name は日本語なので URL エンコードして送る
+export const addCategory = (category: NewCategory) =>
+  request<{ category: CategoryView; created_group: boolean; message: string }>("POST", "/api/categories", category);
+export const updateCategory = (name: string, patch: CategoryPatch) =>
+  request<{ category: CategoryView; created_group: boolean; message: string }>("PATCH", `/api/categories/${encodeURIComponent(name)}`, patch);
+export const deleteCategory = (name: string, moveTo?: string) =>
+  request<CategoryDeleted>("DELETE", `/api/categories/${encodeURIComponent(name)}${moveTo ? `?move_to=${encodeURIComponent(moveTo)}` : ""}`);
+export const renameCategoryGroup = (rename: GroupRename) =>
+  request<{ group: string; previous: string; updated: number; merged: boolean; message: string }>("POST", "/api/category-groups/rename", rename);
 
 export const addTransactions = (transactions: NewTransaction[]) =>
   request<{ registered: TransactionView[]; skipped_duplicates: unknown[]; message: string }>("POST", "/api/transactions", { transactions });

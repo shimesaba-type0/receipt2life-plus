@@ -115,9 +115,42 @@ export interface DayData {
 }
 
 // GET /api/categories
+// categories は大分類ごと・追加順(group_name が大分類、name がサブカテゴリ)。usage はそのカテゴリを使っている取引の件数
+export interface CategoryView {
+  name: string;
+  group_name: string;
+  usage: number;
+}
+
 export interface CategoriesData {
-  categories: { name: string; group_name: string }[];
+  categories: CategoryView[];
   accounts: string[];
+}
+
+// POST /api/categories の入力。戻りは category と created_group(新しい大分類を作ったか)と message
+export interface NewCategory {
+  name: string;
+  group_name: string;
+}
+
+// PATCH /api/categories/:name の入力(パスの name が対象。1つ以上が必要)。戻りは category, created_group, message
+export interface CategoryPatch {
+  new_name?: string;
+  group_name?: string;
+}
+
+// POST /api/category-groups/rename の入力。戻りは group, previous, updated(カテゴリの件数), merged(既存の大分類への統合か), message
+export interface GroupRename {
+  group: string;
+  new_name: string;
+}
+
+// DELETE /api/categories/:name?move_to= の戻り(使用中は move_to が必要)
+export interface CategoryDeleted {
+  deleted: { name: string; group_name: string };
+  moved: number;
+  move_to: string | null;
+  message: string;
 }
 
 // POST /api/transactions の入力(add_transactions と同じ規則)

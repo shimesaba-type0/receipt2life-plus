@@ -30,9 +30,11 @@ export function registerReportTools(server: McpServer, db: D1Database): void {
     {
       title: "カテゴリと口座を一覧する",
       description: [
-        "登録できるカテゴリ(name と大分類 group_name)と口座の名前を返す。引数はなし。",
-        "add_transactions で取引を登録する前に、決められた名前から category と account を選ぶために呼ぶ。",
-        "一覧にない名前は登録できないので、近いものに寄せる。決められなければ category は省略する(needs_review になる)。",
+        "登録できるカテゴリと口座の名前を返す。引数はなし。",
+        "カテゴリは、大分類(group_name)の下にサブカテゴリ(name)が並ぶ構造。groups は大分類ごとのまとまり(各サブカテゴリの usage=そのカテゴリを使っている支出の件数つき)、categories は同じ内容を name / group_name / usage の平らな一覧にしたもの。並びは大分類ごと・追加順で安定している。",
+        "add_transactions で取引を登録する前に、決められた名前から category と account を選ぶために呼ぶ。category にはサブカテゴリの名前(name)を使う。",
+        "一覧にない名前は登録できないので、近いものに寄せる。合うものが本当に無いときは、add_category で新しいカテゴリを作ってから登録する。決められなければ category は省略する(needs_review になる)。",
+        "カテゴリを整理する前(update_category / delete_category / rename_group)に usage を確かめるのにも使う。",
       ].join("\n"),
       inputSchema: {},
     },

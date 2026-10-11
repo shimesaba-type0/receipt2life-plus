@@ -9,6 +9,7 @@ import {
   type FieldError,
   type TransactionInput,
 } from "../core/schema";
+import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
 import { dedupHash } from "../core/transactions";
 
@@ -310,11 +311,16 @@ async function loadNames(db: D1Database, table: "categories" | "accounts"): Prom
 const unknownName = (field: string, label: string, value: string, names: Map<string, string>) =>
   `${field}: 「${value}」という${label}はありません(自動作成しません)。選べる値: ${[...names.keys()].join("、")}`;
 
+// バックアップの復元で、取り込み先に無いカテゴリを自動で作るときの大分類(行には大分類が入っていない)
+export const RESTORED_CATEGORY_GROUP = "その他";
+
 async function importTransactions(db: D1Database, entries: Entry[], report: Report, now: Date): Promise<void> {
   if (entries.length === 0) return;
   const nowIso = now.toISOString();
   const today = todayJst(now);
   const [categories, accounts] = await Promise.all([loadNames(db, "categories"), loadNames(db, "accounts")]);
+  // バックアップ行(id と created_at がある)に出てきた、取り込み先に無いカテゴリ名 → 作るときの id
+  const restoredCategories = new Map<string, string>();
 
   const valid: {
     entry: Entry;
@@ -338,9 +344,18 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
       continue;
     }
     const item = d.data;
+    const isBackup = e.data.id !== undefined && e.data.created_at !== undefined;
     const errors: string[] = [];
     if (item.date && item.date > today) errors.push(`date: 未来の日付(${item.date})は取り込めません。今日は ${today} です`);
-    if (item.category && !categories.has(item.category)) errors.push(unknownName("category", "カテゴリ", item.category, categories));
+    if (item.category && !categories.has(item.category)) {
+      // 復元では、元のカテゴリを再現するために自動で作る。名前が規則(30文字・前後の空白なし)に合うものだけ
+      const restorable = isBackup && categoryNameField("category").safeParse(item.category).data === item.category;
+      if (restorable) {
+        if (!restoredCategories.has(item.category)) restoredCategories.set(item.category, `cat_${crypto.randomUUID()}`);
+      } else {
+        errors.push(unknownName("category", "カテゴリ", item.category, categories));
+      }
+    }
     if (item.account && !accounts.has(item.account)) errors.push(unknownName("account", "口座", item.account, accounts));
     if (errors.length > 0) {
       report(entry, { status: "error", message: errors.join(" / ") });
@@ -353,7 +368,7 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
       id: e.data.id ?? crypto.randomUUID(),
       given: e.data.id !== undefined,
       // id と created_at の両方があるのは、エクスポート由来のバックアップ行
-      isBackup: e.data.id !== undefined && e.data.created_at !== undefined,
+      isBackup,
       item,
       date,
       status: e.data.status ?? (!item.merchant || !item.category ? "needs_review" : "ok"),
@@ -377,6 +392,8 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
   const seenIds = new Set<string>();
   const seenHash = new Map<string, string>();
   const pending: Pending[] = [];
+  // 実際に取り込む行が使う、自動作成のカテゴリ(取り込まれない行のぶんは作らない)
+  const createStatements = new Map<string, D1PreparedStatement>();
   for (const v of valid) {
     if (existingIdSet.has(v.id) || seenIds.has(v.id)) {
       report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」の取引は既にあるためスキップしました` });
@@ -395,6 +412,13 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
     }
     seenIds.add(v.id);
     if (!seenHash.has(v.hash)) seenHash.set(v.hash, v.id);
+    const restoredId = v.item.category ? restoredCategories.get(v.item.category) : undefined;
+    if (v.item.category && restoredId && !createStatements.has(v.item.category)) {
+      createStatements.set(
+        v.item.category,
+        db.prepare("INSERT INTO categories (id, name, group_name) VALUES (?, ?, ?)").bind(restoredId, v.item.category, RESTORED_CATEGORY_GROUP),
+      );
+    }
     pending.push({
       entry: v.entry,
       id: v.id,
@@ -408,7 +432,7 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
           v.date,
           v.item.amount,
           v.item.merchant ?? null,
-          v.item.category ? categories.get(v.item.category)! : null,
+          v.item.category ? (categories.get(v.item.category) ?? restoredCategories.get(v.item.category)!) : null,
           v.item.account ? accounts.get(v.item.account)! : null,
           v.item.memo ?? null,
           v.item.source,
@@ -419,6 +443,16 @@ async function importTransactions(db: D1Database, entries: Entry[], report: Repo
           v.item.tax_flag ?? null,
         ),
     });
+  }
+  // カテゴリを先に作る(取引の外部キーのため)。同じ名前が同時に作られて失敗したら、この回は取引ごとエラーにする
+  if (createStatements.size > 0) {
+    try {
+      await db.batch([...createStatements.values()]);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      for (const p of pending) report(p.entry, { status: "error", message: `カテゴリを作成できませんでした(${reason})` });
+      return;
+    }
   }
   await insertAll(db, pending, report);
 }

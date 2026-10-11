@@ -4,8 +4,8 @@ import { categoryChipLabel } from "../../ui/src/pages/dayLogic";
 
 const cats: CategoriesData = {
   categories: [
-    { name: "チャージ", group_name: "交通" },
-    { name: "食費", group_name: "食費" },
+    { name: "チャージ", group_name: "交通", usage: 0 },
+    { name: "食費", group_name: "食費", usage: 0 },
   ],
   accounts: [],
 };

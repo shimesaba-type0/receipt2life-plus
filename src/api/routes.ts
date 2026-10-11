@@ -1,6 +1,6 @@
 import type { Context, Hono } from "hono";
 import { getCalendar, getDay } from "../core/calendar";
-import { listCategories } from "../core/categories";
+import { addCategory, deleteCategory, listCategories, renameGroup, updateCategory } from "../core/categories";
 import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { getHome } from "../core/home";
 import { addLink, deleteLink, updateLink } from "../core/links";
@@ -18,7 +18,8 @@ const MULTIPART_OVERHEAD = 64 * 1024;
 const fail = (c: Ctx, status: 400 | 404 | 413 | 500, errors: FieldError[]) => c.json({ ok: false as const, errors }, status);
 
 // core は成功/失敗だけを返す。「存在しない id」は id 項目の「〜はありません」で表すので、404 に対応づける
-const isNotFound = (errors: FieldError[]) => errors.some((e) => e.field === "id" && /という.+はありません/.test(e.message));
+// カテゴリ・大分類は、名前(name / group)で指す。move_to は入力の誤りなので 400
+const isNotFound = (errors: FieldError[]) => errors.some((e) => (e.field === "id" || e.field === "name" || e.field === "group") && /という.+はありません/.test(e.message));
 
 function respond(c: Ctx, result: { ok: true } | { ok: false; errors: FieldError[] }) {
   if (result.ok) return c.json(result);
@@ -41,7 +42,7 @@ const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSON�
 export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -52,6 +53,30 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.get("/api/categories", async (c) => {
     const { categories, accounts } = await listCategories(c.env.DB);
     return c.json({ ok: true as const, categories, accounts });
+  });
+
+  // カテゴリの管理(大分類の下のサブカテゴリ)。:name はURLエンコードしたカテゴリ名
+  app.post("/api/categories", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addCategory(c.env.DB, body.value));
+  });
+
+  app.patch("/api/categories/:name", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateCategory(c.env.DB, { ...body.value, name: c.req.param("name") }));
+  });
+
+  app.delete("/api/categories/:name", async (c) => {
+    const moveTo = c.req.query("move_to");
+    return respond(c, await deleteCategory(c.env.DB, { name: c.req.param("name"), ...(moveTo ? { move_to: moveTo } : {}) }));
+  });
+
+  app.post("/api/category-groups/rename", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await renameGroup(c.env.DB, body.value));
   });
 
   // 取引
