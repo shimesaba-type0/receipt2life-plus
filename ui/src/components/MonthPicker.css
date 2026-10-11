@@ -1,0 +1,28 @@
+/* 年月ピッカー(シート) */
+.mp__backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center; background: rgba(24, 33, 29, 0.45); }
+.mp { width: 100%; max-width: 420px; max-height: 100dvh; overflow-y: auto; background: var(--surface); border-radius: var(--radius) var(--radius) 0 0; padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.mp__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mp__title { margin: 0; font-size: 17px; }
+.mp__today, .mp__close { min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 500; cursor: pointer; }
+.mp__close { align-self: stretch; border-color: var(--line); color: var(--muted); }
+.mp__year { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.mp__yearbtn { width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); font-size: 24px; line-height: 1; cursor: pointer; }
+.mp__yearbtn:disabled { opacity: 0.4; cursor: default; }
+.mp__yeartext { min-width: 6em; text-align: center; font-size: 18px; font-weight: 700; }
+.mp__months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mp__month { min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; cursor: pointer; }
+.mp__month:hover { background: var(--accent-soft); }
+.mp__month.is-selected { border-color: var(--accent); border-width: 2px; font-weight: 700; }
+/* 今月は主色の濃い緑で塗る */
+.mp__month.is-current, .mp__month.is-current:hover { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.mp__month.is-current.is-selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mp__date { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line-soft); padding-top: 16px; }
+.mp__label { font-size: 14px; color: var(--muted); }
+.mp__row { display: flex; gap: 8px; }
+.mp__input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.mp__date .error { margin: 0; }
+
+@media (min-width: 600px) {
+  .mp__backdrop { align-items: center; }
+  .mp { border-radius: var(--radius); max-height: 90dvh; }
+}

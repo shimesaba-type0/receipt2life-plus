@@ -3,6 +3,7 @@ import type { CalendarData, EventView, FieldError } from "../../../src/api/contr
 import { getCalendar } from "../api";
 import { buildMonthGrid, eventEnd, laneCount, layoutWeekBands } from "../calendar-layout";
 import { addMonths, formatDateJa, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
+import { MonthPicker } from "../components/MonthPicker";
 import { Link } from "../router";
 import "./Calendar.css";
 
@@ -20,6 +21,7 @@ export function Calendar(props: { month: string | null }) {
   const month = props.month ?? monthOf(today);
   const [state, setState] = useState<State>({ status: "loading" });
   const [reloadKey, setReloadKey] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +52,11 @@ export function Calendar(props: { month: string | null }) {
           ‹
         </Link>
         <div class="cal__title">
-          <h1 class="page__title">{formatMonthJa(month)}</h1>
+          <h1 class="page__title">
+            <button class="cal__pick" type="button" aria-label="年月を選んで移動" aria-haspopup="dialog" aria-expanded={pickerOpen} onClick={() => setPickerOpen(true)}>
+              {formatMonthJa(month)} <span aria-hidden="true">▾</span>
+            </button>
+          </h1>
           <p class="cal__total num" aria-live="polite">
             {data ? `合計 ${formatYen(data.total)}` : "合計 —"}
           </p>
@@ -59,6 +65,8 @@ export function Calendar(props: { month: string | null }) {
           ›
         </Link>
       </header>
+
+      {pickerOpen && <MonthPicker month={month} todayMonth={monthOf(today)} onClose={() => setPickerOpen(false)} />}
 
       {state.status === "error" && (
         <div class="card" role="alert">
