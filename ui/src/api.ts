@@ -6,7 +6,10 @@ import type {
   EventPatch,
   EventView,
   HomeData,
+  LinkPatch,
+  LinkView,
   NewEvent,
+  NewLink,
   NewTransaction,
   PhotoMeta,
   PhotoView,
@@ -78,3 +81,8 @@ export async function uploadPhoto(file: Blob, meta: PhotoMeta = {}): Promise<Api
   }
 }
 export const deletePhoto = (id: string) => request<{ deleted: PhotoView }>("DELETE", `/api/photos/${encodeURIComponent(id)}`);
+
+// リンク(Xの投稿・YouTubeの動画)。duplicate が true のときは登録せず、既存のリンクが返る
+export const addLink = (link: NewLink) => request<{ link: LinkView; duplicate: boolean; message: string }>("POST", "/api/links", link);
+export const updateLink = (id: string, patch: LinkPatch) => request<{ link: LinkView; duplicate: false; message: string }>("PATCH", `/api/links/${encodeURIComponent(id)}`, patch);
+export const deleteLink = (id: string) => request<{ deleted: LinkView; message: string }>("DELETE", `/api/links/${encodeURIComponent(id)}`);

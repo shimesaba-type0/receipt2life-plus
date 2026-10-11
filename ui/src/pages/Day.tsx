@@ -1,20 +1,24 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, PhotoView, TransactionView } from "../../../src/api/contract";
+import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, TransactionView } from "../../../src/api/contract";
 import {
   UnauthorizedError,
   addEvent,
+  addLink,
   addTransactions,
   deleteEvent,
+  deleteLink,
   deletePhoto,
   deleteTransaction,
   getCategories,
   getDay,
   photoUrl,
   updateEvent,
+  updateLink,
   updateTransaction,
 } from "../api";
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
 import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-queue";
+import { LinkCard } from "../components/LinkCard";
 import { PhotoUploader } from "../components/PhotoUploader";
 import { Link } from "../router";
 import { categoryChipLabel } from "./dayLogic";
@@ -207,6 +211,33 @@ export function Day(props: { date: string }) {
     if (ok) setEditingEvent(null);
   }
 
+  // リンクの追加。エラーはフォームの近くに出すので、ページ全体のエラーには出さず文言を返す(成功は null)
+  async function addLinkAction(url: string, title: string): Promise<string | null> {
+    if (busyRef.current) return "処理中です。少し待ってからやり直してください。";
+    busyRef.current = true;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await run(() => addLink({ url: url.trim(), title: optional(title), date }));
+      if (!res.ok) return res.message;
+      setNotice(res.value.duplicate ? "すでに追加されています。" : "リンクを追加しました。");
+      await load();
+      return null;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function saveLinkTitle(id: string, title: string | null): Promise<boolean> {
+    return guarded(async () => failOf(await run(() => updateLink(id, { title }))), "リンクのタイトルを保存しました。");
+  }
+
+  async function removeLink(id: string): Promise<boolean> {
+    return guarded(async () => failOf(await run(() => deleteLink(id))), "リンクを削除しました。");
+  }
+
   async function removePhoto(photo: PhotoView) {
     const ok = await guarded(async () => failOf(await run(() => deletePhoto(photo.id))), "写真を削除しました。");
     if (ok) closeLightbox();
@@ -354,6 +385,8 @@ export function Day(props: { date: string }) {
           </div>
 
           <PhotosCard date={date} photos={data.photos} disabled={busy} onView={setViewPhoto} onChanged={load} />
+
+          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onDelete={removeLink} />
         </>
       )}
 
@@ -566,6 +599,104 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
       </>
       )}
     </PhotoUploader>
+  );
+}
+
+// リンクエリア(Xの投稿・YouTubeの動画)。追加はこの日の日付に紐づける
+function LinksCard(props: {
+  links: LinkView[];
+  busy: boolean;
+  onAdd: (url: string, title: string) => Promise<string | null>;
+  onSaveTitle: (id: string, title: string | null) => Promise<boolean>;
+  onDelete: (id: string) => Promise<boolean>;
+}) {
+  const { links, busy } = props;
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const id = useRef(`lf-${Math.random().toString(36).slice(2, 8)}`).current;
+
+  function close() {
+    setOpen(false);
+    setUrl("");
+    setTitle("");
+    setFormError(null);
+  }
+
+  async function submit() {
+    if (url.trim() === "") {
+      setFormError("URLを入力してください。");
+      return;
+    }
+    setFormError(null);
+    const failure = await props.onAdd(url, title);
+    if (failure) setFormError(failure);
+    else close();
+  }
+
+  return (
+    <div class="card">
+      <div class="day__row-head day__row-head--sub">
+        <h2 class="day__h">リンク</h2>
+        <span class="muted day__sub">Xの投稿・YouTubeの動画</span>
+        {!open && (
+          <div class="day__photo-tools">
+            <button type="button" class="btn" disabled={busy} onClick={() => setOpen(true)}>
+              リンクを追加
+            </button>
+          </div>
+        )}
+      </div>
+      {open && (
+        <form
+          class="day__form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          <label for={`${id}-url`}>リンク(XまたはYouTube)</label>
+          <input
+            id={`${id}-url`}
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellcheck={false}
+            required
+            placeholder="https://"
+            value={url}
+            onInput={(e) => setUrl((e.currentTarget as HTMLInputElement).value)}
+          />
+          <label for={`${id}-title`}>タイトル(任意)</label>
+          <input id={`${id}-title`} type="text" maxLength={200} value={title} onInput={(e) => setTitle((e.currentTarget as HTMLInputElement).value)} />
+          {formError && (
+            <p class="error" role="alert">
+              {formError}
+            </p>
+          )}
+          <div class="day__actions">
+            <button type="submit" class="btn btn--primary" disabled={busy}>
+              {busy ? "追加中…" : "追加"}
+            </button>
+            <button type="button" class="btn" disabled={busy} onClick={close}>
+              キャンセル
+            </button>
+          </div>
+        </form>
+      )}
+      {links.length === 0 && !open && <p class="muted">この日のリンクはありません。</p>}
+      {links.length > 0 && (
+        <ul class="day__list day__links">
+          {links.map((l) => (
+            <li key={l.id}>
+              <LinkCard link={l} busy={busy} onSaveTitle={props.onSaveTitle} onDelete={props.onDelete} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
