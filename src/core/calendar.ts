@@ -4,7 +4,8 @@ import { listEvents, type EventView } from "./events";
 import { listLinksOnDay, type LinkView } from "./links";
 import { listPhotosOnDay, photoOnDay, type PhotoView } from "./photos";
 import type { FieldError } from "./schema";
-import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionView } from "./transactions";
+import { withItems } from "./items";
+import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionRow, type TransactionView } from "./transactions";
 
 // カレンダーと日別の集計(読み取り専用)
 
@@ -69,12 +70,14 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
          ORDER BY t.created_at, t.id`,
       )
       .bind(date)
-      .all<TransactionView>(),
+      .all<TransactionRow>(),
     listEvents(db, { from: date, to: date, limit: 500 }),
     listPhotosOnDay(db, date),
     listLinksOnDay(db, date),
   ]);
   if (!events.ok) return events;
+  // 日の合計と件数は取引(レシート)で数える
   const total = txs.results.reduce((s, t) => s + t.amount, 0);
-  return { ok: true, date, total, count: txs.results.length, transactions: txs.results, events: events.events, photos, links };
+  const transactions = await withItems(db, txs.results);
+  return { ok: true, date, total, count: txs.results.length, transactions, events: events.events, photos, links };
 }

@@ -41,7 +41,7 @@ export const renameGroupSchema = z.strictObject({
 export interface CategoryView {
   name: string;
   group_name: string;
-  // このカテゴリを使っている取引の件数
+  // このカテゴリを使っている支出の件数(取引のカテゴリ + 明細の行のカテゴリ)
   usage: number;
 }
 
@@ -86,8 +86,12 @@ const allRows = async (db: D1Database) => (await db.prepare("SELECT id, name, gr
 const findByName = (rows: CategoryRow[], name: string) => rows.find((r) => r.name === name);
 const names = (rows: CategoryRow[]) => rows.map((r) => r.name).join("、");
 
+// 取引のカテゴリと、明細の行のカテゴリ(行自身に付いたもの)の両方を数える
+const USAGE = (col: string) =>
+  `(SELECT COUNT(*) FROM transactions t WHERE t.category_id = ${col}) + (SELECT COUNT(*) FROM transaction_items i WHERE i.category_id = ${col})`;
+
 async function usageOf(db: D1Database, id: string): Promise<number> {
-  const row = await db.prepare("SELECT COUNT(*) AS n FROM transactions WHERE category_id = ?").bind(id).first<{ n: number }>();
+  const row = await db.prepare(`SELECT ${USAGE("?1")} AS n`).bind(id).first<{ n: number }>();
   return row?.n ?? 0;
 }
 
@@ -96,7 +100,7 @@ export async function listCategories(db: D1Database): Promise<ListCategoriesResu
   const [categories, accounts] = await Promise.all([
     db
       .prepare(
-        `SELECT c.name AS name, c.group_name AS group_name, (SELECT COUNT(*) FROM transactions t WHERE t.category_id = c.id) AS usage
+        `SELECT c.name AS name, c.group_name AS group_name, ${USAGE("c.id")} AS usage
          FROM categories c ORDER BY c.rowid`,
       )
       .all<CategoryView>(),
@@ -219,8 +223,10 @@ export async function deleteCategory(db: D1Database, input: unknown, options: Co
   const statements: D1PreparedStatement[] = [];
   if (target && usage > 0) {
     // 付け替え前後ともカテゴリありなので、status(店名とカテゴリの有無)は変わらない。dedup_hash にもカテゴリは含まれない
+    // 明細の行に付いたカテゴリも、同じ移し先に付け替える
     statements.push(
       db.prepare("UPDATE transactions SET category_id = ?, updated_at = ? WHERE category_id = ?").bind(target.id, (options.now ?? new Date()).toISOString(), current.id),
+      db.prepare("UPDATE transaction_items SET category_id = ? WHERE category_id = ?").bind(target.id, current.id),
     );
   }
   statements.push(db.prepare("DELETE FROM categories WHERE id = ?").bind(current.id));

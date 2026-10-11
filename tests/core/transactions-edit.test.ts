@@ -29,6 +29,7 @@ describe("updateTransaction", () => {
       source: "manual",
       status: "ok",
       tax_flag: null,
+      items: [],
     });
     expect(res.warnings).toEqual([]);
     expect(res.message).toBe("更新しました: A店 1,380円");
@@ -160,7 +161,7 @@ describe("deleteTransaction", () => {
     const res = await deleteTransaction(db(), { id });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.deleted).toMatchObject({ id, amount: 1280, merchant: "A店", category: "食費", account: "現金" });
+    expect(res.deleted).toMatchObject({ transaction: { id, amount: 1280, merchant: "A店", category: "食費", account: "現金" }, items: 0, photos: 0, links: 0 });
     expect(res.message).toBe("削除しました: A店 1,280円");
     const list = await listTransactions(db(), {});
     expect(list.ok && list.transactions).toEqual([]);
@@ -196,8 +197,8 @@ describe("deleteTransaction", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.errors[0]).toMatchObject({ field: "id" });
-    expect(res.errors[0]?.message).toContain("写真が");
-    expect(res.errors[0]?.message).toContain("削除できません");
+    expect(res.errors[0]?.message).toContain("写真1枚が紐づいています。delete_photos で写真もいっしょに削除できます");
+    expect(res.errors[0]?.message).toContain("削除していません");
     const list = await listTransactions(db(), {});
     expect(list.ok && list.transactions).toHaveLength(1);
   });

@@ -2,7 +2,8 @@ import { monthRange } from "./calendar";
 import { todayJst } from "./dates";
 import type { FieldError } from "./schema";
 import { summarize, type SummaryRow } from "./summarize";
-import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionView } from "./transactions";
+import { withItems } from "./items";
+import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionRow, type TransactionView } from "./transactions";
 
 export interface HomeResult {
   ok: true;
@@ -15,6 +16,7 @@ export interface HomeResult {
 }
 
 // ホーム画面の集計。月の集計は summarize(大分類)を使い回す
+// 大分類の内訳は支出の行(明細があれば行ごとの実効カテゴリ)で数え、今日・今月の合計と件数は取引(レシート)で数える
 export async function getHome(db: D1Database, options: CoreOptions = {}): Promise<HomeResult | { ok: false; errors: FieldError[] }> {
   const today = todayJst(options.now);
   const month = today.slice(0, 7);
@@ -43,7 +45,7 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
          ORDER BY t.date DESC, t.created_at DESC, t.id
          LIMIT 5`,
       )
-      .all<TransactionView>(),
+      .all<TransactionRow>(),
   ]);
   if (!byGroup.ok) return byGroup;
 
@@ -56,6 +58,6 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
     groups: byGroup.rows,
     memo: { with_memo: withMemo, total: memoTotal, percent: memoTotal === 0 ? 0 : Math.round((withMemo / memoTotal) * 1000) / 10 },
     needs_review: review?.n ?? 0,
-    recent: recent.results,
+    recent: await withItems(db, recent.results),
   };
 }

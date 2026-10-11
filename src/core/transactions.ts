@@ -1,20 +1,37 @@
 import { todayJst } from "./dates";
 import {
+  anyLineMatches,
+  checkItemCategories,
+  insertItemStatements,
+  needsReview,
+  toStoredItems,
+  withItems,
+  type ItemView,
+  type StoredItem,
+} from "./items";
+import type { LinkView } from "./links";
+import { toPhotoView, type PhotoView } from "./photos";
+import {
   addTransactionsEnvelopeSchema,
+  itemsTotalMismatch,
   listTransactionsSchema,
   transactionInputSchema,
   toFieldErrors,
   type FieldError,
+  type ItemInput,
   type TransactionInput,
 } from "./schema";
 import { ANY_TAX_FLAG, type TaxFlag } from "./tax-flags";
 import { deleteTransactionSchema, updateTransactionSchema } from "./transaction-edit-schema";
 
+export type { ItemView } from "./items";
+
 export interface CoreOptions {
   now?: Date;
 }
 
-export interface TransactionView {
+// 取引の行(明細を含まない)。TX_VIEW_COLUMNS で読んだもの
+export interface TransactionRow {
   id: string;
   date: string;
   amount: number;
@@ -27,7 +44,15 @@ export interface TransactionView {
   tax_flag: TaxFlag | null;
 }
 
-// 取引の表示用の列(TransactionView と同じ並び)。transactions を t、カテゴリを c、口座を a で JOIN して使う
+// 取引の表現。items は明細(並び順。明細なしは空配列)
+export interface TransactionView extends TransactionRow {
+  items: ItemView[];
+}
+
+// 登録の結果の1件。カテゴリを同じ店の直近の支出から引き継いだときだけ applied_default_category にその名前が入る
+export type RegisteredTransaction = TransactionView & { applied_default_category?: string };
+
+// 取引の表示用の列(TransactionRow と同じ並び)。transactions を t、カテゴリを c、口座を a で JOIN して使う
 export const TX_VIEW_COLUMNS = "t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status, t.tax_flag";
 
 export interface DuplicateInfo {
@@ -37,11 +62,12 @@ export interface DuplicateInfo {
 }
 
 export type AddResult =
-  | { ok: true; registered: TransactionView[]; skipped_duplicates: DuplicateInfo[]; message: string }
+  | { ok: true; registered: RegisteredTransaction[]; skipped_duplicates: DuplicateInfo[]; message: string }
   | { ok: false; errors: FieldError[] };
 
 export type ListResult =
-  | { ok: true; transactions: TransactionView[]; count: number }
+  // include_items: false のときは items を省く
+  | { ok: true; transactions: (TransactionRow & { items?: ItemView[] })[]; count: number }
   | { ok: false; errors: FieldError[] };
 
 interface NamedRow {
@@ -49,10 +75,14 @@ interface NamedRow {
   name: string;
 }
 
-// 日付+金額+正規化した店名のSHA-256。店名は全角半角・大文字小文字・空白の違いを吸収する
+// 店名の正規化。全角半角・大文字小文字・空白の違いを吸収する(重複判定とカテゴリの引き継ぎで使う)
+export function normalizeMerchant(merchant: string | null | undefined): string {
+  return (merchant ?? "").normalize("NFKC").toLowerCase().replace(/\s+/g, "");
+}
+
+// 日付+金額+正規化した店名のSHA-256
 export async function dedupHash(date: string, amount: number, merchant: string | undefined): Promise<string> {
-  const normalized = (merchant ?? "").normalize("NFKC").toLowerCase().replace(/\s+/g, "");
-  const data = new TextEncoder().encode(`${date}|${amount}|${normalized}`);
+  const data = new TextEncoder().encode(`${date}|${amount}|${normalizeMerchant(merchant)}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -68,6 +98,13 @@ function unknownName(field: "category" | "account", label: string, value: string
 
 const yen = (n: number) => `${n.toLocaleString("ja-JP")}円`;
 const label = (t: { merchant: string | null; amount: number }) => `${t.merchant ?? "(店名なし)"} ${yen(t.amount)}`;
+
+// 同じ店のカテゴリを引き継ぐ対象か: 店名があり、取引のカテゴリが無く、カテゴリの無い行(明細なしなら取引そのもの)があるとき
+function wantsDefaultCategory(item: TransactionInput): boolean {
+  if (!item.merchant || item.category) return false;
+  const items = item.items ?? [];
+  return items.length === 0 || items.some((i) => !i.category);
+}
 
 export async function addTransactions(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<AddResult> {
   const envelope = addTransactionsEnvelopeSchema.safeParse(input);
@@ -94,6 +131,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     if (item.account && !accounts.has(item.account)) {
       errors.push({ index, field: "account", message: unknownName("account", "口座", item.account, accounts) });
     }
+    errors.push(...checkItemCategories(item.items ?? [], categories, index));
   });
   if (errors.length > 0) return { ok: false, errors: errors.sort((a, b) => (a.index ?? -1) - (b.index ?? -1)) };
   // ここまで来たら全件が正しいので、valid の並びは元の配列と同じ(indexが一致する)
@@ -111,8 +149,11 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     .all<{ id: string; dedup_hash: string }>();
   for (const row of results) if (!existing.has(row.dedup_hash)) existing.set(row.dedup_hash, row.id);
 
+  // 同じ店のカテゴリの引き継ぎ先は、必要なときだけ読む(既存の取引だけを見る。同じ呼び出しの他の取引は見ない)
+  const defaults = prepared.some((p) => wantsDefaultCategory(p.item)) ? await latestCategoryByMerchant(db) : new Map<string, string>();
+
   const skipped: DuplicateInfo[] = [];
-  const registered: TransactionView[] = [];
+  const registered: RegisteredTransaction[] = [];
   const statements: D1PreparedStatement[] = [];
   const seenInBatch = new Map<string, number>();
   const timestamp = now.toISOString();
@@ -133,7 +174,11 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     if (!seenInBatch.has(hash)) seenInBatch.set(hash, index);
 
     const id = crypto.randomUUID();
-    const status = needsReview(item) ? "needs_review" : "ok";
+    // AIが明示したカテゴリは上書きしない。引き継ぐのは、カテゴリが省略されたときだけ
+    const applied = wantsDefaultCategory(item) ? defaults.get(normalizeMerchant(item.merchant)) : undefined;
+    const category = item.category ?? applied ?? null;
+    const stored = toStoredItems(item.items ?? [], categories);
+    const status = needsReview(item.merchant, category, stored.map((s) => s.view)) ? "needs_review" : "ok";
     statements.push(
       db
         .prepare(
@@ -145,7 +190,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
           date,
           item.amount,
           item.merchant ?? null,
-          item.category ? categories.get(item.category)! : null,
+          category ? categories.get(category)! : null,
           item.account ? accounts.get(item.account)! : null,
           item.memo ?? null,
           item.source,
@@ -155,42 +200,67 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
           timestamp,
           item.tax_flag ?? null,
         ),
+      ...insertItemStatements(db, id, stored, timestamp),
     );
     registered.push({
       id,
       date,
       amount: item.amount,
       merchant: item.merchant ?? null,
-      category: item.category ?? null,
+      category,
       account: item.account ?? null,
       memo: item.memo ?? null,
       source: item.source,
       status,
       tax_flag: item.tax_flag ?? null,
+      items: stored.map((s) => s.view),
+      ...(applied ? { applied_default_category: applied } : {}),
     });
   });
 
-  // 全件成功か全件ロールバック(D1のbatchはトランザクションとして実行される)
+  // 全件成功か全件ロールバック(D1のbatchはトランザクションとして実行される)。明細も同じ batch に入れる
   if (statements.length > 0) await db.batch(statements);
 
   return { ok: true, registered, skipped_duplicates: skipped, message: buildMessage(registered, skipped, prepared) };
 }
 
-// 店名かカテゴリが空なら、後で見直す対象にする
-function needsReview(item: TransactionInput): boolean {
-  return !item.merchant || !item.category;
+/**
+ * 正規化した店名 → その店の直近の取引(日付、登録日時の新しい順)のカテゴリ名。カテゴリが付いた取引だけを見る。
+ * 表記ゆれ(全角半角・大文字小文字・空白)は normalizeMerchant で吸収する(SQLでは正規化できないので、店名の表記ごとの直近を読んで寄せる)。
+ */
+async function latestCategoryByMerchant(db: D1Database): Promise<Map<string, string>> {
+  const { results } = await db
+    .prepare(
+      `SELECT r.merchant, c.name AS category, r.date, r.created_at, r.id
+       FROM (SELECT merchant, category_id, date, created_at, id,
+               ROW_NUMBER() OVER (PARTITION BY merchant ORDER BY date DESC, created_at DESC, id DESC) AS rn
+             FROM transactions WHERE merchant IS NOT NULL AND category_id IS NOT NULL) r
+       JOIN categories c ON c.id = r.category_id
+       WHERE r.rn = 1`,
+    )
+    .all<{ merchant: string; category: string; date: string; created_at: string; id: string }>();
+  const best = new Map<string, { category: string; order: string }>();
+  for (const r of results) {
+    const key = normalizeMerchant(r.merchant);
+    if (!key) continue;
+    const order = `${r.date}|${r.created_at}|${r.id}`;
+    const current = best.get(key);
+    if (!current || order > current.order) best.set(key, { category: r.category, order });
+  }
+  return new Map([...best].map(([k, v]) => [k, v.category]));
 }
 
-function buildMessage(
-  registered: TransactionView[],
-  skipped: DuplicateInfo[],
-  prepared: { item: TransactionInput; date: string }[],
-): string {
+function buildMessage(registered: RegisteredTransaction[], skipped: DuplicateInfo[], prepared: { item: TransactionInput; date: string }[]): string {
   const parts: string[] = [];
   parts.push(registered.length > 0 ? `${registered.length}件登録しました: ${registered.map(label).join(" / ")}` : "登録した取引はありません");
   if (skipped.length > 0) {
     const names = skipped.map((s) => label({ merchant: prepared[s.index]?.item.merchant ?? null, amount: prepared[s.index]?.item.amount ?? 0 }));
     parts.push(`重複の疑いで${skipped.length}件は登録しませんでした(${names.join(" / ")})。別の買い物なら allow_duplicate:true で再送してください`);
+  }
+  const inherited = registered.filter((r) => r.applied_default_category);
+  if (inherited.length > 0) {
+    const list = inherited.map((r) => `${r.merchant ?? ""} → ${r.applied_default_category ?? ""}`).join(" / ");
+    parts.push(`${inherited.length}件はカテゴリの指定が無かったため、同じ店の直近の支出のカテゴリを使いました(${list})。違っていれば update_transaction で直してください`);
   }
   const review = registered.filter((r) => r.status === "needs_review").length;
   if (review > 0) parts.push(`${review}件は店名またはカテゴリが空のため needs_review にしました`);
@@ -200,7 +270,7 @@ function buildMessage(
 export async function listTransactions(db: D1Database, input: unknown): Promise<ListResult> {
   const parsed = listTransactionsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { from, to, category, tax_flag: taxFlag, limit } = parsed.data;
+  const { from, to, category, tax_flag: taxFlag, limit, include_items: includeItems } = parsed.data;
 
   if (from && to && from > to) {
     return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
@@ -216,18 +286,19 @@ export async function listTransactions(db: D1Database, input: unknown): Promise<
     where.push("t.date <= ?");
     params.push(to);
   }
+  // カテゴリとフラグは、支出の行(明細があれば各行の実効値、無ければ取引そのもの)のどれかが当てはまれば含める
   if (category) {
     const categories = await loadNames(db, "categories");
     const id = categories.get(category);
     if (!id) return { ok: false, errors: [{ field: "category", message: unknownName("category", "カテゴリ", category, categories) }] };
-    where.push("t.category_id = ?");
-    params.push(id);
+    where.push(anyLineMatches("category_id", (v) => `${v} = ?`));
+    params.push(id, id);
   }
   if (taxFlag === ANY_TAX_FLAG) {
-    where.push("t.tax_flag IS NOT NULL");
+    where.push(anyLineMatches("tax_flag", (v) => `${v} IS NOT NULL`));
   } else if (taxFlag) {
-    where.push("t.tax_flag = ?");
-    params.push(taxFlag);
+    where.push(anyLineMatches("tax_flag", (v) => `${v} = ?`));
+    params.push(taxFlag, taxFlag);
   }
 
   const { results } = await db
@@ -241,9 +312,10 @@ export async function listTransactions(db: D1Database, input: unknown): Promise<
        LIMIT ?`,
     )
     .bind(...params, limit)
-    .all<TransactionView>();
+    .all<TransactionRow>();
 
-  return { ok: true, transactions: results, count: results.length };
+  const transactions = includeItems ? await withItems(db, results) : results;
+  return { ok: true, transactions, count: results.length };
 }
 
 export interface DuplicateWarning {
@@ -255,9 +327,26 @@ export type UpdateResult =
   | { ok: true; transaction: TransactionView; warnings: DuplicateWarning[]; message: string }
   | { ok: false; errors: FieldError[] };
 
-export type DeleteResult =
-  | { ok: true; deleted: TransactionView; message: string }
-  | { ok: false; errors: FieldError[] };
+// 削除したもの。transaction は削除前の内容(明細つき)、items / photos / links はいっしょに消した件数
+export interface DeletedTransaction {
+  transaction: TransactionView;
+  items: number;
+  photos: number;
+  links: number;
+}
+
+export type DeleteResult = { ok: true; deleted: DeletedTransaction; message: string } | { ok: false; errors: FieldError[] };
+
+export interface TransactionDetail {
+  ok: true;
+  transaction: TransactionView;
+  // この取引に紐づく写真・リンク(transaction_id が一致するもの)
+  photos: PhotoView[];
+  links: LinkView[];
+  counts: { items: number; photos: number; links: number };
+}
+
+export type TransactionDetailResult = TransactionDetail | { ok: false; errors: FieldError[] };
 
 const VIEW_SELECT = `SELECT ${TX_VIEW_COLUMNS}
        FROM transactions t
@@ -266,15 +355,46 @@ const VIEW_SELECT = `SELECT ${TX_VIEW_COLUMNS}
        WHERE t.id = ?`;
 
 const notFound = (id: string): FieldError[] => [
-  { field: "id", message: `id: 「${id}」という取引はありません。list_transactions で id を確認してください` },
+  { field: "id", message: `id: 「${id.slice(0, 64)}」という取引はありません。list_transactions で id を確認してください` },
 ];
+
+async function findTransaction(db: D1Database, id: string): Promise<TransactionView | null> {
+  const row = await db.prepare(VIEW_SELECT).bind(id).first<TransactionRow>();
+  if (!row) return null;
+  const [view] = await withItems(db, [row]);
+  return view ?? null;
+}
+
+// 1件の取引と、明細・写真・リンク(取引の詳細画面用)
+export async function getTransaction(db: D1Database, id: string): Promise<TransactionDetailResult> {
+  if (id.length === 0 || id.length > 100) return { ok: false, errors: notFound(id) };
+  const transaction = await findTransaction(db, id);
+  if (!transaction) return { ok: false, errors: notFound(id) };
+  const [photos, links] = await Promise.all([
+    db
+      .prepare("SELECT id, date, transaction_id, event_id, caption, created_at FROM attachments WHERE transaction_id = ? ORDER BY created_at, id")
+      .bind(id)
+      .all<Omit<PhotoView, "url">>(),
+    db
+      .prepare("SELECT id, url, kind, title, date, transaction_id, event_id, created_at FROM links WHERE transaction_id = ? ORDER BY created_at, id")
+      .bind(id)
+      .all<LinkView>(),
+  ]);
+  return {
+    ok: true,
+    transaction,
+    photos: photos.results.map(toPhotoView),
+    links: links.results,
+    counts: { items: transaction.items.length, photos: photos.results.length, links: links.results.length },
+  };
+}
 
 export async function updateTransaction(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<UpdateResult> {
   const parsed = updateTransactionSchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
   const patch = parsed.data;
 
-  const current = await db.prepare(VIEW_SELECT).bind(patch.id).first<TransactionView>();
+  const current = await findTransaction(db, patch.id);
   if (!current) return { ok: false, errors: notFound(patch.id) };
 
   const now = options.now ?? new Date();
@@ -290,6 +410,9 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
   if (patch.account && !accounts.has(patch.account)) {
     errors.push({ field: "account", message: unknownName("account", "口座", patch.account, accounts) });
   }
+  // items は全置換。null と省略は「変えない」
+  const replaceItems: ItemInput[] | null = patch.items ?? null;
+  if (replaceItems) errors.push(...checkItemCategories(replaceItems, categories));
   if (errors.length > 0) return { ok: false, errors };
 
   // undefined は「変えない」、null は「空にする」
@@ -304,30 +427,48 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
     source: patch.source ?? current.source,
     tax_flag: patch.tax_flag === undefined ? current.tax_flag : patch.tax_flag,
   };
-  next.status = next.merchant && next.category ? "ok" : "needs_review";
-  const hash = await dedupHash(next.date, next.amount, next.merchant ?? undefined);
+  const stored: StoredItem[] | null = replaceItems ? toStoredItems(replaceItems, categories) : null;
+  next.items = stored ? stored.map((s) => s.view) : current.items;
 
-  await db
-    .prepare(
-      `UPDATE transactions
-       SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?, tax_flag = ?
-       WHERE id = ?`,
-    )
-    .bind(
-      next.date,
-      next.amount,
-      next.merchant,
-      next.category ? categories.get(next.category)! : null,
-      next.account ? accounts.get(next.account)! : null,
-      next.memo,
-      next.source,
-      next.status,
-      hash,
-      now.toISOString(),
-      next.tax_flag,
-      next.id,
-    )
-    .run();
+  // 明細がある取引は、明細の合計 = 金額を保つ(金額だけ・カテゴリだけの変更でも確かめる)
+  const mismatch = itemsTotalMismatch(next.amount, next.items);
+  if (mismatch) {
+    const field = stored ? "items" : "amount";
+    const hint = stored ? "" : "(今の明細の合計と合いません。items もいっしょに直すか、items: [] で明細を消してください)";
+    return { ok: false, errors: [{ field, message: `${field}: ${mismatch}${hint}` }] };
+  }
+
+  next.status = needsReview(next.merchant, next.category, next.items) ? "needs_review" : "ok";
+  const hash = await dedupHash(next.date, next.amount, next.merchant ?? undefined);
+  const timestamp = now.toISOString();
+
+  const statements: D1PreparedStatement[] = [
+    db
+      .prepare(
+        `UPDATE transactions
+         SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?, tax_flag = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        next.date,
+        next.amount,
+        next.merchant,
+        next.category ? categories.get(next.category)! : null,
+        next.account ? accounts.get(next.account)! : null,
+        next.memo,
+        next.source,
+        next.status,
+        hash,
+        timestamp,
+        next.tax_flag,
+        next.id,
+      ),
+  ];
+  if (stored) {
+    statements.push(db.prepare("DELETE FROM transaction_items WHERE transaction_id = ?").bind(next.id), ...insertItemStatements(db, next.id, stored, timestamp));
+  }
+  // 取引と明細の置き換えは、1回の batch(全部成功か全部ロールバック)
+  await db.batch(statements);
 
   // 更新は止めない。同じ日・金額・店の別の取引があれば、警告として知らせる
   const { results: dups } = await db
@@ -339,28 +480,59 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
     message: `取引 ${d.id} と同じ日・金額・店です。重複登録の可能性があります。重複なら delete_transaction で片方を削除してください`,
   }));
 
-  const message = `更新しました: ${label(next)}${warnings.length > 0 ? `。重複の疑いが${warnings.length}件あります` : ""}`;
+  const itemNote = stored ? `(明細${stored.length}行${stored.length === 0 ? "。明細を消しました" : "に置き換えました"})` : "";
+  const message = `更新しました: ${label(next)}${itemNote}${warnings.length > 0 ? `。重複の疑いが${warnings.length}件あります` : ""}`;
   return { ok: true, transaction: next, warnings, message };
 }
 
-export async function deleteTransaction(db: D1Database, input: unknown): Promise<DeleteResult> {
+export interface DeleteTransactionOptions {
+  // delete_photos のときに写真の実体(R2)を消す先
+  bucket?: R2Bucket;
+}
+
+export async function deleteTransaction(db: D1Database, input: unknown, options: DeleteTransactionOptions = {}): Promise<DeleteResult> {
   const parsed = deleteTransactionSchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { id } = parsed.data;
+  const { id, delete_photos: deletePhotos } = parsed.data;
 
-  const current = await db.prepare(VIEW_SELECT).bind(id).first<TransactionView>();
+  const current = await findTransaction(db, id);
   if (!current) return { ok: false, errors: notFound(id) };
 
-  // 写真(フェーズ5)が紐づく取引は、外部キーで落ちる前に、分かる文章で断る
-  const photos = await db.prepare("SELECT COUNT(*) AS n FROM attachments WHERE transaction_id = ?").bind(id).first<{ n: number }>();
-  if (photos && photos.n > 0) {
+  const [photoRows, linkCount] = await Promise.all([
+    db.prepare("SELECT id, r2_key FROM attachments WHERE transaction_id = ? ORDER BY id").bind(id).all<{ id: string; r2_key: string }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM links WHERE transaction_id = ?").bind(id).first<{ n: number }>(),
+  ]);
+  const photos = photoRows.results;
+  // 写真が紐づく取引は、指定が無ければ外部キーで落ちる前に、分かる文章で断る
+  if (photos.length > 0 && !deletePhotos) {
     return {
       ok: false,
-      errors: [{ field: "id", message: `id: 写真が${photos.n}枚紐づいているため削除できません(${label(current)})` }],
+      errors: [
+        {
+          field: "id",
+          message: `id: 写真${photos.length}枚が紐づいています。delete_photos で写真もいっしょに削除できます(${label(current)} は削除していません)`,
+        },
+      ],
     };
   }
+  if (photos.length > 0) {
+    if (!options.bucket) return { ok: false, errors: [{ field: "delete_photos", message: "delete_photos: 写真の保存先に接続できないため、写真を削除できません" }] };
+    // 写真の実体(R2)が先、行が後。途中で失敗しても、再実行すれば残りが消える(写真の削除と同じ順)
+    await options.bucket.delete(photos.map((p) => p.r2_key));
+  }
 
-  // リンク(外部リンク)は軽いので、取引といっしょに消す
-  await db.batch([db.prepare("DELETE FROM links WHERE transaction_id = ?").bind(id), db.prepare("DELETE FROM transactions WHERE id = ?").bind(id)]);
-  return { ok: true, deleted: current, message: `削除しました: ${label(current)}` };
+  // 写真の行 → リンク → 明細 → 取引の順(外部キーの子から)。1回の batch
+  await db.batch([
+    db.prepare("DELETE FROM attachments WHERE transaction_id = ?").bind(id),
+    db.prepare("DELETE FROM links WHERE transaction_id = ?").bind(id),
+    db.prepare("DELETE FROM transaction_items WHERE transaction_id = ?").bind(id),
+    db.prepare("DELETE FROM transactions WHERE id = ?").bind(id),
+  ]);
+  const deleted: DeletedTransaction = { transaction: current, items: current.items.length, photos: photos.length, links: linkCount?.n ?? 0 };
+  const extras = [
+    ...(deleted.items > 0 ? [`明細${deleted.items}行`] : []),
+    ...(deleted.photos > 0 ? [`写真${deleted.photos}枚`] : []),
+    ...(deleted.links > 0 ? [`リンク${deleted.links}件`] : []),
+  ];
+  return { ok: true, deleted, message: `削除しました: ${label(current)}${extras.length > 0 ? `(${extras.join("、")}もいっしょに削除)` : ""}` };
 }

@@ -41,7 +41,8 @@ describe("listCategories", () => {
     await seed("食費");
     await seed("食費", { amount: 600 });
     await seed("娯楽", { amount: 700 });
-    await seed(undefined, { amount: 800 });
+    // 別の店にする(同じ店だと、直近の支出のカテゴリを引き継ぐため)
+    await seed(undefined, { amount: 800, merchant: "B店" });
     const res = await listCategories(db());
     expect(Object.fromEntries(res.categories.map((c) => [c.name, c.usage]))).toMatchObject({ 食費: 2, 娯楽: 1, 日用品: 0 });
     expect(res.groups.find((g) => g.group_name === "食費")!.categories).toEqual([{ name: "食費", usage: 2 }]);
