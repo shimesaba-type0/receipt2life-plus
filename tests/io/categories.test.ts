@@ -42,7 +42,7 @@ describe("カテゴリが増えたあとのバックアップ", () => {
     const res = await doImport(backup);
     expect(res.summary).toEqual({ total: 1, ok: 1, skipped: 0, errors: 0 });
     const cats = (await listCategories(db())).categories;
-    expect(cats.at(-1)).toEqual({ name: "外食", group_name: "その他", usage: 1 });
+    expect(cats.at(-1)).toEqual({ name: "外食", group_name: "その他", icon: null, usage: 1 });
     expect(cats).toHaveLength(6);
   });
 

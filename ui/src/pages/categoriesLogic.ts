@@ -1,13 +1,13 @@
 // カテゴリ画面の純粋な部分(DOMに触れない。テストする)
 // 上限はサーバー(src/core/categories.ts)と同じ。送る前に検査して、理由を日本語で出す
-import type { CategoryPatch, CategoryView } from "../../../src/api/contract";
+import type { CategoryIconKey, CategoryPatch, CategoryView } from "../../../src/api/contract";
 
 export const MAX_CATEGORY_NAME = 30;
 export const MAX_GROUP_NAME = 20;
 
 export interface GroupView {
   group_name: string;
-  categories: { name: string; usage: number }[];
+  categories: { name: string; icon: CategoryIconKey | null; usage: number }[];
 }
 
 // API の平らな一覧を、大分類ごとにまとめる。大分類は最初に現れた順、中は元の順(サーバーの並びをそのまま使う)
@@ -15,7 +15,7 @@ export function groupCategories(categories: CategoryView[]): GroupView[] {
   const groups = new Map<string, GroupView>();
   for (const c of categories) {
     const g = groups.get(c.group_name) ?? { group_name: c.group_name, categories: [] };
-    g.categories.push({ name: c.name, usage: c.usage });
+    g.categories.push({ name: c.name, icon: c.icon, usage: c.usage });
     groups.set(c.group_name, g);
   }
   return [...groups.values()];

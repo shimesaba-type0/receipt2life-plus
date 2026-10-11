@@ -44,8 +44,8 @@ describe("MCP のカテゴリ管理", () => {
     expect(text(tx)).toMatchObject({ ok: true, registered: [{ category: "光熱費", status: "ok" }] });
 
     const list = text(await callTool("list_categories", {}));
-    expect(list.groups.at(-1)).toEqual({ group_name: "住まい", categories: [{ name: "光熱費", usage: 1 }] });
-    expect(list.categories.find((c: { name: string }) => c.name === "光熱費")).toEqual({ name: "光熱費", group_name: "住まい", usage: 1 });
+    expect(list.groups.at(-1)).toEqual({ group_name: "住まい", categories: [{ name: "光熱費", icon: null, usage: 1 }] });
+    expect(list.categories.find((c: { name: string }) => c.name === "光熱費")).toEqual({ name: "光熱費", group_name: "住まい", icon: null, usage: 1 });
   });
 
   it("重複はエラー(isError)", async () => {
@@ -71,5 +71,33 @@ describe("MCP のカテゴリ管理", () => {
     expect(r.body.result.isError).toBe(true);
     const bad = await callTool("add_category", { name: "", group_name: "食費" });
     expect(bad.body.result.isError).toBe(true);
+  });
+});
+
+describe("MCP のカテゴリのアイコン", () => {
+  it("add_category / update_category の説明にアイコンのキーと意味が載る。list_categories は icon を返す", async () => {
+    const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string; inputSchema: { properties: Record<string, unknown> } }[];
+    for (const n of ["add_category", "update_category"]) {
+      const t = tools.find((x) => x.name === n)!;
+      expect(t.description).toContain("taxi=タクシー");
+      expect(t.description).toContain("bigspend=大型出費");
+      expect(Object.keys(t.inputSchema.properties)).toContain("icon");
+    }
+    expect(tools.find((x) => x.name === "list_categories")!.description).toContain("icon");
+  });
+
+  it("追加(icon つき)→ 一覧 → 変更 → 外す", async () => {
+    expect(text(await callTool("add_category", { name: "タクシー", group_name: "交通", icon: "taxi" }))).toMatchObject({ ok: true, category: { icon: "taxi" } });
+    const list = text(await callTool("list_categories", {}));
+    expect(list.categories.find((c: { name: string }) => c.name === "タクシー").icon).toBe("taxi");
+    expect(list.categories.find((c: { name: string }) => c.name === "食費").icon).toBe("food");
+    expect(text(await callTool("update_category", { name: "タクシー", icon: "car" }))).toMatchObject({ ok: true, category: { icon: "car" } });
+    expect(text(await callTool("update_category", { name: "タクシー", icon: null }))).toMatchObject({ ok: true, category: { icon: null } });
+  });
+
+  it("一覧にない icon はエラー(選べるキーが返る)", async () => {
+    const r = await callTool("add_category", { name: "謎", group_name: "その他", icon: "rocket" });
+    expect(r.body.result.isError).toBe(true);
+    expect(JSON.stringify(r.body.result)).toContain("taxi=タクシー");
   });
 });

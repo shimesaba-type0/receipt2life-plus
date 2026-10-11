@@ -15,7 +15,7 @@ import {
   validateName,
 } from "../../ui/src/pages/categoriesLogic";
 
-const cat = (name: string, group_name: string, usage = 0): CategoryView => ({ name, group_name, usage });
+const cat = (name: string, group_name: string, usage = 0): CategoryView => ({ name, group_name, icon: null, usage });
 const sample = [cat("食費", "食費", 3), cat("日用品", "生活", 1), cat("外食", "食費"), cat("光熱費", "住まい")];
 
 describe("groupCategories", () => {

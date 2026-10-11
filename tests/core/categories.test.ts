@@ -19,11 +19,11 @@ describe("listCategories", () => {
     const res = await listCategories(db());
     expect(res.ok).toBe(true);
     expect(res.categories).toEqual([
-      { name: "食費", group_name: "食費", usage: 0 },
-      { name: "日用品", group_name: "生活", usage: 0 },
-      { name: "交通・チャージ", group_name: "交通", usage: 0 },
-      { name: "娯楽", group_name: "娯楽", usage: 0 },
-      { name: "その他", group_name: "その他", usage: 0 },
+      { name: "食費", group_name: "食費", icon: "food", usage: 0 },
+      { name: "日用品", group_name: "生活", icon: "daily", usage: 0 },
+      { name: "交通・チャージ", group_name: "交通", icon: "transit", usage: 0 },
+      { name: "娯楽", group_name: "娯楽", icon: "entertainment", usage: 0 },
+      { name: "その他", group_name: "その他", icon: "other", usage: 0 },
     ]);
     expect(res.groups.map((g) => g.group_name)).toEqual(["食費", "生活", "交通", "娯楽", "その他"]);
     expect(res.accounts).toEqual(["現金", "カード", "Suica"]);
@@ -45,7 +45,7 @@ describe("listCategories", () => {
     await seed(undefined, { amount: 800, merchant: "B店" });
     const res = await listCategories(db());
     expect(Object.fromEntries(res.categories.map((c) => [c.name, c.usage]))).toMatchObject({ 食費: 2, 娯楽: 1, 日用品: 0 });
-    expect(res.groups.find((g) => g.group_name === "食費")!.categories).toEqual([{ name: "食費", usage: 2 }]);
+    expect(res.groups.find((g) => g.group_name === "食費")!.categories).toEqual([{ name: "食費", icon: "food", usage: 2 }]);
   });
 
   it("後から足したカテゴリは、既存の大分類の中の末尾に並ぶ(大分類はまとまって返る)", async () => {
@@ -257,5 +257,44 @@ describe("deleteCategory", () => {
   it("使われていなくても move_to を付けて呼べる(何も移さない)", async () => {
     const res = await deleteCategory(db(), { name: "娯楽", move_to: "その他" });
     expect(res).toMatchObject({ ok: true, moved: 0, move_to: null });
+  });
+});
+
+describe("カテゴリのアイコン", () => {
+  const iconOf = async (name: string) => (await listCategories(db())).categories.find((c) => c.name === name)!.icon;
+
+  it("追加: icon を付けられる。省略・null は null(未設定)", async () => {
+    expect(await addCategory(db(), { name: "タクシー代", group_name: "交通", icon: "taxi" })).toMatchObject({ ok: true, category: { icon: "taxi" } });
+    expect(await iconOf("タクシー代")).toBe("taxi");
+    expect(await addCategory(db(), { name: "雑費", group_name: "その他" })).toMatchObject({ ok: true, category: { icon: null } });
+    expect(await addCategory(db(), { name: "雑費2", group_name: "その他", icon: null })).toMatchObject({ ok: true, category: { icon: null } });
+    expect(await iconOf("雑費")).toBeNull();
+  });
+
+  it("一覧にない icon はエラーで、選べるキーを日本語で返す(何も作らない)", async () => {
+    const res = await addCategory(db(), { name: "謎", group_name: "その他", icon: "rocket" });
+    expect(res.ok).toBe(false);
+    expect(errMessage(res)).toContain("選んでください");
+    expect(errMessage(res)).toContain("taxi=タクシー");
+    expect(await names()).not.toContain("謎");
+    const upd = await updateCategory(db(), { name: "食費", icon: "Taxi" });
+    expect(upd.ok).toBe(false);
+    expect(errMessage(upd)).toContain("food=食事");
+  });
+
+  it("更新: icon だけを変えられ、null で外せ、省略すると変えない", async () => {
+    expect(await updateCategory(db(), { name: "食費", icon: "cafe" })).toMatchObject({ ok: true, category: { name: "食費", icon: "cafe" } });
+    expect(await iconOf("食費")).toBe("cafe");
+    // 名前だけ変えても icon は変わらない
+    expect(await updateCategory(db(), { name: "食費", new_name: "外食" })).toMatchObject({ ok: true, category: { icon: "cafe" } });
+    expect(await updateCategory(db(), { name: "外食", icon: null })).toMatchObject({ ok: true, category: { icon: null } });
+    expect(await iconOf("外食")).toBeNull();
+  });
+
+  it("更新: 今と同じ icon だけの指定は「変更なし」のエラー。何も指定しないのもエラー", async () => {
+    const res = await updateCategory(db(), { name: "食費", icon: "food" });
+    expect(res.ok).toBe(false);
+    expect(errMessage(res)).toContain("変更する内容がありません");
+    expect(errMessage(await updateCategory(db(), { name: "食費" }))).toContain("1つ以上");
   });
 });

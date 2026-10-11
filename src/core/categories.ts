@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CATEGORY_ICON_DESCRIPTION, categoryIconSchema, type CategoryIconKey } from "./category-icons";
 import { toFieldErrors, type FieldError } from "./schema";
 import type { CoreOptions } from "./transactions";
 
@@ -20,12 +21,14 @@ const groupNameField = (field: string) =>
 export const addCategorySchema = z.strictObject({
   name: categoryNameField("name").describe("新しいカテゴリ(サブカテゴリ)の名前。30文字まで。全体で一意(取引の登録で名前から引く)。必須"),
   group_name: groupNameField("group_name").describe("所属させる大分類の名前。20文字まで。既存の大分類でも新しい大分類でもよい(新しければ大分類が増える)。必須"),
+  icon: categoryIconSchema.nullable().optional().describe(`${CATEGORY_ICON_DESCRIPTION}新しいカテゴリには合うアイコンを付ける。省略すると未設定(画面では other と同じ見た目)`),
 });
 
 export const updateCategoryFieldsSchema = z.strictObject({
   name: categoryNameField("name").describe("対象のカテゴリの今の名前(list_categories で確かめる)。必須"),
   new_name: categoryNameField("new_name").optional().describe("新しい名前。30文字まで、他のカテゴリと重複不可。省略すると変えない"),
   group_name: groupNameField("group_name").optional().describe("移す先の大分類。20文字まで。新しい名前なら大分類が増える。省略すると変えない"),
+  icon: categoryIconSchema.nullable().optional().describe(`${CATEGORY_ICON_DESCRIPTION}null で外す(未設定に戻す)。省略すると変えない`),
 });
 
 export const deleteCategoryFieldsSchema = z.strictObject({
@@ -41,13 +44,15 @@ export const renameGroupSchema = z.strictObject({
 export interface CategoryView {
   name: string;
   group_name: string;
+  // アイコンのキー(src/core/category-icons.ts)。未設定は null(画面では other と同じ見た目)
+  icon: CategoryIconKey | null;
   // このカテゴリを使っている支出の件数(取引のカテゴリ + 明細の行のカテゴリ)
   usage: number;
 }
 
 export interface CategoryGroupView {
   group_name: string;
-  categories: { name: string; usage: number }[];
+  categories: { name: string; icon: CategoryIconKey | null; usage: number }[];
 }
 
 export interface ListCategoriesResult {
@@ -76,12 +81,13 @@ interface CategoryRow {
   id: string;
   name: string;
   group_name: string;
+  icon: string | null;
 }
 
 const fail = (field: string, message: string): { ok: false; errors: FieldError[] } => ({ ok: false, errors: [{ field, message: `${field}: ${message}` }] });
 
 // 追加順(rowid)で読む。大分類の並びは「最初に現れた順」で、ここから決まる
-const allRows = async (db: D1Database) => (await db.prepare("SELECT id, name, group_name FROM categories ORDER BY rowid").all<CategoryRow>()).results;
+const allRows = async (db: D1Database) => (await db.prepare("SELECT id, name, group_name, icon FROM categories ORDER BY rowid").all<CategoryRow>()).results;
 
 const findByName = (rows: CategoryRow[], name: string) => rows.find((r) => r.name === name);
 const names = (rows: CategoryRow[]) => rows.map((r) => r.name).join("、");
@@ -100,7 +106,7 @@ export async function listCategories(db: D1Database): Promise<ListCategoriesResu
   const [categories, accounts] = await Promise.all([
     db
       .prepare(
-        `SELECT c.name AS name, c.group_name AS group_name, ${USAGE("c.id")} AS usage
+        `SELECT c.name AS name, c.group_name AS group_name, c.icon AS icon, ${USAGE("c.id")} AS usage
          FROM categories c ORDER BY c.rowid`,
       )
       .all<CategoryView>(),
@@ -109,14 +115,14 @@ export async function listCategories(db: D1Database): Promise<ListCategoriesResu
   const byGroup = new Map<string, CategoryGroupView>();
   for (const c of categories.results) {
     const g = byGroup.get(c.group_name) ?? { group_name: c.group_name, categories: [] };
-    g.categories.push({ name: c.name, usage: c.usage });
+    g.categories.push({ name: c.name, icon: c.icon, usage: c.usage });
     byGroup.set(c.group_name, g);
   }
   const groups = [...byGroup.values()];
   const accountNames = accounts.results.map((a) => a.name);
   return {
     ok: true,
-    categories: groups.flatMap((g) => g.categories.map((c) => ({ name: c.name, group_name: g.group_name, usage: c.usage }))),
+    categories: groups.flatMap((g) => g.categories.map((c) => ({ name: c.name, group_name: g.group_name, icon: c.icon, usage: c.usage }))),
     groups,
     accounts: accountNames,
     message: `カテゴリ(大分類: サブカテゴリ): ${groups.map((g) => `${g.group_name}: ${g.categories.map((c) => c.name).join("、")}`).join(" / ")}。口座: ${accountNames.join("、")}`,
@@ -126,16 +132,16 @@ export async function listCategories(db: D1Database): Promise<ListCategoriesResu
 export async function addCategory(db: D1Database, input: unknown): Promise<CategoryResult> {
   const parsed = addCategorySchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { name, group_name } = parsed.data;
+  const { name, group_name, icon = null } = parsed.data;
 
   const rows = await allRows(db);
   if (findByName(rows, name)) return fail("name", `「${name}」というカテゴリは既にあります。別の名前にするか、update_category で既存のものを変更してください`);
   const createdGroup = !rows.some((r) => r.group_name === group_name);
 
-  await db.prepare("INSERT INTO categories (id, name, group_name) VALUES (?, ?, ?)").bind(`cat_${crypto.randomUUID()}`, name, group_name).run();
+  await db.prepare("INSERT INTO categories (id, name, group_name, icon) VALUES (?, ?, ?, ?)").bind(`cat_${crypto.randomUUID()}`, name, group_name, icon).run();
   return {
     ok: true,
-    category: { name, group_name, usage: 0 },
+    category: { name, group_name, icon, usage: 0 },
     created_group: createdGroup,
     message: `カテゴリ「${name}」を大分類「${group_name}」に追加しました${createdGroup ? "(新しい大分類)" : ""}。add_transactions の category に使えます`,
   };
@@ -144,9 +150,9 @@ export async function addCategory(db: D1Database, input: unknown): Promise<Categ
 export async function updateCategory(db: D1Database, input: unknown): Promise<CategoryResult> {
   const parsed = updateCategoryFieldsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { name, new_name: newName, group_name: newGroup } = parsed.data;
-  if (newName === undefined && newGroup === undefined) {
-    return fail("input", "更新する項目(new_name / group_name)を1つ以上指定してください");
+  const { name, new_name: newName, group_name: newGroup, icon: newIcon } = parsed.data;
+  if (newName === undefined && newGroup === undefined && newIcon === undefined) {
+    return fail("input", "更新する項目(new_name / group_name / icon)を1つ以上指定してください");
   }
 
   const rows = await allRows(db);
@@ -155,21 +161,26 @@ export async function updateCategory(db: D1Database, input: unknown): Promise<Ca
 
   const nextName = newName ?? current.name;
   const nextGroup = newGroup ?? current.group_name;
-  if (nextName === current.name && nextGroup === current.group_name) return fail("input", "変更する内容がありません(名前も大分類も今と同じです)");
+  // icon は省略で変えない・null で外す
+  const nextIcon = newIcon === undefined ? current.icon : newIcon;
+  if (nextName === current.name && nextGroup === current.group_name && nextIcon === current.icon) {
+    return fail("input", "変更する内容がありません(名前も大分類もアイコンも今と同じです)");
+  }
   if (nextName !== current.name && findByName(rows, nextName)) {
     return fail("new_name", `「${nextName}」というカテゴリは既にあります。別の名前にしてください`);
   }
 
-  await db.prepare("UPDATE categories SET name = ?, group_name = ? WHERE id = ?").bind(nextName, nextGroup, current.id).run();
+  await db.prepare("UPDATE categories SET name = ?, group_name = ?, icon = ? WHERE id = ?").bind(nextName, nextGroup, nextIcon, current.id).run();
   const createdGroup = nextGroup !== current.group_name && !rows.some((r) => r.group_name === nextGroup);
   const changes = [
     ...(nextName !== current.name ? [`名前 ${current.name} → ${nextName}`] : []),
     ...(nextGroup !== current.group_name ? [`大分類 ${current.group_name} → ${nextGroup}${createdGroup ? "(新しい大分類)" : ""}`] : []),
+    ...(nextIcon !== current.icon ? [`アイコン ${current.icon ?? "なし"} → ${nextIcon ?? "なし"}`] : []),
   ];
   // 取引はカテゴリのIDで参照しているので、名前や大分類を変えても取引の更新は要らない(status・dedup_hash にも影響しない)
   return {
     ok: true,
-    category: { name: nextName, group_name: nextGroup, usage: await usageOf(db, current.id) },
+    category: { name: nextName, group_name: nextGroup, icon: nextIcon as CategoryIconKey | null, usage: await usageOf(db, current.id) },
     created_group: createdGroup,
     message: `カテゴリを更新しました: ${changes.join("、")}`,
   };

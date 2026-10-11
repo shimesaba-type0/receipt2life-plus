@@ -6,6 +6,12 @@ export type EventColor = "red" | "orange" | "green" | "blue" | "purple";
 // 税金の控除用フラグ(1つの取引に1つ。なしは null)。ラベルは ui/src/taxFlags.ts
 export type TaxFlag = "medical" | "self_medication" | "donation";
 
+// カテゴリのアイコン(キー。未設定は null)。一覧とラベルは src/core/category-icons.ts、UI は ui/src/categoryIcons.ts
+export type CategoryIconKey =
+  | "food" | "cafe" | "grocery" | "daily" | "transit" | "taxi" | "car" | "fuel" | "social" | "entertainment"
+  | "movie" | "education" | "book" | "clothes" | "beauty" | "medical" | "insurance" | "phone" | "utility" | "home"
+  | "tax" | "bigspend" | "travel" | "gift" | "kids" | "pet" | "sports" | "hobby" | "subscription" | "bank" | "other";
+
 export interface FieldError {
   index?: number;
   field: string;
@@ -145,6 +151,7 @@ export interface DayData {
 export interface CategoryView {
   name: string;
   group_name: string;
+  icon: CategoryIconKey | null;
   usage: number;
 }
 
@@ -157,12 +164,15 @@ export interface CategoriesData {
 export interface NewCategory {
   name: string;
   group_name: string;
+  icon?: CategoryIconKey | null;
 }
 
 // PATCH /api/categories/:name の入力(パスの name が対象。1つ以上が必要)。戻りは category, created_group, message
 export interface CategoryPatch {
   new_name?: string;
   group_name?: string;
+  // null で外す
+  icon?: CategoryIconKey | null;
 }
 
 // POST /api/category-groups/rename の入力。戻りは group, previous, updated(カテゴリの件数), merged(既存の大分類への統合か), message
