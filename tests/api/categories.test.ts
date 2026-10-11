@@ -19,8 +19,8 @@ describe("GET /api/categories", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     const body = await json(res);
-    expect(body.categories[0]).toEqual({ name: "食費", group_name: "食費", usage: 1 });
-    expect(body.categories[1]).toEqual({ name: "日用品", group_name: "生活", usage: 0 });
+    expect(body.categories[0]).toEqual({ name: "食費", group_name: "食費", icon: "food", usage: 1 });
+    expect(body.categories[1]).toEqual({ name: "日用品", group_name: "生活", icon: "daily", usage: 0 });
     expect(body.accounts).toEqual(["現金", "カード", "Suica"]);
   });
 });
@@ -29,9 +29,9 @@ describe("POST /api/categories", () => {
   it("追加できる(新しい大分類も)", async () => {
     const res = await send("POST", "/api/categories", { name: "家賃", group_name: "住まい" });
     expect(res.status).toBe(200);
-    expect(await json(res)).toMatchObject({ ok: true, category: { name: "家賃", group_name: "住まい", usage: 0 }, created_group: true });
+    expect(await json(res)).toMatchObject({ ok: true, category: { name: "家賃", group_name: "住まい", icon: null, usage: 0 }, created_group: true });
     const list = await json(await call("/api/categories"));
-    expect(list.categories.at(-1)).toEqual({ name: "家賃", group_name: "住まい", usage: 0 });
+    expect(list.categories.at(-1)).toEqual({ name: "家賃", group_name: "住まい", icon: null, usage: 0 });
   });
 
   it("重複・空は400でフィールド名つき", async () => {
@@ -133,5 +133,29 @@ describe("POST /api/category-groups/rename", () => {
     expect((await send("POST", "/api/category-groups/rename", { group: "なぞ", new_name: "x" })).status).toBe(404);
     expect((await call("/api/category-groups/rename", { method: "POST", body: "x", headers: { "content-type": "text/plain" } })).status).toBe(415);
     expect((await send("POST", "/api/category-groups/rename", { group: "生活", new_name: "x" }, { origin: "https://evil.example" })).status).toBe(403);
+  });
+});
+
+describe("カテゴリのアイコン(API)", () => {
+  it("POST で icon を付け、GET で返る。PATCH で変更・null で外す", async () => {
+    const created = await send("POST", "/api/categories", { name: "タクシー", group_name: "交通", icon: "taxi" });
+    expect(created.status).toBe(200);
+    expect((await json(created)).category.icon).toBe("taxi");
+    expect((await json(await call("/api/categories"))).categories.find((c: { name: string }) => c.name === "タクシー").icon).toBe("taxi");
+
+    const patched = await send("PATCH", `/api/categories/${enc("タクシー")}`, { icon: "car" });
+    expect(patched.status).toBe(200);
+    expect((await json(patched)).category.icon).toBe("car");
+    const cleared = await send("PATCH", `/api/categories/${enc("タクシー")}`, { icon: null });
+    expect((await json(cleared)).category.icon).toBeNull();
+  });
+
+  it("一覧にない icon は400で、選べるキーを返す", async () => {
+    const res = await send("POST", "/api/categories", { name: "謎", group_name: "その他", icon: "rocket" });
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.errors[0].field).toBe("icon");
+    expect(body.errors[0].message).toContain("taxi=タクシー");
+    expect((await send("PATCH", `/api/categories/${enc("食費")}`, { icon: 5 })).status).toBe(400);
   });
 });

@@ -1,13 +1,13 @@
 // カテゴリ画面の純粋な部分(DOMに触れない。テストする)
 // 上限はサーバー(src/core/categories.ts)と同じ。送る前に検査して、理由を日本語で出す
-import type { CategoryPatch, CategoryView } from "../../../src/api/contract";
+import type { CategoryIconKey, CategoryPatch, CategoryView } from "../../../src/api/contract";
 
 export const MAX_CATEGORY_NAME = 30;
 export const MAX_GROUP_NAME = 20;
 
 export interface GroupView {
   group_name: string;
-  categories: { name: string; usage: number }[];
+  categories: { name: string; icon: CategoryIconKey | null; usage: number }[];
 }
 
 // API の平らな一覧を、大分類ごとにまとめる。大分類は最初に現れた順、中は元の順(サーバーの並びをそのまま使う)
@@ -15,7 +15,7 @@ export function groupCategories(categories: CategoryView[]): GroupView[] {
   const groups = new Map<string, GroupView>();
   for (const c of categories) {
     const g = groups.get(c.group_name) ?? { group_name: c.group_name, categories: [] };
-    g.categories.push({ name: c.name, usage: c.usage });
+    g.categories.push({ name: c.name, icon: c.icon, usage: c.usage });
     groups.set(c.group_name, g);
   }
   return [...groups.values()];
@@ -46,8 +46,8 @@ export type PatchCheck = { ok: true; patch: CategoryPatch } | { ok: false; error
 // 編集フォームの値から、変えた項目だけの PATCH 本文を作る
 export function buildCategoryPatch(
   categories: CategoryView[],
-  current: { name: string; group_name: string },
-  form: { name: string; group: string },
+  current: { name: string; group_name: string; icon?: CategoryIconKey | null },
+  form: { name: string; group: string; icon?: CategoryIconKey | null },
 ): PatchCheck {
   const v = validateName(form.name, "名前", MAX_CATEGORY_NAME);
   if (!v.ok) return v;
@@ -57,6 +57,8 @@ export function buildCategoryPatch(
     patch.new_name = v.value;
   }
   if (form.group !== current.group_name) patch.group_name = form.group;
+  // アイコンは、フォームが値を持つ(undefined でない)ときだけ比べる。null は外す
+  if (form.icon !== undefined && form.icon !== (current.icon ?? null)) patch.icon = form.icon;
   return Object.keys(patch).length === 0 ? { ok: false, error: "変更がありません" } : { ok: true, patch };
 }
 
