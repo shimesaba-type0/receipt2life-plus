@@ -44,7 +44,8 @@ describe("MCP /mcp", () => {
   it("tools/list に add_transactions と list_transactions があり、説明が書かれている", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: unknown }[];
-    expect(tools.map((t) => t.name).sort()).toEqual(["add_transactions", "list_transactions"]);
+    // ツールは、機能ごとに増えていく。最低限、取引の登録と一覧があることを確かめる
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["add_transactions", "list_transactions"]));
     for (const t of tools) expect(t.description.length).toBeGreaterThan(50);
     const add = tools.find((t) => t.name === "add_transactions");
     expect(JSON.stringify(add?.inputSchema)).toContain("allow_duplicate");

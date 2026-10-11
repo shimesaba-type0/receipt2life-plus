@@ -5,7 +5,7 @@ export const MAX_AMOUNT = 10_000_000;
 export const MAX_BATCH = 50;
 export const SOURCES = ["receipt", "manual", "voice"] as const;
 
-const isoDate = z
+export const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "YYYY-MM-DD 形式で指定してください(例: 2026-10-11)", abort: true })
   .refine(isRealDate, "実在しない日付です");
@@ -56,6 +56,24 @@ export const listTransactionsSchema = z.strictObject({
   category: z.string().min(1).optional().describe("カテゴリ名で絞り込む"),
   limit: z.number().int().min(1).max(500).default(100).describe("最大件数(既定100、最大500)"),
 });
+
+export const COLORS = ["red", "orange", "green", "blue", "purple"] as const;
+
+// 出来事(日付や期間のメモ)。MCPの入力定義には eventFieldsSchema.shape を使い、検証は eventInputSchema で行う
+export const eventFieldsSchema = z.strictObject({
+  title: z.string().trim().min(1, "title は必須です").max(100).describe("出来事のタイトル(例: 出張、誕生日)"),
+  start_date: isoDate.describe("開始日(YYYY-MM-DD)。単日の出来事は、この日だけ"),
+  end_date: isoDate.optional().describe("終了日(YYYY-MM-DD)。期間のときだけ。開始日以降"),
+  note: z.string().max(1000).optional().describe("メモ(任意)"),
+  color: z.enum(COLORS).default("blue").describe("色。red / orange / green / blue / purple のいずれか。省略すると blue"),
+});
+
+export const eventInputSchema = eventFieldsSchema.refine((e) => !e.end_date || e.end_date >= e.start_date, {
+  message: "end_date は start_date 以降の日付にしてください",
+  path: ["end_date"],
+});
+
+export type EventInput = z.infer<typeof eventInputSchema>;
 
 export type TransactionInput = z.infer<typeof transactionInputSchema>;
 export type AddTransactionsInput = z.infer<typeof addTransactionsSchema>;
