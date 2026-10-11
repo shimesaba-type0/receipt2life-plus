@@ -2,6 +2,8 @@
 .cal { --lane-h: 18px; --lane-gap: 2px; --date-h: 26px; }
 .cal__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cal__title { text-align: center; }
+.cal__pick { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; border-radius: 22px; background: transparent; font: inherit; font-weight: 700; color: inherit; cursor: pointer; }
+.cal__pick:hover { background: var(--accent-soft); }
 .cal__total { margin: 2px 0 0; font-size: 15px; color: var(--muted); }
 .cal__nav { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); font-size: 24px; line-height: 1; }
 
