@@ -8,6 +8,7 @@
 
 - 1行1レコードで、`type` が `event` → `transaction` → `attachment` → `link` の順に並ぶ(`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`)
 - カテゴリと口座は、名前で書き出される
+- `transaction` の行には `tax_flag`(税金の控除用フラグ。`medical` / `self_medication` / `donation`、なしは `null`)が入る
 - 写真の実体は含まれない(写真の保存先ができるフェーズ5で、zip にする)
 
 保存したファイルは、**実データ**です。リポジトリには置かないでください(`exports/` と `backup/` は `.gitignore` 済み)。
@@ -19,6 +20,7 @@
 - 上限は 5MB または 5000 行(件)。超えると 413、空は 400
 - エクスポートした行(`id` と `created_at` がある取引)は、重複判定を飛ばして、そのまま戻る
 - `id` か `created_at` が無い行は、重複判定をする(同日・同額・同じ店はスキップ)
+- `tax_flag` が無い古いバックアップも、そのまま取り込める(フラグなしになる)。`tax_flag` に未知の値がある行は、その行だけエラー
 - 未知のカテゴリ・口座の名前は、その行だけエラーになる(自動では作らない)
 - `link` の行は、URLを登録時と同じ規則で検証・正規化する(許可リスト外のURL、`http:`、`user:pass@` 付き、`kind` がURLと合わないものは、その行だけエラー)。紐づけ先の取引・出来事が無い行もエラー
 - `link` の重複: 同じ `id` は `skipped_exists`。`id` が違っても、同じ紐づけ先に同じ正規化URLがあれば `skipped_duplicate`(バックアップを同じDBに何度戻しても増えない)

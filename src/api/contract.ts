@@ -3,6 +3,9 @@
 
 export type EventColor = "red" | "orange" | "green" | "blue" | "purple";
 
+// 税金の控除用フラグ(1つの取引に1つ。なしは null)。ラベルは ui/src/taxFlags.ts
+export type TaxFlag = "medical" | "self_medication" | "donation";
+
 export interface FieldError {
   index?: number;
   field: string;
@@ -22,6 +25,7 @@ export interface TransactionView {
   memo: string | null;
   source: string;
   status: string;
+  tax_flag: TaxFlag | null;
 }
 
 export interface EventView {
@@ -125,6 +129,8 @@ export interface NewTransaction {
   account?: string;
   memo?: string;
   source?: "receipt" | "manual" | "voice";
+  // 省略または null でフラグなし
+  tax_flag?: TaxFlag | null;
   allow_duplicate?: boolean;
 }
 
@@ -137,6 +143,8 @@ export interface TransactionPatch {
   account?: string | null;
   memo?: string | null;
   source?: "receipt" | "manual" | "voice";
+  // null でフラグを外す
+  tax_flag?: TaxFlag | null;
 }
 
 // POST /api/events の入力

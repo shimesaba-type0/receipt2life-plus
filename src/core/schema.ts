@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isRealDate } from "./dates";
+import { TAX_FLAG_DESCRIPTION, TAX_FLAG_FILTER_DESCRIPTION, TAX_FLAG_FILTERS, taxFlagSchema } from "./tax-flags";
 
 export const MAX_AMOUNT = 10_000_000;
 export const MAX_BATCH = 50;
@@ -27,6 +28,7 @@ export const transactionInputSchema = z
       .describe("カテゴリ名。list_categories で取れる既存の名前から選ぶ。決められなければ省略(needs_reviewになる)"),
     account: z.string().min(1).optional().describe("支払方法(口座)名。現金・カード・Suica など。不明なら省略"),
     memo: z.string().max(500).optional().describe("メモ(任意)"),
+    tax_flag: taxFlagSchema.nullable().optional().describe(TAX_FLAG_DESCRIPTION),
     source: z
       .enum(SOURCES)
       .default("manual")
@@ -54,6 +56,10 @@ export const listTransactionsSchema = z.strictObject({
   from: isoDate.optional().describe("この日以降(YYYY-MM-DD)"),
   to: isoDate.optional().describe("この日以前(YYYY-MM-DD)"),
   category: z.string().min(1).optional().describe("カテゴリ名で絞り込む"),
+  tax_flag: z
+    .enum(TAX_FLAG_FILTERS, { error: `tax_flag は ${TAX_FLAG_FILTERS.join(" / ")} のいずれかで指定してください` })
+    .optional()
+    .describe(TAX_FLAG_FILTER_DESCRIPTION),
   limit: z.number().int().min(1).max(500).default(100).describe("最大件数(既定100、最大500)"),
 });
 

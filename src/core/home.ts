@@ -2,7 +2,7 @@ import { monthRange } from "./calendar";
 import { todayJst } from "./dates";
 import type { FieldError } from "./schema";
 import { summarize, type SummaryRow } from "./summarize";
-import type { CoreOptions, TransactionView } from "./transactions";
+import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionView } from "./transactions";
 
 export interface HomeResult {
   ok: true;
@@ -36,7 +36,7 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
     db.prepare("SELECT COUNT(*) AS n FROM transactions WHERE status = 'needs_review'").first<{ n: number }>(),
     db
       .prepare(
-        `SELECT t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status
+        `SELECT ${TX_VIEW_COLUMNS}
          FROM transactions t
          LEFT JOIN categories c ON c.id = t.category_id
          LEFT JOIN accounts a ON a.id = t.account_id

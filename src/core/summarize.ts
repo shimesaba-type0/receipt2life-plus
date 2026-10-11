@@ -1,4 +1,5 @@
 import { summarizeSchema, type GroupBy } from "./report-schema";
+import { NO_TAX_FLAG_LABEL, TAX_FLAG_LABELS, type TaxFlag } from "./tax-flags";
 import { toFieldErrors, type FieldError } from "./schema";
 
 export interface SummaryRow {
@@ -107,6 +108,11 @@ export async function summarize(db: D1Database, input: unknown): Promise<Summari
   }
 
   const rows: SummaryRow[] = raw.map((r) => {
+    if (groupBy === "tax_flag") {
+      const flag = r.key as TaxFlag | null;
+      const label = flag ? (TAX_FLAG_LABELS[flag] ?? flag) : NO_TAX_FLAG_LABEL;
+      return { key: flag ?? NO_TAX_FLAG_LABEL, label, count: r.count, total: r.total, percent: percentOf(r.total, total) };
+    }
     const key = r.key ?? (groupBy === "merchant" ? NO_MERCHANT : NO_CATEGORY);
     return { key, label: r.label ?? key, count: r.count, total: r.total, percent: percentOf(r.total, total) };
   });
@@ -134,6 +140,8 @@ function groupExpr(groupBy: Exclude<GroupBy, "event_id">): { expr: string; join:
       return { expr: "substr(t.date, 1, 7)", join: "" };
     case "merchant":
       return { expr: "t.merchant", join: "" };
+    case "tax_flag":
+      return { expr: "t.tax_flag", join: "" };
   }
 }
 

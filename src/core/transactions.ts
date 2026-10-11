@@ -7,6 +7,7 @@ import {
   type FieldError,
   type TransactionInput,
 } from "./schema";
+import { ANY_TAX_FLAG, type TaxFlag } from "./tax-flags";
 import { deleteTransactionSchema, updateTransactionSchema } from "./transaction-edit-schema";
 
 export interface CoreOptions {
@@ -23,7 +24,11 @@ export interface TransactionView {
   memo: string | null;
   source: string;
   status: string;
+  tax_flag: TaxFlag | null;
 }
+
+// 取引の表示用の列(TransactionView と同じ並び)。transactions を t、カテゴリを c、口座を a で JOIN して使う
+export const TX_VIEW_COLUMNS = "t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status, t.tax_flag";
 
 export interface DuplicateInfo {
   index: number;
@@ -132,8 +137,8 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     statements.push(
       db
         .prepare(
-          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -148,6 +153,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
           hash,
           timestamp,
           timestamp,
+          item.tax_flag ?? null,
         ),
     );
     registered.push({
@@ -160,6 +166,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
       memo: item.memo ?? null,
       source: item.source,
       status,
+      tax_flag: item.tax_flag ?? null,
     });
   });
 
@@ -193,7 +200,7 @@ function buildMessage(
 export async function listTransactions(db: D1Database, input: unknown): Promise<ListResult> {
   const parsed = listTransactionsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { from, to, category, limit } = parsed.data;
+  const { from, to, category, tax_flag: taxFlag, limit } = parsed.data;
 
   if (from && to && from > to) {
     return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
@@ -216,10 +223,16 @@ export async function listTransactions(db: D1Database, input: unknown): Promise<
     where.push("t.category_id = ?");
     params.push(id);
   }
+  if (taxFlag === ANY_TAX_FLAG) {
+    where.push("t.tax_flag IS NOT NULL");
+  } else if (taxFlag) {
+    where.push("t.tax_flag = ?");
+    params.push(taxFlag);
+  }
 
   const { results } = await db
     .prepare(
-      `SELECT t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status
+      `SELECT ${TX_VIEW_COLUMNS}
        FROM transactions t
        LEFT JOIN categories c ON c.id = t.category_id
        LEFT JOIN accounts a ON a.id = t.account_id
@@ -246,7 +259,7 @@ export type DeleteResult =
   | { ok: true; deleted: TransactionView; message: string }
   | { ok: false; errors: FieldError[] };
 
-const VIEW_SELECT = `SELECT t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status
+const VIEW_SELECT = `SELECT ${TX_VIEW_COLUMNS}
        FROM transactions t
        LEFT JOIN categories c ON c.id = t.category_id
        LEFT JOIN accounts a ON a.id = t.account_id
@@ -289,6 +302,7 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
     account: patch.account === undefined ? current.account : patch.account,
     memo: patch.memo === undefined ? current.memo : patch.memo,
     source: patch.source ?? current.source,
+    tax_flag: patch.tax_flag === undefined ? current.tax_flag : patch.tax_flag,
   };
   next.status = next.merchant && next.category ? "ok" : "needs_review";
   const hash = await dedupHash(next.date, next.amount, next.merchant ?? undefined);
@@ -296,7 +310,7 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
   await db
     .prepare(
       `UPDATE transactions
-       SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?
+       SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?, tax_flag = ?
        WHERE id = ?`,
     )
     .bind(
@@ -310,6 +324,7 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
       next.status,
       hash,
       now.toISOString(),
+      next.tax_flag,
       next.id,
     )
     .run();
