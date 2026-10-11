@@ -1,0 +1,11 @@
+# 値はプレースホルダーのみ。アカウントID・D1のID・ドメインなどは書かない(docs/setup.md)
+name = "receipt2life"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+
+[env.staging]
+name = "receipt2life-staging"
+workers_dev = false
+preview_urls = false
