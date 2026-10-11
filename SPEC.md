@@ -99,7 +99,21 @@ receipt2life/
 | created_at, updated_at | TEXT | |
 
 - 必須は金額だけ。読み取れなかった項目は空欄のまま登録でき、不完全なものには needs_review を付ける
-- 明細行は持たず、合計額だけにする
+- 明細(レシートの行)は任意で、transaction_items に持つ(第13節「フェーズ5(明細)」)。取引の amount が支払総額の正
+
+**transaction_items**(明細。migration 0005)
+
+| 列 | 型・制約 | 備考 |
+| --- | --- | --- |
+| id | TEXT PK | |
+| transaction_id | TEXT NOT NULL | transactionsへのFK |
+| position | INTEGER NOT NULL | 並び順(0始まり)。索引は (transaction_id, position) |
+| name | TEXT NOT NULL | 品名。100文字まで |
+| amount | INTEGER NOT NULL CHECK(amount != 0) | 円。マイナスは値引き。絶対値は10,000,000以下 |
+| category_id | TEXT | categoriesへのFK。NULLなら取引のカテゴリに従う |
+| tax_flag | TEXT | transactions.tax_flag と同じ値。NULLなら取引のフラグに従う |
+| memo | TEXT | |
+| created_at | TEXT NOT NULL | |
 
 **categories**: id, name(UNIQUE), group_name(集計用の大分類)。初期データは seed で入れる(例: 食費、日用品、交通・チャージ、娯楽、その他)
 **accounts**: id, name(UNIQUE)。現金、カード、Suica程度のラベル。残高は持たない
@@ -112,15 +126,20 @@ receipt2life/
 
 Streamable HTTPで、ステートレスに実装する。ツールの説明文とスキーマがAIへの仕様書になるので、項目の意味、必須と任意、選べる値を必ず書く。
 
+現在は19個。
+
 | ツール | 役割 |
 | --- | --- |
-| add_transactions | 取引を配列で登録。1レシート1件。写真1枚に複数のレシートがあれば、別々の取引にする。全件成功か全件ロールバック(D1のbatch) |
-| list_transactions | from、to、category(任意)で一覧 |
-| update_transaction / delete_transaction | 修正と削除 |
-| summarize | 期間と group_by(category、group、month、merchant、event_id)で集計。件数、合計、全体に対する割合 |
-| list_categories | AIが既存カテゴリに寄せるために使う |
+| add_transactions | 取引を配列で登録。1レシート1件。写真1枚に複数のレシートがあれば、別々の取引にする。明細(items)を行ごとに付けられる。全件成功か全件ロールバック(D1のbatch) |
+| list_transactions | from、to、category、tax_flag(任意)で一覧。明細(items)つき |
+| update_transaction / delete_transaction | 修正(明細は全置換)と削除(delete_photos で写真もいっしょに) |
+| summarize | 期間と group_by(category、group、month、merchant、event_id、tax_flag)で集計。単位は支出の行。件数、合計、全体に対する割合 |
+| list_categories | AIが既存カテゴリに寄せるために使う。大分類ごとのまとまりと使用数つき |
+| add_category / update_category / delete_category / rename_group | カテゴリ(大分類の下のサブカテゴリ)の管理 |
 | add_event / update_event / list_events | 日付や期間のメモ(色つき) |
-| query(候補) | 読み取り専用のSELECT。行数上限あり。後から追加してよい |
+| create_photo_upload_link / list_photos / get_photos | 写真の登録は Web UI の /photos/add へのリンクを返す。一覧と画像の取得 |
+| add_link / list_links / delete_link | Xの投稿・YouTubeの動画のリンク |
+| query(候補) | 読み取り専用のSELECT。行数上限あり。後から追加してよい(未実装) |
 
 - **重複**: dedup_hash が既存と一致したら、登録せずに既存のIDを返して警告する。同日同額の正当な購入があり得るので、`allow_duplicate: true` で強制登録できるようにする
 - **検証**: 金額は整数、日付はISO形式、未来日付と極端な金額は拒否。エラーは何が悪いかを文章で返し、AIが直して再送できるようにする
@@ -179,7 +198,7 @@ AIで読み取る場所ではなく、カレンダーで振り返りながら、
 
 優先順位は JSONL > Markdown > HTML。
 
-- **JSONL(+写真)**: 完全バックアップ。1行1レコードで、`type`(transaction / event / attachment)で区別する。写真は photos フォルダに入れ、JSONLと一緒にzipにする
+- **JSONL(+写真)**: 完全バックアップ。1行1レコードで、`type`(transaction / item / event / attachment / link)で区別する。写真は photos フォルダに入れ、JSONLと一緒にzipにする
 - **Markdown**: 月、年、期間メモの期間から範囲を選ぶ。サマリ、カテゴリ内訳(表とMermaidの円グラフ)、カレンダー、期間メモ、日別明細。メモの色は🟥🟧🟩🟦🟪で再現し、写真は相対リンクにする
 - **HTML**: MarkdownをHTMLに変換してCSSを当てた1ファイルだけ。見た目の再現にはこだわらない
 - **インポート**: JSONL(とJSON配列)を受け付け、行ごとに結果(成功、重複スキップ、エラー理由)を返す。add_transactions は全件成功か全件失敗、インポートは行単位の部分成功を許す
@@ -273,3 +292,17 @@ backup/
 - フェーズ5(エクスポート画面): 画面は `/backup`(ナビの文言は「エクスポート」)。読み込みの前にブラウザで上限(5MB・5000行。空行を除く行数かJSON配列の件数)を検査し、中身の判定はサーバーに任せる。結果は登録 / 重複でスキップ / 既にある / 読めなかった行(最大50件)に分けて出す。期間指定と件数表示は、`/export` が対応していないので出さない。Markdownは「準備中」(フェーズ6)。バックアップに写真の実体は含まれない
 - フェーズ5(祝日): 国民の祝日は外部APIを使わず `ui/src/holidays.ts` で計算する(2000〜2099年)。春分・秋分は近似式、ハッピーマンデー、振替休日、国民の休日、2019年の即位に関する休日、2020・2021年の東京オリンピックによる移動に対応。振替休日は2007年以降の規則を2000〜2006年にも適用する(簡易化)。祝日は出来事としては保存せず、表示だけにする
 - フェーズ5(障害対応): 想定外の例外は、ログに種類と文面(200文字まで。値は出さない)を残し、`/api/*` にはJSONの500で理由を返す。本番で「新しい列が無い」エラーが出た原因は、Cloudflareの「デプロイコマンド」が `npx wrangler deploy` だけでマイグレーションが当たっていなかったこと。デプロイコマンドは必ず `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy --env=""` にする(docs/setup.md)
+- フェーズ5(明細): 「1レシート=1支出=カテゴリ1つ」をやめ、レシートの下に明細(行)を持てるようにした(ユーザー指示)。第5節の「明細行は持たず、合計額だけ」を置き換える。以下、項目ごと
+  - データ: テーブル `transaction_items`(migration 0005、追加のみ。外部キーは取引・カテゴリ。索引は `(transaction_id, position)`)。既存の取引は明細なしのままで、バックフィルしない。集計の土台は SQL の VIEW ではなく、core の共通クエリ片(`src/core/items.ts` の `spendLines`)にした(VIEW はマイグレーションでしか変えられず、後の変更が重いため)
+  - ルール: 取引の `amount` が支払総額の正。明細がある取引は「明細の amount の合計 = 取引の amount」が必須で、合わなければ全体を拒否し、差額を日本語で返す(「明細の合計(580円)が金額 amount(1,000円)と一致しません。差額は420円で、明細が420円足りません…」)。明細は任意で、1取引50行まで。行の金額はマイナス(値引き)可、0は不可、絶対値は10,000,000以下。品名は100文字まで。取引の金額は従来どおり1円以上(返金は未対応のまま)。`position` は入力の配列の順(0始まり)に振り直す
+  - 実効値: 行の実効カテゴリ・実効フラグは COALESCE(行の値, 取引の値)。「全部同じカテゴリ」は取引のカテゴリだけを付け、行のカテゴリを空にして表す。`ItemView` の `category` / `tax_flag` は行自身の値(実効ではない)
+  - 集計: 「支出の行」(明細がある取引は各明細行、無い取引は取引そのもの)を土台に、`summarize`(全 group_by)、ホームの大分類別の内訳、税金フラグ別の集計、`list_transactions` の `tax_flag` 絞り込み(行のどれかが当てはまれば含める。`"any"` も同様)を数える。`category` の絞り込みも同じく行のどれかで含める(仕様外の判断)。**summarize の rows の `count` は支出の行の数**(取引数ではない)。戻りの `count` は従来どおり取引(レシート)の件数で、行の数は新しい `lines` に入れた。`total` と行の合計の総和は、取引の合計と一致する(テストで確認)。日別合計・カレンダー・ホームの今日/今月の合計と件数は、取引の amount と件数のまま
+  - status: 店名が無い、または実効カテゴリの無い行が1つでもあれば `needs_review`(明細なしは従来どおり店名かカテゴリが空なら)。`dedup_hash` は変えない(日付|金額|正規化した店名。明細は含めない)
+  - カテゴリの引き継ぎ: `add_transactions` で取引のカテゴリが省略され、カテゴリの無い行がある(明細なしなら取引そのものがその行)とき、同じ正規化店名(全角半角・大文字小文字・空白を吸収)の既存の取引のうち、カテゴリが付いた直近のもの(日付、登録日時の順)のカテゴリを取引のカテゴリにし、結果の各登録に `applied_default_category` を付けて message でも知らせる。明細なしの取引にも適用する(仕様の「カテゴリの無い行」を、明細なしの取引そのものも含むと読んだ)。明示したカテゴリは上書きしない。同じ呼び出しの中の他の取引は参照しない。既存の支出には遡らない。インポートには適用しない。店名の正規化はSQLでできないので、店名の表記ごとの直近を読んでから寄せる
+  - 表現: `TransactionView` に `items: ItemView[]`(id, position, name, amount, category, tax_flag, memo。明細なしは空配列)を足し、`GET /api/day/:date` とホームの最近の取引、`add_transactions` / `update_transaction` / `list_transactions` の戻りに含める。`list_transactions` は `include_items`(既定 true)。`GET /api/transactions/:id` は `{transaction, photos, links, counts: {items, photos, links}}`(写真・リンクは transaction_id が一致するものだけ)
+  - 追加・更新: `items` は `add_transactions` の各取引と `update_transaction`(`PATCH /api/transactions/:id`)に追加。更新は全置換で、`null` と省略は変更なし、`[]` で全部消す(`items: null` だけの更新は「変更なし」としてエラー)。金額・カテゴリなどだけの変更でも、今の明細と合計の整合を検証する(合わなければ `field: "amount"`)。取引と明細の書き込みは1回の batch
+  - 削除: `delete_transaction` / `DELETE /api/transactions/:id` に `delete_photos`(API は `?delete_photos=1`。`0` と省略は false、それ以外の値は400)。既定は従来どおり写真つきの取引を断る(「写真N枚が紐づいています。delete_photos で写真もいっしょに削除できます」)。指定時は R2 の写真オブジェクトを先に消し、attachments の行・リンク・明細・取引を1回の batch で消す(途中で失敗しても再実行で消える)。写真が出来事や日付にも紐づいていても、写真ごと消す。戻りの `deleted` は `{transaction(削除前の内容), items, photos, links(消した件数)}` に変えた(以前は取引そのもの)。明細とリンクは写真が無ければ確認なしで消える
+  - カテゴリ: `usage`(使用数)は取引のカテゴリと明細の行のカテゴリの件数の和。カテゴリの削除で `move_to` を指定すると、明細の行のカテゴリも付け替える
+  - JSONL: 取引の行とは別に `type: "item"` の行(`id`, `transaction_id`, `position`, `name`, `amount`, `category`(名前), `tax_flag`, `memo`, `created_at`)を、取引の後に出す。取り込みは、同じファイルの取引の行(id が一致)に明細を結びつけ、取引と明細を1回の batch で書く。合計が合わない・明細のカテゴリが未知(復元では自動作成)・50行超・明細の id が既存なら、その取引と明細の行を error にする。取引が skipped_exists / skipped_duplicate なら、明細の行も同じ状態にする。取引の行が無い明細は、同じ id が既にあれば skipped_exists、無ければ error。取引の行に入れ子の `items` を書いたものは error(明細は item の行で書く)。明細の無い古いバックアップはそのまま取り込める
+  - MCP: ツールは増やさず、`add_transactions` / `update_transaction` / `list_transactions` / `delete_transaction` / `summarize` の入力スキーマと説明を更新した(「レシート写真を見て、品名・金額の行をそのまま items に入れる。値引きはマイナスの行。合計は金額と一致させる」)
+  - 画面: 明細の表示・編集の画面は別PR(UI担当)。それまでは画面の取引の編集は明細を送らない(明細は変わらない)が、金額だけを変えると合計の検証で400になりうる

@@ -17,16 +17,32 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | --- | --- |
 | `GET /api/home` | `HomeData`: 今日と今月の合計、大分類別(`summarize` の group)、メモ付き支出の割合、要確認の件数、最近の取引5件 |
 | `GET /api/calendar?month=YYYY-MM` | `CalendarData`: その月の日別の合計・件数・写真枚数(取引のある日だけ)、その月と重なる出来事。`month` 省略は今月 |
-| `GET /api/day/:date` | `DayData`: その日の合計・取引一覧・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの) |
-| `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`usage`=使っている取引の件数。大分類ごと・追加順)と口座名 |
+| `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの) |
+| `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
+| `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名 |
 
 ## 取引
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `POST /api/transactions` | `{transactions: NewTransaction[]}`(`add_transactions` と同じ) | `registered`, `skipped_duplicates`, `message` |
-| `PATCH /api/transactions/:id` | `TransactionPatch`(`update_transaction` と同じ。null で空にできる) | `transaction`, `warnings`, `message` |
-| `DELETE /api/transactions/:id` | なし | `deleted`, `message`(写真が紐づく取引は 400 で拒否) |
+| `POST /api/transactions` | `{transactions: NewTransaction[]}`(`add_transactions` と同じ。`items` で明細つき) | `registered`(各取引に `items`。カテゴリを引き継いだときは `applied_default_category`), `skipped_duplicates`, `message` |
+| `PATCH /api/transactions/:id` | `TransactionPatch`(`update_transaction` と同じ。null で空にできる。`items` は全置換) | `transaction`(`items` つき), `warnings`, `message` |
+| `DELETE /api/transactions/:id[?delete_photos=1]` | なし | `TransactionDeleted`: `deleted: {transaction, items, photos, links}`(消した件数), `message`。写真が紐づく取引は、`delete_photos=1` が無ければ 400 で拒否 |
+
+### 明細(`items`)
+
+レシートの下に、品名・金額の行を持てる。明細は任意で、無い取引は今までどおり1行の支出として扱う。
+
+- `ItemView`: `id`, `position`(0始まりの並び順), `name`, `amount`(円。マイナスは値引き、0は無い), `category`, `tax_flag`, `memo`。`category` / `tax_flag` は**行自身の値**で、`null` の行は取引の `category` / `tax_flag` に従う(実効値 = 行の値 ?? 取引の値)
+- `TransactionView.items`: 常に含まれる(明細なしは `[]`)。`POST` / `PATCH` の戻り、`GET /api/day/:date`、`GET /api/home` の `recent`、`GET /api/transactions/:id`
+- 合計: 明細がある取引は「明細の `amount` の合計 = 取引の `amount`」が必須。合わなければ 400(`POST` は `field: "items"`、`PATCH` で金額だけを変えたときは `field: "amount"`)で、差額の文が返る
+- 入力(`NewItem`): `name`(必須、100文字まで)、`amount`(必須、整数、0以外、絶対値10,000,000以下)、`category?`、`tax_flag?`、`memo?`。1取引50行まで
+- `PATCH` の `items`: 全置換。省略または `null` で変えない、`[]` で全部消す
+- 全部同じカテゴリなら、取引の `category` だけを付けて行の `category` は空にする
+- `status`: 店名が無い、または実効カテゴリの無い行が1つでもあれば `needs_review`
+- カテゴリの引き継ぎ: `category` を省略し、カテゴリの無い行がある(明細なしなら取引そのもの)とき、同じ店名(表記ゆれは吸収)の直近の取引のカテゴリを使い、`registered[].applied_default_category` で知らせる
+- 集計(ホームの大分類別の内訳)は明細の行ごとの実効カテゴリで数える。今日・今月の合計と件数、カレンダー・日の合計と件数は取引(レシート)で数える
+- 削除: 明細とリンクは取引といっしょに消える。写真は `?delete_photos=1` のときだけ(R2 の実体が先、行が後)
 
 ### 税金の控除用フラグ(`tax_flag`)
 
@@ -37,6 +53,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 - `NewTransaction.tax_flag`: 省略または `null` でフラグなし。`TransactionPatch.tax_flag`: 省略は変更なし、`null` で解除
 - 不正な値は 400(`field: "tax_flag"`)。重複判定(`dedup_hash`)には含めない
 - 年ごとの合計は、MCP の `summarize`(`group_by: "tax_flag"` と `from` / `to`)で出す。Web UI の API には集計用の道は足していない
+- 明細の行にもフラグを付けられる(行の `tax_flag`、`null` なら取引のフラグに従う)。集計は行ごとの実効フラグで数える
 
 ## カテゴリ(大分類の下のサブカテゴリ)
 
@@ -51,7 +68,7 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 - `:name` は URL エンコードしたカテゴリ名(日本語。例: `/api/categories/%E9%A3%9F%E8%B2%BB`)。パスの `name` が本文の `name` に優先する
 - 名前の重複・空・長すぎる・変更なしは 400(`field` は `name` / `new_name` / `group_name` / `input`)。存在しないカテゴリ(`name`)・大分類(`group`)は 404。`move_to` が存在しない・自分自身は 400
-- 削除: 取引が1件も使っていなければそのまま削除。使っているのに `move_to` が無ければ 400(「N件の支出が使っています。move_to で移し先を指定してください」)。`move_to` があれば取引のカテゴリを付け替えてから削除(1回のバッチ)。最後の1つのカテゴリは削除できない(400)
+- 削除: 取引・明細の行が1件も使っていなければそのまま削除。使っているのに `move_to` が無ければ 400(「N件の支出が使っています。move_to で移し先を指定してください」)。`move_to` があれば取引と明細の行のカテゴリを付け替えてから削除(1回のバッチ)。最後の1つのカテゴリは削除できない(400)
 - 大分類の名前の変更(`rename`): その大分類の全カテゴリの `group_name` を更新する。既にある別の大分類と同名にすると統合(`merged: true`)。確認なしで実行され、変更したカテゴリの件数を `updated` で返す
 - カテゴリの名前・大分類を変えても、取引の `category_id` 参照は変わらないので、取引の `status` / `dedup_hash` への影響はない
 - JSON を受ける POST / PATCH は `application/json` 以外を 415、書き込みは同一オリジンのみ(他は取引・出来事と同じ)。応答は `Cache-Control: private, no-store`

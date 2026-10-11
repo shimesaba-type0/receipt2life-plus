@@ -6,7 +6,7 @@
 
 ブラウザで、ログインしたまま `https://<サブドメイン>.<ドメイン>/export` を開くと、`receipt2life-YYYYMMDD.jsonl` が保存されます。
 
-- 1行1レコードで、`type` が `event` → `transaction` → `attachment` → `link` の順に並ぶ(`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`)
+- 1行1レコードで、`type` が `event` → `transaction` → `item` → `attachment` → `link` の順に並ぶ(`item` はレシートの明細の行。`id`, `transaction_id`, `position`, `name`, `amount`, `category`, `tax_flag`, `memo`, `created_at`。`category` と `tax_flag` は行自身の値で、`null` は取引の値に従う。`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`)
 - カテゴリと口座は、名前で書き出される
 - `transaction` の行には `tax_flag`(税金の控除用フラグ。`medical` / `self_medication` / `donation`、なしは `null`)が入る
 - 写真の実体は含まれない(写真の保存先ができるフェーズ5で、zip にする)
@@ -21,6 +21,12 @@
 - エクスポートした行(`id` と `created_at` がある取引)は、重複判定を飛ばして、そのまま戻る
 - `id` か `created_at` が無い行は、重複判定をする(同日・同額・同じ店はスキップ)
 - `tax_flag` が無い古いバックアップも、そのまま取り込める(フラグなしになる)。`tax_flag` に未知の値がある行は、その行だけエラー
+- 明細(`item` の行)は、同じファイルの取引の行(`id` が `transaction_id` と一致)といっしょに取り込む。取引と明細は一度に書くので、片方だけが残ることはない
+  - 明細の合計が取引の `amount` と合わないときは、その取引と明細の行がエラー(差額が出る)。明細のカテゴリが未知(エクスポートした行では自動で作る)、1取引50行を超える、明細の `id` が既にある場合も同じ
+  - 取引が `skipped_exists`(同じ id がある)・`skipped_duplicate` なら、明細の行も同じ結果になる。バックアップを同じDBに何度戻しても増えない
+  - 取引の行がファイルに無い明細の行は、同じ `id` の明細が既にあれば `skipped_exists`、無ければエラー
+  - 取引の行の中に `items` を入れ子で書いた行はエラー(明細は `item` の行で書く)
+  - 明細の無い古いバックアップも、そのまま取り込める
 - 未知の口座の名前は、その行だけエラーになる(自動では作らない)
 - 未知のカテゴリの名前も、その行だけエラーになる。ただし**エクスポートした行(`id` と `created_at` がある取引)**は復元とみなし、取り込み先に無いカテゴリを自動で作る。バックアップの行には大分類が入っていないので、大分類は「その他」になる(必要なら、あとで `/categories` の画面か MCP の `update_category` で移す)。名前が30文字を超える・前後に空白があるものは作らず、その行がエラーになる。実際に取り込む行が使うカテゴリだけを作る(スキップされる行のぶんは作らない)
 - `link` の行は、URLを登録時と同じ規則で検証・正規化する(許可リスト外のURL、`http:`、`user:pass@` 付き、`kind` がURLと合わないものは、その行だけエラー)。紐づけ先の取引・出来事が無い行もエラー
