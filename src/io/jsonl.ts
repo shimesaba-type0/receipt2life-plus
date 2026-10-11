@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { todayJst } from "../core/dates";
 import { needsReview } from "../core/items";
+import { RECEIPT_DETAIL_KEYS } from "../core/receipt-details";
 import {
   eventInputSchema,
   isoDate,
@@ -42,7 +43,8 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   {
     sql: `SELECT 'transaction' AS type, t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account,
-                 t.memo, t.source, t.status, t.tax_flag, t.created_at, t.updated_at
+                 t.memo, t.source, t.status, t.tax_flag, t.paid_time, t.merchant_phone, t.merchant_address, t.invoice_number, t.clerk_name, t.receipt_no,
+                 t.created_at, t.updated_at
           FROM transactions t
           LEFT JOIN categories c ON c.id = t.category_id
           LEFT JOIN accounts a ON a.id = t.account_id
@@ -479,7 +481,7 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
       status: e.data.status ?? (needsReview(item.merchant, item.category, lines.map((l) => l.data)) ? "needs_review" : "ok"),
       createdAt,
       updatedAt: e.data.updated_at ?? createdAt,
-      hash: await dedupHash(date, item.amount, item.merchant),
+      hash: await dedupHash(date, item.amount, item.merchant, item.paid_time),
     });
   }
 
@@ -547,8 +549,9 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
       statements: [
         db
           .prepare(
-            `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag,
+                                        paid_time, merchant_phone, merchant_address, invoice_number, clerk_name, receipt_no)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             v.id,
@@ -564,6 +567,7 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
             v.createdAt,
             v.updatedAt,
             v.item.tax_flag ?? null,
+            ...RECEIPT_DETAIL_KEYS.map((k) => v.item[k] ?? null),
           ),
         // 明細は、取引と同じ batch で書く(取引だけ・明細だけが残らない)。position は並べ直した順(0 始まり)
         ...v.lines.map((l, position) =>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ApiResult, CategoriesData, FieldError, PhotoView, TransactionDetailData, TransactionView } from "../../../src/api/contract";
 import { UnauthorizedError, deleteLink, deleteTransaction, getCategories, getTransaction, photoUrl, updateLink, updateTransaction } from "../api";
+import { CopyValue } from "../components/CopyValue";
 import { CategoryChip } from "../components/CategoryIcon";
 import { chipIcon } from "../categoryIcons";
 import { LinkCard } from "../components/LinkCard";
@@ -8,6 +9,7 @@ import { PhotoLightbox } from "../components/PhotoLightbox";
 import { CategorySelect, TaxFlagSelect, TransactionFields } from "../components/TransactionFields";
 import { formatDateJa, formatYen } from "../format";
 import { holidayName } from "../holidays";
+import { clockLabel, hasShopInfo, telHref } from "../receiptDetails";
 import { Link, navigate } from "../router";
 import { categoryChipLabel, taxFlagChipLabel } from "./dayLogic";
 import {
@@ -200,6 +202,8 @@ function TransactionBody(props: {
   const catChip = categoryChipLabel(tx.category, props.cats);
   const taxChip = taxFlagChipLabel(tx.tax_flag);
   const totals = tx.items.length > 0 ? viewTotalsLabel(tx) : null;
+  const paidClock = clockLabel(tx.paid_time);
+  const tel = telHref(tx.merchant_phone);
   return (
     <>
       <div class="card tx__summary">
@@ -210,6 +214,11 @@ function TransactionBody(props: {
         </div>
         <div class="tx__meta">
           <span>{formatDateJa(tx.date)}</span>
+          {paidClock && (
+            <span class="tx__time">
+              <span class="muted">決済時刻</span> <span class="num tx__time-value">{paidClock}</span>
+            </span>
+          )}
           {holiday && <span class="chip chip--holiday">{holiday}</span>}
           {tx.account && <span class="muted">{tx.account}</span>}
         </div>
@@ -228,6 +237,50 @@ function TransactionBody(props: {
           </div>
         </dl>
       </div>
+
+      {hasShopInfo(tx) && (
+        <section class="card" aria-label="店舗の情報">
+          <div class="day__row-head">
+            <h2 class="day__h">店舗の情報</h2>
+          </div>
+          <dl class="tx__facts tx__shop">
+            {tx.merchant_phone && (
+              <div>
+                <dt>電話</dt>
+                <dd>{tel ? <a class="tx__tel" href={tel} aria-label={`${tx.merchant_phone} に電話をかける`}>{tx.merchant_phone}</a> : tx.merchant_phone}</dd>
+              </div>
+            )}
+            {tx.merchant_address && (
+              <div>
+                <dt>住所</dt>
+                <dd>
+                  <CopyValue text={tx.merchant_address} label="住所" />
+                </dd>
+              </div>
+            )}
+            {tx.invoice_number && (
+              <div>
+                <dt>事業者登録番号</dt>
+                <dd>
+                  <CopyValue text={tx.invoice_number} label="事業者登録番号" class="num" />
+                </dd>
+              </div>
+            )}
+            {tx.clerk_name && (
+              <div>
+                <dt>対応した人</dt>
+                <dd class="tx__memo">{tx.clerk_name}</dd>
+              </div>
+            )}
+            {tx.receipt_no && (
+              <div>
+                <dt>レシート番号</dt>
+                <dd class="tx__memo">{tx.receipt_no}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
 
       <section class="card" aria-label="明細の行">
         <div class="day__row-head">
@@ -362,7 +415,7 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
       }}
     >
       <h2 class="day__form-title">支出を編集</h2>
-      <TransactionFields idPrefix={id} values={form} cats={cats} showDate onChange={(patch) => setForm((cur) => ({ ...cur, ...patch }))} />
+      <TransactionFields idPrefix={id} values={form} cats={cats} showDate showDetails onChange={(patch) => setForm((cur) => ({ ...cur, ...patch }))} />
 
       <fieldset class="tx__editor">
         <legend class="day__h">明細の行</legend>

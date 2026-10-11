@@ -2,6 +2,7 @@ import type { CategoriesData } from "../../../src/api/contract";
 import { Link } from "../router";
 import { groupCategories } from "../pages/categoriesLogic";
 import { TAX_FLAG_OPTIONS } from "../pages/dayLogic";
+import { invoiceHint, normalizeInvoiceNumber, MAX_ADDRESS, MAX_CLERK, MAX_PHONE, MAX_RECEIPT_NO } from "../receiptDetails";
 import type { TxFormValues } from "../pages/transactionLogic";
 import "../pages/Day.css";
 
@@ -48,6 +49,8 @@ export function TransactionFields(props: {
   onChange: (patch: Partial<TxFormValues>) => void;
   // 日付の欄を出すか(編集では出し、日の画面の追加では出さない)
   showDate?: boolean;
+  // レシートの情報(決済時刻・電話・住所・登録番号・担当者・レシート番号)の欄を出すか(編集では出し、日の画面の追加では出さない)
+  showDetails?: boolean;
 }) {
   const { idPrefix: id, values: f, cats } = props;
   const input = (k: keyof TxFormValues) => (e: Event) => props.onChange({ [k]: (e.currentTarget as HTMLInputElement).value });
@@ -83,6 +86,51 @@ export function TransactionFields(props: {
       <TaxFlagSelect id={`${id}-taxflag`} value={f.tax_flag} onChange={(tax_flag) => props.onChange({ tax_flag })} />
       <label for={`${id}-memo`}>メモ</label>
       <textarea id={`${id}-memo`} rows={2} value={f.memo} onInput={input("memo")} />
+      {props.showDetails && <ReceiptDetailFields idPrefix={id} values={f} onChange={props.onChange} />}
     </>
+  );
+}
+
+// レシートに印字された情報の入力欄。すべて任意(空欄は「値なし」)。登録番号は、入力中に注意書きを出し、欄を離れたら正規化する
+function ReceiptDetailFields(props: { idPrefix: string; values: TxFormValues; onChange: (patch: Partial<TxFormValues>) => void }) {
+  const { idPrefix: id, values: f } = props;
+  const input = (k: keyof TxFormValues) => (e: Event) => props.onChange({ [k]: (e.currentTarget as HTMLInputElement).value });
+  const invoiceError = invoiceHint(f.invoice_number);
+  return (
+    <fieldset class="day__details">
+      <legend class="day__h">レシートの情報</legend>
+      <p class="muted day__note">レシートに印字されているものだけ入れます(後から店に問い合わせるときの手がかり)。</p>
+      <label for={`${id}-paidtime`}>決済時刻(日本時間)</label>
+      <input id={`${id}-paidtime`} type="time" value={f.paid_time} onInput={input("paid_time")} />
+      <label for={`${id}-phone`}>店の電話番号</label>
+      <input id={`${id}-phone`} type="tel" inputMode="tel" autoComplete="off" maxLength={MAX_PHONE} placeholder="例: 03-0000-0000" value={f.merchant_phone} onInput={input("merchant_phone")} />
+      <label for={`${id}-address`}>店の住所</label>
+      <textarea id={`${id}-address`} rows={2} maxLength={MAX_ADDRESS} value={f.merchant_address} onInput={input("merchant_address")} />
+      <label for={`${id}-invoice`}>事業者登録番号(インボイス)</label>
+      <input
+        id={`${id}-invoice`}
+        type="text"
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellcheck={false}
+        placeholder="例: T0000000000000"
+        aria-invalid={invoiceError ? "true" : undefined}
+        aria-describedby={invoiceError ? `${id}-invoice-err` : undefined}
+        value={f.invoice_number}
+        onInput={input("invoice_number")}
+        onBlur={() => {
+          if (!invoiceError && f.invoice_number.trim() !== "") props.onChange({ invoice_number: normalizeInvoiceNumber(f.invoice_number) });
+        }}
+      />
+      {invoiceError && f.invoice_number.trim() !== "" && (
+        <p id={`${id}-invoice-err`} class="error day__fielderr" role="alert">
+          {invoiceError}
+        </p>
+      )}
+      <label for={`${id}-clerk`}>対応した人(担当・責任者・レジ)</label>
+      <input id={`${id}-clerk`} type="text" maxLength={MAX_CLERK} value={f.clerk_name} onInput={input("clerk_name")} />
+      <label for={`${id}-receiptno`}>レシート番号・伝票番号</label>
+      <input id={`${id}-receiptno`} type="text" autoComplete="off" maxLength={MAX_RECEIPT_NO} value={f.receipt_no} onInput={input("receipt_no")} />
+    </fieldset>
   );
 }

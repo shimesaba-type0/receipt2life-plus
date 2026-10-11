@@ -24,7 +24,8 @@ import { PhotoUploader } from "../components/PhotoUploader";
 import { TransactionFields } from "../components/TransactionFields";
 import { Link } from "../router";
 import { categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
-import { dayItemsSub, parseAmount, type TxFormValues } from "./transactionLogic";
+import { clockLabel } from "../receiptDetails";
+import { dayItemsSub, emptyTxForm, parseAmount, type TxFormValues } from "./transactionLogic";
 import "./Day.css";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -297,6 +298,7 @@ export function Day(props: { date: string }) {
                     <span class="day__tx-main">
                       <span class="day__merchant">
                         {tx.merchant ?? "店名なし"}
+                        {clockLabel(tx.paid_time) && <span class="day__time num muted">{clockLabel(tx.paid_time)}</span>}
                         {tx.status === "needs_review" && <span class="chip chip--warn day__review">要確認</span>}
                       </span>
                       <span class="day__tags">
@@ -677,7 +679,7 @@ function LinksCard(props: {
 // 支出の追加フォーム(新規登録用)。明細は、登録後にそのレシートの「明細」ページで編集する
 function AddTxForm(props: { date: string; cats: CategoriesData; busy: boolean; onSubmit: (f: TxFormValues) => Promise<boolean>; onCancel: () => void }) {
   const { busy } = props;
-  const [f, setF] = useState<TxFormValues>({ date: props.date, amount: "", merchant: "", category: "", account: "", memo: "", tax_flag: "" });
+  const [f, setF] = useState<TxFormValues>(() => emptyTxForm(props.date));
   const id = useRef(`tx-${Math.random().toString(36).slice(2, 8)}`).current;
   return (
     <form

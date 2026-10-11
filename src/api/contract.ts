@@ -47,6 +47,17 @@ export interface TransactionView {
   // 店名が無い、または実効カテゴリの無い行が1つでもあれば needs_review
   status: string;
   tax_flag: TaxFlag | null;
+  // レシートに印字された情報(すべて任意。無ければ null)
+  // 決済時刻(日本時間 HH:MM。日付は date)
+  paid_time: string | null;
+  merchant_phone: string | null;
+  merchant_address: string | null;
+  // 適格請求書発行事業者の登録番号(T + 数字13桁)
+  invoice_number: string | null;
+  // 対応した店員の名前(担当・責任者・レジなど)
+  clerk_name: string | null;
+  // レシート番号・伝票番号
+  receipt_no: string | null;
   // 明細(position の順)。明細なしは空配列
   items: ItemView[];
 }
@@ -214,6 +225,13 @@ export interface NewTransaction {
   source?: "receipt" | "manual" | "voice";
   // 省略または null でフラグなし
   tax_flag?: TaxFlag | null;
+  // レシートに印字された情報(すべて任意。TransactionView と同じ規則。invoice_number は全角・小文字の t・ハイフンや空白入りでも受け付けて正規化する)
+  paid_time?: string | null;
+  merchant_phone?: string | null;
+  merchant_address?: string | null;
+  invoice_number?: string | null;
+  clerk_name?: string | null;
+  receipt_no?: string | null;
   // 明細(50行まで)。合計は amount と一致させる(合わなければ 400、field: "items" で差額が返る)
   items?: NewItem[];
   allow_duplicate?: boolean;
@@ -230,6 +248,13 @@ export interface TransactionPatch {
   source?: "receipt" | "manual" | "voice";
   // null でフラグを外す
   tax_flag?: TaxFlag | null;
+  // レシートに印字された情報。省略は変更なし、null で空にする
+  paid_time?: string | null;
+  merchant_phone?: string | null;
+  merchant_address?: string | null;
+  invoice_number?: string | null;
+  clerk_name?: string | null;
+  receipt_no?: string | null;
   // 明細の全置換。省略または null で変えない、[] で明細を全部消す。明細があるときは合計 = amount(金額だけ変えるときも)
   items?: NewItem[] | null;
 }

@@ -11,6 +11,7 @@ import {
 } from "./items";
 import type { LinkView } from "./links";
 import { toPhotoView, type PhotoView } from "./photos";
+import { detailsOf, phoneDigits, RECEIPT_DETAIL_KEYS, type ReceiptDetails } from "./receipt-details";
 import {
   addTransactionsEnvelopeSchema,
   itemsTotalMismatch,
@@ -31,7 +32,7 @@ export interface CoreOptions {
 }
 
 // 取引の行(明細を含まない)。TX_VIEW_COLUMNS で読んだもの
-export interface TransactionRow {
+export interface TransactionRow extends ReceiptDetails {
   id: string;
   date: string;
   amount: number;
@@ -53,7 +54,7 @@ export interface TransactionView extends TransactionRow {
 export type RegisteredTransaction = TransactionView & { applied_default_category?: string };
 
 // 取引の表示用の列(TransactionRow と同じ並び)。transactions を t、カテゴリを c、口座を a で JOIN して使う
-export const TX_VIEW_COLUMNS = "t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status, t.tax_flag";
+export const TX_VIEW_COLUMNS = "t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status, t.tax_flag, t.paid_time, t.merchant_phone, t.merchant_address, t.invoice_number, t.clerk_name, t.receipt_no";
 
 export interface DuplicateInfo {
   index: number;
@@ -80,9 +81,11 @@ export function normalizeMerchant(merchant: string | null | undefined): string {
   return (merchant ?? "").normalize("NFKC").toLowerCase().replace(/\s+/g, "");
 }
 
-// 日付+金額+正規化した店名のSHA-256
-export async function dedupHash(date: string, amount: number, merchant: string | undefined): Promise<string> {
-  const data = new TextEncoder().encode(`${date}|${amount}|${normalizeMerchant(merchant)}`);
+// 日付+金額+正規化した店名のSHA-256。決済時刻(paid_time)がある取引は、時刻も含める(同じ日に同じ店で同額の別の買い物を、重複にしないため)。
+// 時刻がなければ従来どおり(日付|金額|店名)で、既存の取引のハッシュは変わらない
+export async function dedupHash(date: string, amount: number, merchant: string | null | undefined, paidTime?: string | null): Promise<string> {
+  const base = `${date}|${amount}|${normalizeMerchant(merchant)}`;
+  const data = new TextEncoder().encode(paidTime ? `${base}|${paidTime}` : base);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -138,7 +141,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
   const items = valid.map((v) => v.item);
 
   const prepared = await Promise.all(
-    items.map(async (item) => ({ item, date: item.date ?? today, hash: await dedupHash(item.date ?? today, item.amount, item.merchant) })),
+    items.map(async (item) => ({ item, date: item.date ?? today, hash: await dedupHash(item.date ?? today, item.amount, item.merchant, item.paid_time) })),
   );
 
   const existing = new Map<string, string>();
@@ -182,8 +185,9 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     statements.push(
       db
         .prepare(
-          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag,
+                                      paid_time, merchant_phone, merchant_address, invoice_number, clerk_name, receipt_no)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -199,6 +203,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
           timestamp,
           timestamp,
           item.tax_flag ?? null,
+          ...RECEIPT_DETAIL_KEYS.map((k) => item[k] ?? null),
         ),
       ...insertItemStatements(db, id, stored, timestamp),
     );
@@ -213,6 +218,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
       source: item.source,
       status,
       tax_flag: item.tax_flag ?? null,
+      ...detailsOf(item),
       items: stored.map((s) => s.view),
       ...(applied ? { applied_default_category: applied } : {}),
     });
@@ -267,10 +273,33 @@ function buildMessage(registered: RegisteredTransaction[], skipped: DuplicateInf
   return parts.join("。");
 }
 
+// LIKE のワイルドカード(% と _)とエスケープ文字(\)を文字として扱う
+export function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, "\\$&");
+}
+
+const KEYWORD_COLUMNS = ["t.merchant", "t.merchant_phone", "t.merchant_address", "t.clerk_name", "t.memo", "t.receipt_no", "t.invoice_number"] as const;
+// 保存済みの電話番号から数字以外(ハイフン・括弧・プラス・空白)を除く式
+const PHONE_DIGITS_SQL = `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(t.merchant_phone, '-', ''), ' ', ''), '(', ''), ')', ''), '+', '')`;
+
+// keyword の条件: 店名・電話番号・住所・担当者名・メモ・レシート番号・登録番号のどれかに部分一致。
+// 電話番号らしいキーワード(数字・ハイフン・括弧・プラス・空白だけ)は、数字だけにそろえた比較でも当てる
+export function keywordCondition(keyword: string): { sql: string; params: string[] } {
+  const pattern = `%${escapeLike(keyword)}%`;
+  const parts = KEYWORD_COLUMNS.map((c) => `${c} LIKE ? ESCAPE '\\'`);
+  const params = KEYWORD_COLUMNS.map(() => pattern);
+  const digits = phoneDigits(keyword);
+  if (digits !== "" && /^[\d\-()+\s]+$/.test(keyword.normalize("NFKC"))) {
+    parts.push(`${PHONE_DIGITS_SQL} LIKE ?`);
+    params.push(`%${digits}%`);
+  }
+  return { sql: `(${parts.join(" OR ")})`, params };
+}
+
 export async function listTransactions(db: D1Database, input: unknown): Promise<ListResult> {
   const parsed = listTransactionsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { from, to, category, tax_flag: taxFlag, limit, include_items: includeItems } = parsed.data;
+  const { from, to, category, tax_flag: taxFlag, keyword, limit, include_items: includeItems } = parsed.data;
 
   if (from && to && from > to) {
     return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
@@ -299,6 +328,12 @@ export async function listTransactions(db: D1Database, input: unknown): Promise<
   } else if (taxFlag) {
     where.push(anyLineMatches("tax_flag", (v) => `${v} = ?`));
     params.push(taxFlag, taxFlag);
+  }
+
+  if (keyword) {
+    const search = keywordCondition(keyword);
+    where.push(search.sql);
+    params.push(...search.params);
   }
 
   const { results } = await db
@@ -426,6 +461,12 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
     memo: patch.memo === undefined ? current.memo : patch.memo,
     source: patch.source ?? current.source,
     tax_flag: patch.tax_flag === undefined ? current.tax_flag : patch.tax_flag,
+    paid_time: patch.paid_time === undefined ? current.paid_time : patch.paid_time,
+    merchant_phone: patch.merchant_phone === undefined ? current.merchant_phone : patch.merchant_phone,
+    merchant_address: patch.merchant_address === undefined ? current.merchant_address : patch.merchant_address,
+    invoice_number: patch.invoice_number === undefined ? current.invoice_number : patch.invoice_number,
+    clerk_name: patch.clerk_name === undefined ? current.clerk_name : patch.clerk_name,
+    receipt_no: patch.receipt_no === undefined ? current.receipt_no : patch.receipt_no,
   };
   const stored: StoredItem[] | null = replaceItems ? toStoredItems(replaceItems, categories) : null;
   next.items = stored ? stored.map((s) => s.view) : current.items;
@@ -439,14 +480,15 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
   }
 
   next.status = needsReview(next.merchant, next.category, next.items) ? "needs_review" : "ok";
-  const hash = await dedupHash(next.date, next.amount, next.merchant ?? undefined);
+  const hash = await dedupHash(next.date, next.amount, next.merchant, next.paid_time);
   const timestamp = now.toISOString();
 
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
         `UPDATE transactions
-         SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?, tax_flag = ?
+         SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?, tax_flag = ?,
+             paid_time = ?, merchant_phone = ?, merchant_address = ?, invoice_number = ?, clerk_name = ?, receipt_no = ?
          WHERE id = ?`,
       )
       .bind(
@@ -461,6 +503,7 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
         hash,
         timestamp,
         next.tax_flag,
+        ...RECEIPT_DETAIL_KEYS.map((k) => next[k]),
         next.id,
       ),
   ];

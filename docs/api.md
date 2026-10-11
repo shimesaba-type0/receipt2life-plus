@@ -55,6 +55,25 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 - 年ごとの合計は、MCP の `summarize`(`group_by: "tax_flag"` と `from` / `to`)で出す。Web UI の API には集計用の道は足していない
 - 明細の行にもフラグを付けられる(行の `tax_flag`、`null` なら取引のフラグに従う)。集計は行ごとの実効フラグで数える
 
+## レシートの情報(決済時刻・店の連絡先・登録番号など)
+
+後から店に問い合わせる(例: タクシーの領収書)ために、レシートに印字された情報を取引ごとに持てる。すべて任意で、無い取引は今までどおり。検証と正規化は `src/core/receipt-details.ts` の Zod スキーマ1つ(`POST` / `PATCH` / MCP / JSONL の取り込みが共通)。
+
+| 項目 | 規則 |
+| --- | --- |
+| `paid_time` | 決済時刻。日本時間の `HH:MM`(00:00〜23:59)。日付は `date` |
+| `merchant_phone` | 店の電話番号。数字・ハイフン・括弧・プラス・空白のみ、30文字まで。全角は半角に、前後の空白は除いて保存 |
+| `merchant_address` | 店の住所。200文字まで |
+| `invoice_number` | 適格請求書発行事業者の登録番号。全角・小文字の t・ハイフンや空白入りは正規化し、`T` + 数字13桁でなければ 400(「T と数字13桁で入力してください」) |
+| `clerk_name` | 対応した店員の名前(担当・責任者・レジ)。50文字まで |
+| `receipt_no` | レシート番号・伝票番号。50文字まで |
+
+- `TransactionView` に常に含まれる(なしは `null`)。`GET /api/transactions/:id`、`GET /api/day/:date`、`GET /api/home` の取引、`POST` / `PATCH` の戻りにも含まれる
+- `NewTransaction`: 省略または `null` で値なし。`TransactionPatch`: 省略は変更なし、`null` で空にする(空文字は 400)
+- 重複判定(`dedup_hash`): `paid_time` がある取引は `日付|金額|店名|時刻`。時刻が違えば、同じ日・同じ店・同額でも別の取引として登録できる。時刻なしは従来どおり
+- `GET /api/day/:date` の `transactions` は、決済時刻の昇順(時刻なしは末尾、同じ時刻・時刻なしどうしは登録順)
+- 検索の `keyword` は MCP の `list_transactions` にある(Web UI 用の API には足していない)
+
 ## カテゴリ(大分類の下のサブカテゴリ)
 
 Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)が並ぶ。取引が参照するのはサブカテゴリ(`name` は全体で一意)。大分類は独立した表を持たず、`group_name` が同じカテゴリのまとまり。ロジックは `src/core/categories.ts`(MCP の `add_category` / `update_category` / `delete_category` / `rename_group` と同じ関数)。
