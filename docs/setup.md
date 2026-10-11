@@ -15,7 +15,7 @@
 
 ## PC があるときに行う
 
-- `wrangler.toml` に D1/R2 のバインディングを書く(IDは書かない方針。方法はフェーズ2で決める)
+- `wrangler.toml` の D1/R2 のバインディングは、すでに書いてある(`DB`、`PHOTOS`。ID は書かない方針で、デプロイ時の自動プロビジョニングに任せる)。ステージング用の `[env.staging]` も定義済み
 - Cloudflare Access のアプリ作成、Managed OAuth、DCR 許可リストの登録
 - Claude.ai と ChatGPT のコネクタ接続の検証
 - 使うドメインとサブドメインの決定
@@ -81,7 +81,14 @@ Access アプリの「追加設定」タブで **Managed OAuth** をオンにす
 - ホーム画面に追加(PWA)して使うなら、Zero Trust → Access → アプリケーション → ポリシーで、次の3つのパスだけ **Bypass** にする: `/manifest.webmanifest`、`/sw.js`、`/icons/*`(認証情報を含まない静的ファイル)。しないと、アイコンが出ない、更新に失敗する、といった不具合が出ることがある(未検証)
 - Access のクッキーの SameSite は Lax 以上にしておく(書き込み系は Origin も検査するが、二重の備え)
 
+### 環境変数(ローカル開発)
+
+ローカル(`npm run dev`)の設定は、リポジトリ直下の `.dev.vars` に書く(**gitignore 済み。コミットしない**)。雛形は `.dev.vars.example`。実際の値はここにも雛形にも書かない。
+
+- `AUTH_BYPASS`: ローカル開発専用の認証の素通り。`1` のときで、かつリクエストのホストが localhost のときだけ有効。**本番やステージングには設定しない**(設定しても localhost 以外では効かないが、置かない)
+- `ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`: Access の JWT 検証用。空だと全リクエストを拒否する(フェイルクローズ)。本番では上の手順 4 のとおりシークレットとして入れる
+
 ### まだ手を付けていないこと
 
-- ステージング環境(別の Worker、別の D1、サービストークン)
-- GitHub Actions からのデプロイ(`CLOUDFLARE_DEPLOY_ENABLED`)。ステージングを作るときに使う予定
+- ステージングの実環境: `wrangler.toml` の `[env.staging]` は定義済みだが、実環境(`receipt2life-staging` の Worker、D1、R2、サービストークン、Access のアプリ)は未作成
+- GitHub Actions からのデプロイ(`CLOUDFLARE_DEPLOY_ENABLED`)。未設定のまま。ステージングを作るときに使う予定(有効にする前の確認事項は [ci-cd.md](ci-cd.md))
