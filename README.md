@@ -5,6 +5,7 @@
 - 入力は主に AI(Claude、ChatGPT)から MCP 経由で行い、見返しは専用の Web UI で行う
 - Cloudflare Workers(Hono)+ D1 + R2 で動く
 - 仕様は [SPEC.md](SPEC.md)、開発ルールは [AGENTS.md](AGENTS.md)
+- 公開の手順は [docs/setup.md](docs/setup.md)、AI(Claude)との接続は [docs/connect-claude.md](docs/connect-claude.md)
 
 ## 開発
 
