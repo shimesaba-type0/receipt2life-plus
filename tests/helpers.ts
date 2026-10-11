@@ -3,6 +3,7 @@ import type { D1Migration } from "@cloudflare/vitest-plugin";
 
 export interface TestEnv {
   DB: D1Database;
+  PHOTOS: R2Bucket;
   TEST_MIGRATIONS: D1Migration[];
 }
 

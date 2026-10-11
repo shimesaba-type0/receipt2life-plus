@@ -99,6 +99,27 @@ export async function updateEvent(db: D1Database, input: unknown, options: CoreO
   return { ok: true, event: next, message: `出来事を更新しました: ${next.title} ${period(next)}(${next.color})` };
 }
 
+export type DeleteEventResult =
+  | { ok: true; deleted: EventView; message: string }
+  | { ok: false; errors: FieldError[] };
+
+// UI 専用(MCP には出さない)。写真が紐づく出来事は、外部キーで落ちる前に、分かる文章で断る
+export async function deleteEvent(db: D1Database, input: unknown): Promise<DeleteEventResult> {
+  const parsed = z.strictObject({ id: z.string().min(1, "id は必須です") }).safeParse(input);
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const { id } = parsed.data;
+
+  const current = await db.prepare(`SELECT ${COLUMNS} FROM events WHERE id = ?`).bind(id).first<EventView>();
+  if (!current) return { ok: false, errors: [{ field: "id", message: `id: 「${id}」という出来事はありません` }] };
+
+  const photos = await db.prepare("SELECT COUNT(*) AS n FROM attachments WHERE event_id = ?").bind(id).first<{ n: number }>();
+  if (photos && photos.n > 0) {
+    return { ok: false, errors: [{ field: "id", message: `id: 写真が${photos.n}枚紐づいているため削除できません(${current.title})` }] };
+  }
+  await db.prepare("DELETE FROM events WHERE id = ?").bind(id).run();
+  return { ok: true, deleted: current, message: `出来事を削除しました: ${current.title} ${period(current)}` };
+}
+
 export async function listEvents(db: D1Database, input: unknown): Promise<ListEventsResult> {
   const parsed = listEventsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
