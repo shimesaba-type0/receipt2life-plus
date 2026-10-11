@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { ApiResult, CategoriesData, FieldError, PhotoView, TransactionDetailData, TransactionView } from "../../../src/api/contract";
 import { UnauthorizedError, deleteLink, deleteTransaction, getCategories, getTransaction, photoUrl, updateLink, updateTransaction } from "../api";
 import { CopyValue } from "../components/CopyValue";
+import { CategoryChip } from "../components/CategoryIcon";
+import { chipIcon } from "../categoryIcons";
 import { LinkCard } from "../components/LinkCard";
 import { PhotoLightbox } from "../components/PhotoLightbox";
 import { CategorySelect, TaxFlagSelect, TransactionFields } from "../components/TransactionFields";
@@ -223,7 +225,7 @@ function TransactionBody(props: {
         <dl class="tx__facts">
           <div>
             <dt>カテゴリ</dt>
-            <dd>{catChip ? <span class="chip">{catChip}</span> : <span class="muted">未設定</span>}</dd>
+            <dd>{catChip ? <CategoryChip label={catChip} icon={chipIcon(props.cats, tx.category)} /> : <span class="muted">未設定</span>}</dd>
           </div>
           <div>
             <dt>税金のフラグ</dt>
@@ -301,7 +303,7 @@ function TransactionBody(props: {
                       <div class="tx__item-main">
                         <span class="tx__item-name">{it.name}</span>
                         <span class="day__tags">
-                          {catLabel ? <span class="chip">{catLabel}</span> : <span class="chip chip--warn">カテゴリ未設定</span>}
+                          {catLabel ? <CategoryChip label={catLabel} icon={chipIcon(props.cats, cat)} /> : <span class="chip chip--warn">カテゴリ未設定</span>}
                           {flag && <span class="chip day__taxflag">{flag}</span>}
                         </span>
                         {it.memo && <span class="muted day__memo">{it.memo}</span>}

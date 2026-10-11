@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ApiResult, CategoryView } from "../../../src/api/contract";
+import type { ApiResult, CategoryIconKey, CategoryView } from "../../../src/api/contract";
+import { CategoryIcon } from "../components/CategoryIcon";
+import { CategoryIconPicker } from "../components/CategoryIconPicker";
 import { addCategory, deleteCategory, getCategories, renameCategoryGroup, updateCategory } from "../api";
 import {
   MAX_GROUP_NAME,
@@ -134,7 +136,7 @@ export function Categories() {
                 open={open}
                 close={close}
                 onRename={(newName) => act(() => renameCategoryGroup({ group: g.group_name, new_name: newName }))}
-                onAdd={(name) => act(() => addCategory({ name, group_name: g.group_name }))}
+                onAdd={(name, icon) => act(() => addCategory({ name, group_name: g.group_name, ...(icon ? { icon } : {}) }))}
                 onUpdate={(name, patch) => act(() => updateCategory(name, patch))}
                 onDelete={(name, moveTo) => act(() => deleteCategory(name, moveTo))}
               />
@@ -142,7 +144,7 @@ export function Categories() {
           </div>
 
           {mode.kind === "add-group" ? (
-            <AddGroupForm groups={groups} cats={cats} busy={busy} onSubmit={(group, name) => act(() => addCategory({ name, group_name: group }))} onCancel={close} />
+            <AddGroupForm groups={groups} cats={cats} busy={busy} onSubmit={(group, name, icon) => act(() => addCategory({ name, group_name: group, ...(icon ? { icon } : {}) }))} onCancel={close} />
           ) : (
             <button type="button" class="btn cat__add-group" onClick={() => open({ kind: "add-group" })}>
               大分類を追加
@@ -164,8 +166,8 @@ interface GroupCardProps {
   open: (m: Mode) => void;
   close: () => void;
   onRename: Submit<string>;
-  onAdd: Submit<string>;
-  onUpdate: (name: string, patch: { new_name?: string; group_name?: string }) => Promise<string | null>;
+  onAdd: (name: string, icon: CategoryIconKey | null) => Promise<string | null>;
+  onUpdate: (name: string, patch: { new_name?: string; group_name?: string; icon?: CategoryIconKey | null }) => Promise<string | null>;
   onDelete: (name: string, moveTo?: string) => Promise<string | null>;
 }
 
@@ -200,6 +202,7 @@ function GroupCard(props: GroupCardProps) {
                   name={c.name}
                   usage={c.usage}
                   group={group.group_name}
+                  icon={c.icon}
                   groups={groups}
                   cats={cats}
                   busy={busy}
@@ -209,6 +212,9 @@ function GroupCard(props: GroupCardProps) {
                 />
               ) : (
                 <>
+                  <span class="cat__icon">
+                    <CategoryIcon icon={c.icon} />
+                  </span>
                   <span class="cat__name">{c.name}</span>
                   <span class={`cat__usage num${c.usage === 0 ? " is-zero" : ""}`}>{usageLabel(c.usage)}</span>
                   <button type="button" class="cat__link" aria-label={`「${c.name}」を編集`} onClick={() => props.open({ kind: "edit", name: c.name })}>
@@ -253,8 +259,9 @@ function FormButtons(props: { busy: boolean; submitLabel: string; onCancel: () =
   );
 }
 
-function AddCategoryForm(props: { cats: CategoryView[]; group: string; busy: boolean; onSubmit: Submit<string>; onCancel: () => void }) {
+function AddCategoryForm(props: { cats: CategoryView[]; group: string; busy: boolean; onSubmit: (name: string, icon: CategoryIconKey | null) => Promise<string | null>; onCancel: () => void }) {
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState<CategoryIconKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ref = useFocusOnOpen();
   const id = useRef(`cat-add-${Math.random().toString(36).slice(2, 8)}`).current;
@@ -264,22 +271,24 @@ function AddCategoryForm(props: { cats: CategoryView[]; group: string; busy: boo
     const check = checkNewCategory(props.cats, name);
     if (!check.ok) return setError(check.error);
     setError(null);
-    setError(await props.onSubmit(check.value));
+    setError(await props.onSubmit(check.value, icon));
   }
 
   return (
     <form class="cat__form" onSubmit={submit}>
       <label for={id}>サブカテゴリの名前({props.group})</label>
       <input id={id} ref={ref} type="text" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} autocomplete="off" />
+      <CategoryIconPicker value={icon} onChange={setIcon} disabled={props.busy} />
       <FormError message={error} />
       <FormButtons busy={props.busy} submitLabel="追加" onCancel={props.onCancel} />
     </form>
   );
 }
 
-function AddGroupForm(props: { groups: GroupView[]; cats: CategoryView[]; busy: boolean; onSubmit: (group: string, name: string) => Promise<string | null>; onCancel: () => void }) {
+function AddGroupForm(props: { groups: GroupView[]; cats: CategoryView[]; busy: boolean; onSubmit: (group: string, name: string, icon: CategoryIconKey | null) => Promise<string | null>; onCancel: () => void }) {
   const [group, setGroup] = useState("");
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState<CategoryIconKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ref = useFocusOnOpen();
   const existing = props.groups.some((g) => g.group_name === group.trim());
@@ -291,7 +300,7 @@ function AddGroupForm(props: { groups: GroupView[]; cats: CategoryView[]; busy: 
     const n = checkNewCategory(props.cats, name);
     if (!n.ok) return setError(n.error);
     setError(null);
-    setError(await props.onSubmit(g.value, n.value));
+    setError(await props.onSubmit(g.value, n.value, icon));
   }
 
   return (
@@ -302,6 +311,7 @@ function AddGroupForm(props: { groups: GroupView[]; cats: CategoryView[]; busy: 
       {existing && <p class="muted cat__hint">「{group.trim()}」は既にある大分類です。その下にサブカテゴリを追加します。</p>}
       <label for="cat-new-first">最初のサブカテゴリの名前</label>
       <input id="cat-new-first" type="text" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} autocomplete="off" />
+      <CategoryIconPicker value={icon} onChange={setIcon} disabled={props.busy} />
       <p class="muted cat__hint">大分類は、サブカテゴリが1つ以上あるときだけ表示されます。</p>
       <FormError message={error} />
       <FormButtons busy={props.busy} submitLabel="追加" onCancel={props.onCancel} />
@@ -338,10 +348,11 @@ interface EditFormProps {
   name: string;
   usage: number;
   group: string;
+  icon: CategoryIconKey | null;
   groups: GroupView[];
   cats: CategoryView[];
   busy: boolean;
-  onSave: (name: string, patch: { new_name?: string; group_name?: string }) => Promise<string | null>;
+  onSave: (name: string, patch: { new_name?: string; group_name?: string; icon?: CategoryIconKey | null }) => Promise<string | null>;
   onDelete: (name: string, moveTo?: string) => Promise<string | null>;
   onCancel: () => void;
 }
@@ -350,6 +361,7 @@ function EditForm(props: EditFormProps) {
   const { name, usage, groups, busy } = props;
   const [newName, setNewName] = useState(name);
   const [group, setGroup] = useState(props.group);
+  const [icon, setIcon] = useState<CategoryIconKey | null>(props.icon);
   const [error, setError] = useState<string | null>(null);
   // 削除は2段階: 「削除…」で確認を開き、確認の中のボタンで実行する
   const [confirming, setConfirming] = useState(false);
@@ -361,7 +373,7 @@ function EditForm(props: EditFormProps) {
 
   async function save(e: Event) {
     e.preventDefault();
-    const check = buildCategoryPatch(props.cats, { name, group_name: props.group }, { name: newName, group });
+    const check = buildCategoryPatch(props.cats, { name, group_name: props.group, icon: props.icon }, { name: newName, group, icon });
     if (!check.ok) return setError(check.error);
     setError(null);
     setError(await props.onSave(name, check.patch));
@@ -385,6 +397,7 @@ function EditForm(props: EditFormProps) {
           </option>
         ))}
       </select>
+      <CategoryIconPicker value={icon} onChange={setIcon} disabled={busy} />
       <FormError message={error} />
       <FormButtons busy={busy} submitLabel="保存" onCancel={props.onCancel} />
 

@@ -17,6 +17,8 @@ import {
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
 import { holidayName } from "../holidays";
 import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-queue";
+import { CategoryChip } from "../components/CategoryIcon";
+import { chipIcon } from "../categoryIcons";
 import { LinkCard } from "../components/LinkCard";
 import { PhotoUploader } from "../components/PhotoUploader";
 import { TransactionFields } from "../components/TransactionFields";
@@ -300,7 +302,7 @@ export function Day(props: { date: string }) {
                         {tx.status === "needs_review" && <span class="chip chip--warn day__review">要確認</span>}
                       </span>
                       <span class="day__tags">
-                        {chip && <span class="chip">{chip}</span>}
+                        {chip && <CategoryChip label={chip} icon={chipIcon(cats, tx.category)} />}
                         {itemsSub && (
                           <span class="day__items muted">
                             {itemsSub.count}

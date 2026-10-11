@@ -46,7 +46,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 | --- | --- |
 | `add_transactions` / `list_transactions` / `update_transaction` / `delete_transaction` | 取引の登録・一覧・修正・削除。明細(レシートの行)や、レシートの情報(時刻・電話・住所・登録番号など)つきで登録・修正できる。一覧は `keyword` で探せる。削除は `delete_photos` で写真もいっしょに |
 | `summarize` / `list_categories` | 集計(明細があれば行ごとのカテゴリ・フラグで数える)、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
-| `add_category` / `update_category` / `delete_category` / `rename_group` | カテゴリの管理。Zaim のように大分類の下にサブカテゴリを作る・名前や大分類を変える・削除(使用中は `move_to` で支出を移す)・大分類の名前を変える |
+| `add_category` / `update_category` / `delete_category` / `rename_group` | カテゴリの管理。Zaim のように大分類の下にサブカテゴリを作る(アイコンつき)・名前や大分類やアイコンを変える・削除(使用中は `move_to` で支出を移す)・大分類の名前を変える |
 | `add_event` / `update_event` / `list_events` | 日付や期間のメモ(出来事) |
 | `create_photo_upload_link` | 写真のアップロード用リンクを作る |
 | `list_photos` | 写真のメタ情報(id、日付、紐づけ先、説明、種類、サイズ)の一覧 |
@@ -128,6 +128,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 Zaim のように、大分類の下にサブカテゴリを作れます。例: 「大分類『住まい』の下に『光熱費』のカテゴリを作って」 → `add_category` で作ったあと、「電気代 8,000円を登録して」で `add_transactions` の `category` に使われます。
 
 - 名前(サブカテゴリ)は全体で一意(30文字まで)。大分類は20文字まで。既存の大分類でも、新しい名前でもよい
+- アイコン: `add_category` / `update_category` の `icon` に、アイコンのキーを渡す(`update_category` は `null` で外す)。AI は名前に合うものを選ぶ(「タクシー」→ `taxi`)。`list_categories` の戻りの各カテゴリにも `icon` が入る(未設定は `null`)。選べるキー(キー=意味): `food`=食事、`cafe`=カフェ、`grocery`=食料品、`daily`=日用品、`transit`=電車・バス、`taxi`=タクシー、`car`=クルマ、`fuel`=ガソリン、`social`=交際、`entertainment`=娯楽・音楽、`movie`=映画、`education`=教育・教養、`book`=本、`clothes`=服、`beauty`=美容、`medical`=医療、`insurance`=保険、`phone`=通信、`utility`=水道・光熱、`home`=住まい、`tax`=税金、`bigspend`=大型出費、`travel`=旅行、`gift`=贈り物、`kids`=子ども、`pet`=ペット、`sports`=スポーツ、`hobby`=趣味、`subscription`=サブスク、`bank`=金融、`other`=その他。一覧にない値はエラー(選べるキーが返る)
 - 整理: `update_category`(名前の変更・大分類の移動)、`rename_group`(大分類の名前の変更。既存の大分類と同名にすると統合)、`delete_category`(使っている支出があるときは `move_to` に移し先を指定する。AI は先に `list_categories` の `usage` を見る)
 - 画面の `/categories`(ナビの「カテゴリ」)でも同じことができます
 

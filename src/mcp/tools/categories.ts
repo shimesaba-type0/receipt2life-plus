@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { addCategory, addCategorySchema, deleteCategory, deleteCategoryFieldsSchema, renameGroup, renameGroupSchema, updateCategory, updateCategoryFieldsSchema } from "../../core/categories";
+import { CATEGORY_ICON_CHOICES } from "../../core/category-icons";
 import { toResult } from "../result";
 
 // カテゴリの管理ツール: add_category / update_category / delete_category / rename_group(一覧は list_categories)
@@ -13,6 +14,7 @@ export function registerCategoryTools(server: McpServer, db: D1Database): void {
         "使いどころ: 登録したい支出が既存のカテゴリに合わないとき。先にこのツールで新しいカテゴリを作ってから、add_transactions の category にその名前を使う。例: 大分類「住まい」の下に「光熱費」を作る。",
         "name はカテゴリの名前(30文字まで)で、全体で一意。同じ名前が既にあるとエラー(別の大分類にあっても)。前後の空白は取り除く。",
         "group_name は所属させる大分類(20文字まで)。既存の大分類でも、新しい名前でもよい(新しければ大分類が増える)。先に list_categories で既存の大分類を確かめ、近いものがあればそれに揃える。",
+        `icon はアイコンのキー。新しいカテゴリを作るときは、名前に合うアイコンを付ける(画面で一覧の見分けがつく)。選べるキー: ${CATEGORY_ICON_CHOICES}。例: 「タクシー」→ taxi、「映画」→ movie。合うものがなければ other。一覧にない値はエラー。`,
         "既存のカテゴリで足りるなら、新しく作らない(似た名前を増やさない)。成功すると、追加したカテゴリと新しい大分類かどうかを返す。",
       ].join("\n"),
       inputSchema: addCategorySchema.shape,
@@ -25,8 +27,8 @@ export function registerCategoryTools(server: McpServer, db: D1Database): void {
     {
       title: "カテゴリを変更する",
       description: [
-        "既存のカテゴリの名前を変える、または別の大分類へ移す。誤字の修正や、大分類の整理に使う。",
-        "name は今の名前(list_categories で確かめる)。変えたい項目だけ渡す: new_name=新しい名前(30文字まで、他と重複不可)、group_name=移す先の大分類(20文字まで。新しい名前なら大分類が増える)。1つも渡さない、または今と同じ値だとエラー。",
+        "既存のカテゴリの名前を変える、別の大分類へ移す、またはアイコンを変える。誤字の修正や、大分類の整理に使う。",
+        `name は今の名前(list_categories で確かめる)。変えたい項目だけ渡す: new_name=新しい名前(30文字まで、他と重複不可)、group_name=移す先の大分類(20文字まで。新しい名前なら大分類が増える)、icon=アイコンのキー(null で外す。選べるキー: ${CATEGORY_ICON_CHOICES})。1つも渡さない、または今と同じ値だとエラー。`,
         "そのカテゴリを使っている支出は、そのまま新しい名前・大分類に付いてくる(支出の付け替えは不要)。支出を別のカテゴリへ移したいときは update_transaction を使うか、delete_category の move_to を使う。",
         "大分類の名前をまとめて変えたいときは rename_group を使う。",
       ].join("\n"),

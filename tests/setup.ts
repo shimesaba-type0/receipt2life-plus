@@ -15,7 +15,7 @@ beforeEach(async () => {
   // カテゴリは、テストで増減・改名するので初期データに戻す(口座は変わらない)
   await e.DB.exec("DELETE FROM categories");
   await e.DB.exec(
-    "INSERT INTO categories (id, name, group_name) VALUES ('cat_food','食費','食費'),('cat_daily','日用品','生活'),('cat_transport','交通・チャージ','交通'),('cat_leisure','娯楽','娯楽'),('cat_other','その他','その他')",
+    "INSERT INTO categories (id, name, group_name, icon) VALUES ('cat_food','食費','食費','food'),('cat_daily','日用品','生活','daily'),('cat_transport','交通・チャージ','交通','transit'),('cat_leisure','娯楽','娯楽','entertainment'),('cat_other','その他','その他','other')",
   );
   // 写真の実体(R2)も空にする
   const { objects } = await e.PHOTOS.list();

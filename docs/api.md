@@ -19,7 +19,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `GET /api/calendar?month=YYYY-MM` | `CalendarData`: その月の日別の合計・件数・写真枚数(取引のある日だけ)、その月と重なる出来事。`month` 省略は今月 |
 | `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの) |
 | `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
-| `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名 |
+| `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`icon`=アイコンのキー(未設定は `null`)、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名 |
 
 ## 取引
 
@@ -80,8 +80,8 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `POST /api/categories` | `NewCategory`(`name` 30文字まで、`group_name` 20文字まで。どちらも前後の空白は除く) | `category`, `created_group`, `message` |
-| `PATCH /api/categories/:name` | `CategoryPatch`(`new_name?`, `group_name?`。1つ以上必要) | `category`, `created_group`, `message` |
+| `POST /api/categories` | `NewCategory`(`name` 30文字まで、`group_name` 20文字まで。どちらも前後の空白は除く。`icon?`) | `category`, `created_group`, `message` |
+| `PATCH /api/categories/:name` | `CategoryPatch`(`new_name?`, `group_name?`, `icon?`(`null` で外す)。1つ以上必要) | `category`, `created_group`, `message` |
 | `DELETE /api/categories/:name?move_to=` | なし | `deleted`, `moved`, `move_to`, `message` |
 | `POST /api/category-groups/rename` | `GroupRename`(`group`, `new_name`) | `group`, `previous`, `updated`, `merged`, `message` |
 
@@ -89,6 +89,7 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - 名前の重複・空・長すぎる・変更なしは 400(`field` は `name` / `new_name` / `group_name` / `input`)。存在しないカテゴリ(`name`)・大分類(`group`)は 404。`move_to` が存在しない・自分自身は 400
 - 削除: 取引・明細の行が1件も使っていなければそのまま削除。使っているのに `move_to` が無ければ 400(「N件の支出が使っています。move_to で移し先を指定してください」)。`move_to` があれば取引と明細の行のカテゴリを付け替えてから削除(1回のバッチ)。最後の1つのカテゴリは削除できない(400)
 - 大分類の名前の変更(`rename`): その大分類の全カテゴリの `group_name` を更新する。既にある別の大分類と同名にすると統合(`merged: true`)。確認なしで実行され、変更したカテゴリの件数を `updated` で返す
+- `icon` は `src/core/category-icons.ts` の31個のキー(`food`, `cafe`, … `other`。一覧とラベルは `docs/connect-claude.md`)のどれか。一覧にない値は 400(`field: "icon"`、選べるキーを日本語で返す)。省略は未設定(`null`。画面では `other` と同じ見た目)。PATCH で省略すると変えない、`null` で外す
 - カテゴリの名前・大分類を変えても、取引の `category_id` 参照は変わらないので、取引の `status` / `dedup_hash` への影響はない
 - JSON を受ける POST / PATCH は `application/json` 以外を 415、書き込みは同一オリジンのみ(他は取引・出来事と同じ)。応答は `Cache-Control: private, no-store`
 

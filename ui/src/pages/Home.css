@@ -71,7 +71,7 @@
 .home__recent-date { flex: none; width: 3.2em; color: var(--muted); font-size: 13px; }
 .home__recent-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .home__recent-title { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
-.home__recent-sub { font-size: 13px; color: var(--muted); }
+.home__recent-sub { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
 .home__chip { margin-left: 6px; font-weight: 400; }
 .home__recent-amount { flex: none; font-size: 16px; font-weight: 500; }
 

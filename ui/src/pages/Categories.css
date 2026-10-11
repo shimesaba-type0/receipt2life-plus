@@ -16,6 +16,8 @@
 .cat__list { list-style: none; margin: 0; padding: 0; }
 .cat__row { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--line-soft); }
 .cat__row.is-editing { display: block; padding: 8px 0 12px; }
+/* 行の先頭のアイコン(36pxの丸) */
+.cat__icon { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; }
 .cat__name { flex: 1; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
 .cat__usage { flex: none; font-size: 13px; color: var(--muted); }
 .cat__usage.is-zero { color: #6d7873; }
@@ -49,4 +51,17 @@
   .cat__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
   .cat__card { padding: 20px 28px; }
   .cat__card.cat__form { max-width: 520px; padding: 20px 28px; }
+}
+
+/* アイコンの選択(5列程度のグリッド) */
+.cat-picker { margin: 6px 0 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.cat-picker__legend { padding: 0; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.cat-picker__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.cat-picker__btn { min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.cat-picker__btn:hover { background: var(--accent-soft); }
+.cat-picker__btn.is-selected { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--accent); }
+.cat-picker__btn:disabled { opacity: 0.6; cursor: default; }
+.cat-picker__note { margin: 0; font-size: 12px; line-height: 1.6; }
+@media (min-width: 900px) {
+  .cat-picker__grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }

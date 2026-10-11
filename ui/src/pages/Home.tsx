@@ -1,6 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
-import type { HomeData } from "../../../src/api/contract";
-import { getHome } from "../api";
+import type { CategoriesData, HomeData } from "../../../src/api/contract";
+import { getCategories, getHome } from "../api";
+import { CategoryIcon } from "../components/CategoryIcon";
+import { chipIcon } from "../categoryIcons";
 import { CATEGORY_ICON } from "../components/Nav";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
@@ -29,6 +31,16 @@ export function Home() {
       cancelled = true;
     };
   }, [attempt]);
+
+  // 最近の記録のカテゴリのアイコン用。読み込めなくても文字だけで表示を続ける
+  const [cats, setCats] = useState<CategoriesData>({ categories: [], accounts: [] });
+  useEffect(() => {
+    getCategories()
+      .then((res) => {
+        if (res.ok) setCats(res);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const today = state.kind === "ready" ? state.data.today.date : todayJst();
 
@@ -78,13 +90,13 @@ export function Home() {
           </button>
         </div>
       )}
-      {state.kind === "ready" && <HomeBody data={state.data} />}
+      {state.kind === "ready" && <HomeBody data={state.data} cats={cats} />}
     </section>
   );
 }
 
-function HomeBody(props: { data: HomeData }) {
-  const { data } = props;
+function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
+  const { data, cats } = props;
   const segments = barSegments(data.groups);
   const memo = memoView(data.memo);
   const range = monthRangeLabel(data.month.from, data.today.date);
@@ -193,6 +205,7 @@ function HomeBody(props: { data: HomeData }) {
               {data.recent.map((t) => {
                 const m = recentMerchant(t);
                 const sub = recentSub(t);
+                const icon = chipIcon(cats, t.category?.trim());
                 return (
                   <li key={t.id}>
                     <Link href={`/tx/${encodeURIComponent(t.id)}`} class="home__recent-link" aria-label={`${formatDateJa(t.date)} ${m.title} ${t.amount}円。明細を開く`}>
@@ -202,7 +215,12 @@ function HomeBody(props: { data: HomeData }) {
                           {m.title}
                           {(m.missing || t.status === "needs_review") && <span class="chip chip--warn home__chip">要確認</span>}
                         </span>
-                        {sub && <span class="home__recent-sub">{sub}</span>}
+                        {sub && (
+                          <span class="home__recent-sub">
+                            {icon && <CategoryIcon icon={icon} size={16} />}
+                            {sub}
+                          </span>
+                        )}
                       </span>
                       <span class="home__recent-amount num">{formatYen(t.amount)}</span>
                     </Link>
