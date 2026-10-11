@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { accessAuth, type KeyResolver } from "./auth/access";
 import type { AppEnv } from "./env";
 import { registerIoRoutes } from "./api/io";
+import { registerApiRoutes } from "./api/routes";
 import { createMcpServer } from "./mcp/server";
 
 export interface AppOptions {
@@ -26,6 +27,16 @@ export function createApp(options: AppOptions = {}) {
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);
+  });
+
+  registerApiRoutes(app);
+  // 未定義の /api/* は、画面(SPA)ではなく404のJSONにする
+  app.all("/api/*", (c) => c.json({ ok: false, errors: [{ field: "path", message: "そのAPIはありません" }] }, 404));
+
+  // それ以外は、Web UI の静的ファイル。認証の内側で配信する(run_worker_first = true)
+  app.all("*", async (c) => {
+    if (!c.env.ASSETS) return c.text("Not Found", 404);
+    return c.env.ASSETS.fetch(c.req.raw);
   });
 
   return app;

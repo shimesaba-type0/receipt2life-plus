@@ -33,7 +33,7 @@ Workers & Pages → 新規作成 → **Continue with GitHub** → このリポ�
 | 項目 | 値 |
 | --- | --- |
 | プロジェクト名(Worker名) | `receipt2life`(`wrangler.toml` の `name` と同じにする) |
-| ビルドコマンド | 空 |
+| ビルドコマンド | `npm run build`(Web UI を `ui/dist` に作る。フェーズ5から必要) |
 | デプロイコマンド | `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy --env=""` |
 | プレビュービルド | オフ(PRのテストは GitHub Actions が行う) |
 | Cloudflare Access で保護 | オフ(あとで Zero Trust で設定する) |

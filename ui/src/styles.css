@@ -1,0 +1,66 @@
+/* 共通のデザイントークンと基本の部品。ページ固有のスタイルは、各ページの .css に書く */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #18211d;
+  --muted: #5b6762;
+  --line: #dde3e0;
+  --line-soft: #edf0ee;
+  --accent: #1f5c4b;
+  --accent-soft: #e3efea;
+  --warn-soft: #fff3dc;
+  --danger: #b4493c;
+  --event-red: #c94b3f;
+  --event-orange: #d9822b;
+  --event-green: #3e9b68;
+  --event-blue: #3b73c9;
+  --event-purple: #7c5bb5;
+  --event-red-soft: #f6dad6;
+  --event-orange-soft: #f8e3cc;
+  --event-green-soft: #d7eddf;
+  --event-blue-soft: #d8e5f7;
+  --event-purple-soft: #e5ddf3;
+  --radius: 20px;
+  --font: "Zen Kaku Gothic New", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); -webkit-text-size-adjust: 100%; }
+body { min-height: 100dvh; }
+a { color: inherit; text-decoration: none; }
+a:hover { color: var(--accent); }
+button, input, textarea, select { font-family: inherit; font-size: 15px; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* 画面の骨組み: スマホは下タブ、広い画面は左メニュー */
+.shell { display: flex; flex-direction: column; min-height: 100dvh; }
+.shell__main { flex: 1; min-width: 0; padding-bottom: 88px; }
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; height: 72px; padding-bottom: env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--line); }
+.nav__brand { display: none; }
+.nav__item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 44px; color: var(--muted); font-size: 12px; }
+.nav__item.is-active { color: var(--accent); font-weight: 700; }
+.nav__export { display: none; }
+
+@media (min-width: 900px) {
+  .shell { flex-direction: row; }
+  .shell__main { padding-bottom: 32px; }
+  .nav { position: sticky; top: 0; align-self: flex-start; flex-direction: column; width: 240px; height: 100dvh; padding: 28px 16px; border-top: 0; border-right: 1px solid var(--line); gap: 4px; }
+  .nav__brand { display: block; font-size: 17px; font-weight: 700; padding: 0 12px 20px; }
+  .nav__item { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
+  .nav__item.is-active { background: var(--accent-soft); }
+  .nav__export { display: flex; margin-top: auto; }
+}
+
+/* ページの共通部品 */
+.page { max-width: 880px; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+.page__title { margin: 0; font-size: 20px; font-weight: 700; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 24px; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); }
+.chip--warn { background: var(--warn-soft); }
+.btn { min-height: 44px; padding: 0 24px; border-radius: 22px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 500; cursor: pointer; }
+.btn--primary { background: var(--accent); color: #fff; font-weight: 700; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.error { color: var(--danger); font-size: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
