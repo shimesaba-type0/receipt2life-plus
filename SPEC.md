@@ -257,4 +257,6 @@ backup/
 - フェーズ3(集計): `summarize` の期間省略は全期間。`percent` は小数第1位。`event_id` 集計は、1つの取引が複数の出来事に入る場合それぞれに数える(行の合計が全体を超えうる)。どの出来事にも入らない取引は「(出来事なし)」、カテゴリなしは「(未分類)」、店名なしは「(店名なし)」。rows の件数に上限は設けていない。`list_categories` は、カテゴリ(name と group_name)と口座名を返す
 - フェーズ3(エクスポート・インポート): JSONL のみ(写真のzipはフェーズ5、Markdownはフェーズ6)。`GET /export` はカテゴリと口座を名前で出す。`POST /import` は、JSONL または JSON 配列(先頭が `[`)を受け付け、行ごとに結果(ok / skipped_duplicate / skipped_exists / error)を返す。上限は 5MB または 5000 行(件)で、超えると 413、空は 400。取引の行が `id` と `created_at` の両方を持つ場合は、エクスポート由来のバックアップ行とみなして重複判定を飛ばす(allow_duplicate で登録した取引も復元で消えない)。どちらかが無い行は、従来どおり重複判定をする。エクスポートはページごとに読むため、読み出し中に書き換わると、テーブル間の整合は取れない
 - 運用: 並列作業の各ブランチ(`cc/phase3-...`)は、ユーザーの指示(並列で進めてよい)に基づいて作った
+- フェーズ5(UI): 「UIはAstroか素のViteのSPAか」は **Vite + Preact のSPA** にする(画面はすべてAPIから読み込む動的なもので、Astroの強みが活きにくい。Astroの公式ドキュメントが、現在の環境から読めない)。第3節の表の「UI」の行を読み替える。ルーターは自前(3ページだけ)。配信は Workers Assets(`run_worker_first = true` で、静的ファイルも認証を通す。`not_found_handling = "single-page-application"`)。Cloudflareのビルドコマンドは `npm run build`
+- フェーズ5(API): Web UI 用のAPIは `/api/*`。契約は `docs/api.md` と `src/api/contract.ts`。写真はR2に保存し(公開しない)、Worker経由で認証つきで配信する。受け付けるのはJPEG/PNG/WebPで、先頭のバイト列で判定し、5MBまで
 

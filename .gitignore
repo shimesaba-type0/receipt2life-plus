@@ -171,3 +171,8 @@ backup/
 .claude/worktrees/
 .claude/settings.local.json
 CLAUDE.local.md
+
+# Web UI のビルド成果物。assets.directory を存在させるため .gitkeep だけ追跡する
+!ui/dist/
+ui/dist/*
+!ui/dist/.gitkeep

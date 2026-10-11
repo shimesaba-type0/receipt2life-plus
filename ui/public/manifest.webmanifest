@@ -1,0 +1,11 @@
+{
+  "name": "receipt2life+",
+  "short_name": "receipt2life+",
+  "description": "日々の支出を中心に、出来事や思い出も一緒に記録するライフログ",
+  "lang": "ja",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3F5F4",
+  "theme_color": "#F3F5F4",
+  "icons": []
+}

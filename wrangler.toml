@@ -19,6 +19,18 @@ binding = "DB"
 database_name = "receipt2life"
 migrations_dir = "migrations"
 
+# 写真の保存先。公開しない。バケットは、デプロイ時の自動プロビジョニングで作る想定(要確認)
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "receipt2life"
+
+# Web UI(ui/dist)。run_worker_first = true で、静的ファイルも必ずWorker(認証)を通す
+[assets]
+directory = "ui/dist"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "single-page-application"
+
 [env.staging]
 name = "receipt2life-staging"
 workers_dev = false
@@ -28,3 +40,13 @@ preview_urls = false
 binding = "DB"
 database_name = "receipt2life-staging"
 migrations_dir = "migrations"
+
+[[env.staging.r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "receipt2life-staging"
+
+[env.staging.assets]
+directory = "ui/dist"
+binding = "ASSETS"
+run_worker_first = true
+not_found_handling = "single-page-application"
