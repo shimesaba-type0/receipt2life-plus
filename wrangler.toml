@@ -7,6 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = false
 preview_urls = false
 
+# ダッシュボードで設定した変数を、デプロイで上書きして消さない
+keep_vars = true
+
 # ログ(認証で弾いた理由など)をダッシュボードの Observability で見られるようにする
 [observability]
 enabled = true

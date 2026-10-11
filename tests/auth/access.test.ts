@@ -99,6 +99,18 @@ describe("弾いた理由のログ", () => {
   });
 });
 
+describe("未設定のログ", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("どちらが未設定かをログに出す", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await call(await sign(), env({ ACCESS_AUD: "" }))).status).toBe(401);
+    const logged = error.mock.calls.flat().join(" ");
+    expect(logged).toContain("ACCESS_AUD");
+    expect(logged).not.toContain("ACCESS_TEAM_DOMAIN");
+  });
+});
+
 describe("フェイルクローズ", () => {
   it("ACCESS_TEAM_DOMAIN が空なら、正しいJWTでも全拒否", async () => {
     expect((await call(await sign(), env({ ACCESS_TEAM_DOMAIN: "" }))).status).toBe(401);
