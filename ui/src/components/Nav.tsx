@@ -31,10 +31,10 @@ export function Nav(props: { route: Route }) {
           <span>{item.label}</span>
         </Link>
       ))}
-      <a class="nav__item nav__export" href="/export" download>
+      <Link href="/backup" class={`nav__item nav__export${route.name === "backup" ? " is-active" : ""}`} aria-current={route.name === "backup" ? "page" : undefined}>
         <Icon d={["M12 4v11", "M7 11l5 5 5-5", "M5 20h14"]} />
         <span>エクスポート</span>
-      </a>
+      </Link>
     </nav>
   );
 }

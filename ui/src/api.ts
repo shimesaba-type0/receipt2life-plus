@@ -16,6 +16,7 @@ import type {
   TransactionPatch,
   TransactionView,
 } from "../../src/api/contract";
+import type { ImportResponse } from "./pages/backupLogic";
 
 // 認証が切れている(Cloudflare Access のログインが必要)ことを表す
 export class UnauthorizedError extends Error {
@@ -86,3 +87,25 @@ export const deletePhoto = (id: string) => request<{ deleted: PhotoView }>("DELE
 export const addLink = (link: NewLink) => request<{ link: LinkView; duplicate: boolean; message: string }>("POST", "/api/links", link);
 export const updateLink = (id: string, patch: LinkPatch) => request<{ link: LinkView; duplicate: false; message: string }>("PATCH", `/api/links/${encodeURIComponent(id)}`, patch);
 export const deleteLink = (id: string) => request<{ deleted: LinkView; message: string }>("DELETE", `/api/links/${encodeURIComponent(id)}`);
+
+// バックアップ(JSONL)の読み込み。本文はファイルの中身そのまま(JSONLかJSON配列)。上限の検査は呼び出し側で済ませる
+// 全体のエラー(413 など)は ok: false で返る。行ごとの結果は ok: true の results に入る
+export async function importBackup(file: Blob): Promise<ImportResponse & { status: number }> {
+  let res: Response;
+  try {
+    res = await fetch("/import", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/x-ndjson" }, body: file });
+  } catch {
+    throw new UnauthorizedError();
+  }
+  if (res.status === 401) throw new UnauthorizedError();
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    return { ok: false, status: res.status, error: "" };
+  }
+  const b = (body ?? {}) as { ok?: boolean; error?: unknown; errors?: { message?: string }[] };
+  if (res.ok && b.ok === true) return { ...(body as Extract<ImportResponse, { ok: true }>), status: res.status };
+  const message = typeof b.error === "string" ? b.error : (b.errors?.[0]?.message ?? "");
+  return { ok: false, status: res.status, error: message };
+}

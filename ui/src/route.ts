@@ -4,6 +4,7 @@ export type Route =
   | { name: "calendar"; month: string | null }
   | { name: "day"; date: string }
   | { name: "photosAdd"; target: PhotosAddTarget | null }
+  | { name: "backup" }
   | { name: "notfound" };
 
 // /photos/add の紐づけ先。date は必須(実在日付)、あとは任意
@@ -31,6 +32,8 @@ export function parseRoute(pathname: string, search = ""): Route {
     const q = parsePhotosAddQuery(search);
     return { name: "photosAdd", target: q.ok ? q.target : null };
   }
+  // /export と /import は Worker のAPIルート。SPAの画面は衝突しない /backup
+  if (path === "/backup") return { name: "backup" };
   const day = /^\/day\/(\d{4}-\d{2}-\d{2})$/.exec(path);
   if (day?.[1] && DATE.test(day[1])) return { name: "day", date: day[1] };
   return { name: "notfound" };
