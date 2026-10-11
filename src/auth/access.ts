@@ -34,6 +34,14 @@ function unauthorized(c: Context<AppEnv>) {
   return c.json({ error: "unauthorized" }, 401);
 }
 
+// 弾いた理由を、トークンや値を含めずに説明する(ログ用。レスポンスには出さない)
+function describeFailure(err: unknown): string {
+  if (typeof err !== "object" || err === null) return "unknown";
+  const e = err as { code?: unknown; claim?: unknown; reason?: unknown; name?: unknown };
+  const parts = [e.code, e.claim && `claim=${String(e.claim)}`, e.reason && `reason=${String(e.reason)}`, e.name];
+  return parts.filter((p): p is string => typeof p === "string" && p.length > 0).join(" ") || "unknown";
+}
+
 /**
  * Cloudflare Access のJWTを検証する認証ミドルウェア。
  * - 設定(ACCESS_TEAM_DOMAIN / ACCESS_AUD)が空なら、全リクエストを拒否する(フェイルクローズ)
@@ -56,7 +64,10 @@ export function accessAuth(options: { getKey?: KeyResolver } = {}): MiddlewareHa
     }
 
     const token = c.req.header(JWT_HEADER);
-    if (!token) return unauthorized(c);
+    if (!token) {
+      console.warn("auth: Cf-Access-Jwt-Assertion ヘッダーがありません");
+      return unauthorized(c);
+    }
 
     try {
       const { payload } = await jwtVerify(token, resolveKey(teamDomain), {
@@ -68,7 +79,8 @@ export function accessAuth(options: { getKey?: KeyResolver } = {}): MiddlewareHa
       const id = payload.sub || (typeof payload.common_name === "string" ? payload.common_name : "unknown");
       const identity: Identity = { id, ...(typeof payload.email === "string" ? { email: payload.email } : {}) };
       c.set("identity", identity);
-    } catch {
+    } catch (err) {
+      console.warn(`auth: JWTの検証に失敗しました (${describeFailure(err)})`);
       return unauthorized(c);
     }
     return next();

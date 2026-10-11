@@ -1,5 +1,5 @@
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app";
 import { testEnv } from "../helpers";
 
@@ -76,6 +76,26 @@ describe("Cloudflare Access のJWT検証", () => {
 
   it("チーム名にhttps://が付いていても動く", async () => {
     expect((await call(await sign(), env({ ACCESS_TEAM_DOMAIN: `https://${TEAM}/` }))).status).toBe(200);
+  });
+});
+
+describe("弾いた理由のログ", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("audience違いは、どのclaimが合わなかったかをログに出す(トークンは出さない)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const token = await sign({ aud: "other" });
+    expect((await call(token)).status).toBe(401);
+    const logged = warn.mock.calls.flat().join(" ");
+    expect(logged).toContain("aud");
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain(AUD);
+  });
+
+  it("ヘッダーなしは、その旨をログに出す", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect((await call(null)).status).toBe(401);
+    expect(warn.mock.calls.flat().join(" ")).toContain("ヘッダー");
   });
 });
 
