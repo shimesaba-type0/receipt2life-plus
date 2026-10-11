@@ -1,11 +1,23 @@
 # 値はプレースホルダーのみ。アカウントID・D1のID・ドメインなどは書かない(docs/setup.md)
+# D1は database_id を書かない。デプロイ時にWranglerの自動プロビジョニングで解決する想定(要確認)
 name = "receipt2life"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = false
 preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "receipt2life"
+migrations_dir = "migrations"
 
 [env.staging]
 name = "receipt2life-staging"
 workers_dev = false
 preview_urls = false
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "receipt2life-staging"
+migrations_dir = "migrations"
