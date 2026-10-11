@@ -1,20 +1,33 @@
 /* 日の詳細ページ専用 */
-.day__head { display: flex; align-items: center; gap: 12px; }
-.day__back, .day__today { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 22px; color: var(--accent); font-weight: 500; }
-.day__title { flex: 1; text-align: center; }
+.day__head { display: flex; align-items: center; gap: 4px; }
+.day__back { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: var(--ink); }
+.day__today { display: inline-flex; align-items: center; min-height: 44px; padding: 0 8px; border-radius: 22px; color: var(--accent); font-size: 14px; font-weight: 500; }
+.day__title { flex: 1; text-align: left; }
 .day__notice { margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 14px; }
-.day__total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.day__total-amount { font-size: 28px; }
+.day__total { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.day__total-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.day__total-label { font-size: 13px; }
+.day__total-amount { font-size: 36px; font-weight: 700; line-height: 1.15; }
+.day__total-count { font-size: 14px; white-space: nowrap; }
+.day__section { display: flex; flex-direction: column; gap: 8px; }
+.day__section > .day__row-head { margin: 0 4px; }
+.day__section > .muted { margin: 0 4px; }
+.day__txlist { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.day__txlist .day__tx { padding: 14px 16px 14px 20px; }
+.day__txlist .day__form { padding: 14px 20px; }
 .day__row-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .day__h { margin: 0; font-size: 16px; font-weight: 700; }
 .day__list { list-style: none; margin: 0; padding: 0; }
 .day__item + .day__item { border-top: 1px solid var(--line-soft); }
 .day__tx, .day__event { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 56px; padding: 10px 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
 .day__tx-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.day__merchant { font-weight: 700; overflow-wrap: anywhere; }
-.day__tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.day__merchant { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.day__review { margin-left: 6px; font-weight: 400; }
+.day__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.day__account { font-size: 12px; padding: 2px 0; }
 .day__memo { font-size: 13px; overflow-wrap: anywhere; }
-.day__amount { font-weight: 700; white-space: nowrap; }
+.day__amount { font-size: 16px; font-weight: 500; white-space: nowrap; }
+.day__chev { flex: none; color: #8a9792; }
 
 .day__event { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 10px 12px; margin: 6px 0; border-left: 6px solid var(--event-blue); border-radius: 12px; background: var(--event-blue-soft); }
 .day__event--red { border-left-color: var(--event-red); background: var(--event-red-soft); }
@@ -40,8 +53,8 @@
 .day__color.is-selected { border-color: var(--swatch); background: var(--line-soft); font-weight: 700; }
 .day__swatch { width: 18px; height: 18px; border-radius: 50%; background: var(--swatch); }
 
-.day__photos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.day__thumb { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: var(--line-soft); cursor: pointer; }
+.day__photos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.day__thumb { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: var(--line-soft); cursor: pointer; }
 .day__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .day__lightbox { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; background: rgba(0, 0, 0, 0.85); }
@@ -53,6 +66,11 @@
 .day__lightbox-bar { flex-wrap: wrap; justify-content: center; }
 
 .day__drop.is-over { outline: 2px dashed var(--accent); outline-offset: -4px; background: var(--accent-soft); }
+.day__addtile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 100%; aspect-ratio: 1 / 1; padding: 0; border: 1.5px dashed #8a9792; border-radius: 16px; background: transparent; color: var(--accent); font-size: 13px; font-weight: 500; cursor: pointer; }
+.day__note { margin: 8px 0 0; font-size: 12px; }
+.day__row-head--sub { flex-wrap: wrap; align-items: baseline; }
+.day__row-head--sub .day__sub { margin-left: auto; font-size: 12px; }
+.day__row-head--sub .day__photo-tools { flex-basis: 100%; }
 .day__photo-tools { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .day__hint { margin: 0 0 8px; font-size: 12px; }
 .day__progress { margin: 8px 0; }
