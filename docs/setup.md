@@ -74,6 +74,13 @@ Worker → 設定 → **ランタイム変数とシークレット**(「プロ�
 
 Access アプリの「追加設定」タブで **Managed OAuth** をオンにする。ローカルホスト系の許可はオフ。**許可するリダイレクト URI** に、使うクライアントのコールバックURLを入れる。接続の手順は [connect-claude.md](connect-claude.md)。
 
+### 6. 画面(Web UI)を出す
+
+- Worker → 設定 → ビルド → **ビルドコマンド** を `npm run build` にする(空のままだと画面のファイルが作られない)
+- R2 は、`wrangler.toml` の `PHOTOS`(バケット名 `receipt2life`)をデプロイ時に自動で作る想定。デプロイ後に、ダッシュボードの R2 に `receipt2life` があるか確認する。無ければ R2 → バケットを作成 → 名前 `receipt2life`
+- ホーム画面に追加(PWA)して使うなら、Zero Trust → Access → アプリケーション → ポリシーで、次の3つのパスだけ **Bypass** にする: `/manifest.webmanifest`、`/sw.js`、`/icons/*`(認証情報を含まない静的ファイル)。しないと、アイコンが出ない、更新に失敗する、といった不具合が出ることがある(未検証)
+- Access のクッキーの SameSite は Lax 以上にしておく(書き込み系は Origin も検査するが、二重の備え)
+
 ### まだ手を付けていないこと
 
 - ステージング環境(別の Worker、別の D1、サービストークン)
