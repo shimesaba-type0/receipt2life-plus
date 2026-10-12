@@ -8,6 +8,7 @@ import { Categories } from "./pages/Categories";
 import { Day } from "./pages/Day";
 import { Home } from "./pages/Home";
 import { PhotosAdd } from "./pages/PhotosAdd";
+import { Subscriptions } from "./pages/Subscriptions";
 import { Tax } from "./pages/Tax";
 import { Transaction } from "./pages/Transaction";
 import { useRoute } from "./router";
@@ -28,6 +29,7 @@ export function App() {
         {route.name === "connect" && <Connect />}
         {route.name === "categories" && <Categories />}
         {route.name === "accounts" && <Accounts />}
+        {route.name === "subscriptions" && <Subscriptions />}
         {route.name === "tax" && <Tax />}
         {route.name === "notfound" && (
           <section class="page">

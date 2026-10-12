@@ -23,10 +23,10 @@ const X_POST = "https://x.com/example_user/status/1234567890";
 const YT = "https://youtu.be/dQw4w9WgXcQ";
 
 describe("MCP リンクのツール", () => {
-  it("tools/list は30個で、リンクの3ツールの説明が具体的", async () => {
+  it("tools/list は34個で、リンクの3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
-    expect(tools).toHaveLength(30);
+    expect(tools).toHaveLength(34);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("add_link").description).toContain("Xの投稿");
     expect(byName("add_link").description).toContain("YouTube");

@@ -180,6 +180,20 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - 紐づけ先の取引・出来事が存在しなければ 400。存在しないリンクの id は 404
 - 取引・出来事を削除すると、紐づくリンクもいっしょに消える(リンクがあっても削除は拒否しない)。MCP には `add_link` / `list_links` / `delete_link`
 
+## サブスク・固定費(別枠)
+
+支出の記録とは独立で、二重に数えない。型は `SubscriptionView` / `SubscriptionsData` / `NewSubscription` / `SubscriptionPatch`(src/api/contract.ts)。
+
+| ルート | 入力 | 戻り |
+| --- | --- | --- |
+| `GET /api/subscriptions` | クエリ(任意): `active`(`true` / `false`)、`kind`(`subscription` / `insurance` / `other`) | `SubscriptionsData`: `count`、`subscriptions`(契約中が先、名前順)、`totals`(契約中の `monthly` / `yearly` / `count`)、`message` |
+| `POST /api/subscriptions` | `NewSubscription`: `name` / `amount`(0〜10,000,000の整数)/ `period`(`monthly` / `yearly`)が必須。`kind` / `billing_month`(年払いだけ)/ `billing_day` / `url`(https)/ `note` / `active` は任意 | `SubscriptionData`: `subscription`、`message` |
+| `PATCH /api/subscriptions/:id` | `SubscriptionPatch`(指定した項目だけ)。`billing_month` / `billing_day` / `url` / `note` は null で消す。`amount` を変えると `previous_amount` / `amount_changed_on` / `price_checked_on` が自動で入る。`price_checked: true` は確認した日だけ今日にする | `SubscriptionData` |
+| `DELETE /api/subscriptions/:id` | なし | `DeletedSubscriptionData`: `deleted`、`message` |
+
+- `SubscriptionView` の `monthly_equivalent` / `yearly_equivalent` は月あたり・年あたり(年払いの月あたりは年額÷12の四捨五入)。`next_billing_month` は年払いで `billing_month` があるときの次の支払い月(今月を含む)
+- 存在しない `id` は404、不正な入力は400。登録は500件まで
+
 ## 座席の記録(映画館などの席の評価)
 
 映画館のスクリーン・座席や、野球場の席種など、会場の席の評価を構造化して残す。映画以外(劇場、ライブ会場、球場など)にも使える名前(`venue`=会場、`screen`=スクリーン/ホール/エリア(ブロックなどの区画にも使う広い意味)、`seat`=座席、`seat_class`=席種(プレミアムシート、内野指定席など))。作品名・公演名は `title`(任意。映画のタイトル、ライブ名など。明細の品名とは別物)。取引の列は増やさず、別の小さな記録(`seat_records`、migration 0008。`title` は 0009、`seat_class` は 0011 で追加)。ロジックは `src/core/seat-records.ts`(MCP も同じ関数)。

@@ -22,7 +22,9 @@ import type {
   NewCategory,
   NewEvent,
   NewLink,
+  DeletedSubscriptionData,
   NewSeatRecord,
+  NewSubscription,
   NewTransaction,
   PhotoMeta,
   PhotoView,
@@ -31,6 +33,9 @@ import type {
   VenuesData,
   SeatRecordSaved,
   SeatRecordView,
+  SubscriptionData,
+  SubscriptionPatch,
+  SubscriptionsData,
   DeductionsData,
   TaxSummaryData,
   TaxWarning,
@@ -100,6 +105,11 @@ export const getCategories = () => request<CategoriesData>("GET", "/api/categori
 // 割引の集計(query: from / to / group_by)。ホームは getHome の discounts を使うので、いまは画面からは呼ばない
 export const getDiscounts = (query: string) => request<DiscountsData>("GET", `/api/discounts${query ? `?${query}` : ""}`);
 export const getDeductions = (query: string) => request<DeductionsData>("GET", `/api/deductions${query ? `?${query}` : ""}`);
+// サブスク・保険などの固定費(別枠)。query は "active=true" のような絞り込み(省略可)
+export const getSubscriptions = (query = "") => request<SubscriptionsData>("GET", `/api/subscriptions${query ? `?${query}` : ""}`);
+export const addSubscription = (s: NewSubscription) => request<SubscriptionData>("POST", "/api/subscriptions", s);
+export const updateSubscription = (id: string, patch: SubscriptionPatch) => request<SubscriptionData>("PATCH", `/api/subscriptions/${encodeURIComponent(id)}`, patch);
+export const deleteSubscription = (id: string) => request<DeletedSubscriptionData>("DELETE", `/api/subscriptions/${encodeURIComponent(id)}`);
 export const getTaxSummary = (query: string) => request<TaxSummaryData>("GET", `/api/tax-summary${query ? `?${query}` : ""}`);
 
 // カテゴリの管理。name は日本語なので URL エンコードして送る

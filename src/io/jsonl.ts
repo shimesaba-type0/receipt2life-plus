@@ -18,6 +18,8 @@ import {
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
+import { subscriptionFieldsSchema } from "../core/subscriptions";
+import { parseHttpsUrl } from "../core/urls";
 import { MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
 import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
 import { dedupHash } from "../core/transactions";
@@ -90,6 +92,12 @@ const EXPORT_TABLES: TableSpec[] = [
           LEFT JOIN screens s ON s.id = r.screen_id
           WHERE r.id > ? ORDER BY r.id LIMIT ?`,
   },
+  // サブスク・保険などの固定費(別枠)。active は true / false で出す
+  {
+    sql: `SELECT 'subscription' AS type, id, name, kind, amount, period, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at
+          FROM subscriptions WHERE id > ? ORDER BY id LIMIT ?`,
+    decorate: async (_db, rows) => rows.map((r) => ({ ...r, active: (r as { active?: number }).active === 1 })),
+  },
 ];
 
 async function* exportChunks(db: D1Database): AsyncGenerator<string> {
@@ -107,7 +115,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction(税の内訳 tax_lines を入れ子で持つ)→ item(明細)→ attachment → link → screen → seat_record の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction(税の内訳 tax_lines を入れ子で持つ)→ item(明細)→ attachment → link → screen → seat_record → subscription の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -156,7 +164,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record"] as const;
+const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record", "subscription"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -292,7 +300,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "screens" | "seat_records", ids: string[]): Promise<Set<string>> {
+async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "screens" | "seat_records" | "subscriptions", ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (const part of chunks([...new Set(ids)], IN_CHUNK)) {
     const { results } = await db
@@ -399,6 +407,66 @@ async function importEvents(db: D1Database, entries: Entry[], report: Report, no
         db
           .prepare("INSERT INTO events (id, start_date, end_date, title, note, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
           .bind(v.id, v.data.start_date, v.data.end_date ?? null, v.data.title, v.data.note ?? null, v.data.color, v.createdAt, v.updatedAt),
+      ],
+    });
+  }
+  await insertAll(db, pending, report);
+}
+
+// サブスク・固定費の行。入力は登録と同じ規則(core)で検証し、url は正規化する。direct な項目(直前の金額など)はそのまま戻す
+const subscriptionLineSchema = subscriptionFieldsSchema.extend({
+  id: idField.optional(),
+  previous_amount: z.number().int().min(0).optional(),
+  amount_changed_on: isoDate.optional(),
+  price_checked_on: isoDate.optional(),
+  created_at: timestampField.optional(),
+  updated_at: timestampField.optional(),
+});
+
+async function importSubscriptions(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
+  if (entries.length === 0) return;
+  const valid: { entry: Entry; id: string; given: boolean; url: string | null; data: z.infer<typeof subscriptionLineSchema> }[] = [];
+  for (const entry of entries) {
+    const r = subscriptionLineSchema.safeParse(entry.record);
+    if (!r.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
+      continue;
+    }
+    const errors: string[] = [];
+    if (r.data.period === "monthly" && r.data.billing_month !== undefined) errors.push("billing_month: 月払いには指定できません(年払いの更新月です)");
+    let url: string | null = null;
+    if (r.data.url !== undefined) {
+      url = parseHttpsUrl(r.data.url);
+      if (url === null) errors.push("url: https のURLだけ指定できます");
+    }
+    if (errors.length > 0) {
+      report(entry, { status: "error", message: errors.join(" / ") });
+      continue;
+    }
+    valid.push({ entry, id: r.data.id ?? crypto.randomUUID(), given: r.data.id !== undefined, url, data: r.data });
+  }
+
+  const existing = await existingIds(db, "subscriptions", valid.filter((v) => v.given).map((v) => v.id));
+  const seen = new Set<string>();
+  const pending: Pending[] = [];
+  for (const v of valid) {
+    if (existing.has(v.id) || seen.has(v.id)) {
+      report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」のサブスクは既にあるためスキップしました` });
+      continue;
+    }
+    seen.add(v.id);
+    const d = v.data;
+    const createdAt = d.created_at ?? nowIso;
+    pending.push({
+      entry: v.entry,
+      id: v.id,
+      statements: [
+        db
+          .prepare(
+            `INSERT INTO subscriptions (id, name, kind, amount, period, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(v.id, d.name, d.kind, d.amount, d.period, d.billing_month ?? null, d.billing_day ?? null, d.previous_amount ?? null, d.amount_changed_on ?? null, d.price_checked_on ?? null, v.url, d.note || null, d.active ? 1 : 0, createdAt, d.updated_at ?? createdAt),
       ],
     });
   }
@@ -905,7 +973,7 @@ async function importSeatRecords(db: D1Database, entries: Entry[], report: Repor
 
 /**
  * JSONL(または JSON 配列)を取り込む。行ごとに結果を返し、一部の行がエラーでも他の行は取り込む。
- * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → screen → seat_record(外部キーの都合)。結果は元の行の順。
+ * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → screen → seat_record → subscription(外部キーの都合)。結果は元の行の順。
  */
 export async function importRecords(db: D1Database, text: string, options: ImportOptions = {}): Promise<ImportResponse> {
   if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
@@ -921,7 +989,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [], subscription: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -955,6 +1023,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
   await importLinks(db, byType.link, report, nowIso);
   await importScreens(db, byType.screen, report, nowIso);
   await importSeatRecords(db, byType.seat_record, report, nowIso);
+  await importSubscriptions(db, byType.subscription, report, nowIso);
 
   const summary: ImportSummary = { total: results.length, ok: 0, skipped: 0, errors: 0 };
   for (const r of results) {

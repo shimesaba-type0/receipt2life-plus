@@ -628,3 +628,89 @@ export interface MerchantView {
 export interface MerchantsData {
   merchants: MerchantView[];
 }
+
+// ---- サブスク・保険などの固定費(別枠。支出の記録とは独立で、二重に数えない) ----
+export type SubscriptionKind = "subscription" | "insurance" | "other";
+export type SubscriptionPeriod = "monthly" | "yearly";
+
+export interface SubscriptionView {
+  id: string;
+  name: string;
+  kind: SubscriptionKind;
+  // 1回の支払い額(円)。period が monthly なら月額、yearly なら年額
+  amount: number;
+  period: SubscriptionPeriod;
+  // 月あたり・年あたりに直した金額(年払いの月あたりは、年額÷12の四捨五入)
+  monthly_equivalent: number;
+  yearly_equivalent: number;
+  billing_month: number | null;
+  billing_day: number | null;
+  // 年払いで billing_month があるとき、次に払う月(YYYY-MM。今月を含む)
+  next_billing_month: string | null;
+  // 金額を変えたとき、直前の金額と変えた日
+  previous_amount: number | null;
+  amount_changed_on: string | null;
+  // 金額を最後に確認した日
+  price_checked_on: string | null;
+  url: string | null;
+  note: string | null;
+  // true=契約中、false=解約済み(合計に入れない)
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionTotals {
+  // 契約中の合計。月あたりは、年あたりの合計÷12の四捨五入
+  monthly: number;
+  yearly: number;
+  count: number;
+}
+
+// GET /api/subscriptions?active=true|false&kind=(契約中の分が先、名前順)
+export interface SubscriptionsData {
+  count: number;
+  subscriptions: SubscriptionView[];
+  totals: SubscriptionTotals;
+  message: string;
+}
+
+// POST /api/subscriptions の入力
+export interface NewSubscription {
+  name: string;
+  amount: number;
+  period: SubscriptionPeriod;
+  kind?: SubscriptionKind;
+  billing_month?: number;
+  billing_day?: number;
+  url?: string;
+  note?: string;
+  active?: boolean;
+}
+
+// PATCH /api/subscriptions/:id の入力(指定した項目だけ変える。billing_month / billing_day / url / note は null で消す)
+export interface SubscriptionPatch {
+  name?: string;
+  amount?: number;
+  period?: SubscriptionPeriod;
+  kind?: SubscriptionKind;
+  billing_month?: number | null;
+  billing_day?: number | null;
+  url?: string | null;
+  note?: string | null;
+  active?: boolean;
+  // true で、金額を確認した日を今日にする
+  price_checked?: boolean;
+}
+
+// POST / PATCH の戻り
+export interface SubscriptionData {
+  subscription: SubscriptionView;
+  message: string;
+}
+
+// DELETE の戻り
+export interface DeletedSubscriptionData {
+  deleted: SubscriptionView;
+  message: string;
+}

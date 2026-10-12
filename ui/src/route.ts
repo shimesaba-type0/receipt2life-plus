@@ -8,6 +8,7 @@ export type Route =
   | { name: "backup" }
   | { name: "categories" }
   | { name: "accounts" }
+  | { name: "subscriptions" }
   | { name: "tax" }
   | { name: "connect" }
   | { name: "notfound" };
@@ -43,6 +44,8 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/categories") return { name: "categories" };
   // 支払方法の管理。API の /api/accounts とは衝突しない
   if (path === "/accounts") return { name: "accounts" };
+  // サブスク・固定費。API の /api/subscriptions とは衝突しない
+  if (path === "/subscriptions") return { name: "subscriptions" };
   // 税率別の税額。API の /api/tax-summary とは衝突しない
   if (path === "/tax") return { name: "tax" };
   // AI(MCP)とつなぐ手順。Worker の /mcp とは別のパス

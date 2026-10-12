@@ -3,9 +3,9 @@ import { MENU_ITEMS, menuItems, sidebarItems, isMenuRoute } from "../../ui/src/m
 import { parseRoute } from "../../ui/src/route";
 
 describe("menuItems(スマホのメニュー)", () => {
-  it("カテゴリ、支払方法、税額、エクスポート・バックアップ、AIとつなぐの順", () => {
-    expect(menuItems().map((i) => i.label)).toEqual(["カテゴリ", "支払方法", "税額", "エクスポート・バックアップ", "AIとつなぐ(MCP)"]);
-    expect(menuItems().map((i) => i.href)).toEqual(["/categories", "/accounts", "/tax", "/backup", "/connect"]);
+  it("カテゴリ、支払方法、サブスク・固定費、税額、エクスポート・バックアップ、AIとつなぐの順", () => {
+    expect(menuItems().map((i) => i.label)).toEqual(["カテゴリ", "支払方法", "サブスク・固定費", "税額", "エクスポート・バックアップ", "AIとつなぐ(MCP)"]);
+    expect(menuItems().map((i) => i.href)).toEqual(["/categories", "/accounts", "/subscriptions", "/tax", "/backup", "/connect"]);
   });
 
   it("リンク先は、すべて実在のルート(notfound ではない)", () => {
@@ -32,9 +32,9 @@ describe("menuItems(スマホのメニュー)", () => {
 });
 
 describe("sidebarItems(PCの左メニュー)", () => {
-  it("ホーム・カレンダー・カテゴリ・口座・税額・エクスポート・バックアップ。ラベルはメニューと同じ", () => {
+  it("ホーム・カレンダー・カテゴリ・口座・サブスク・固定費・税額・エクスポート・バックアップ。ラベルはメニューと同じ", () => {
     const items = sidebarItems();
-    expect(items.map((i) => i.href)).toEqual(["/", "/calendar", "/categories", "/accounts", "/tax", "/backup", "/connect"]);
+    expect(items.map((i) => i.href)).toEqual(["/", "/calendar", "/categories", "/accounts", "/subscriptions", "/tax", "/backup", "/connect"]);
     for (const m of MENU_ITEMS) expect(items.find((i) => i.href === m.href)?.label).toBe(m.label);
   });
 

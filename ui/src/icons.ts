@@ -22,3 +22,6 @@ export const DISCOUNT_ICON = ["M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6
 
 // 支払方法(カード)
 export const ACCOUNT_ICON = ["M3 6h18v12H3z", "M3 10h18", "M7 15h3"];
+
+// サブスク・固定費(くり返しの円形の矢印)
+export const SUBSCRIPTION_ICON = ["M20 11a8 8 0 0 0-14.5-4.6", "M5 3v4h4", "M4 13a8 8 0 0 0 14.5 4.6", "M19 21v-4h-4"];
