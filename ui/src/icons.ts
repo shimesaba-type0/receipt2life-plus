@@ -13,3 +13,6 @@ export const CALENDAR_ICON = ["M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 
 export const TODAY_ICON = ["M5 5h14v14H5z", "M9 10h6M9 14h4"];
 // メニュー(三本線)
 export const MENU_ICON = ["M4 7h16", "M4 12h16", "M4 17h16"];
+
+// AIとつなぐ(プラグを差し込む形)
+export const CONNECT_ICON = ["M9 3v5", "M15 3v5", "M6 8h12v3a6 6 0 0 1-12 0V8z", "M12 17v4"];

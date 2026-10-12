@@ -3,9 +3,9 @@ import { MENU_ITEMS, menuItems, sidebarItems, isMenuRoute } from "../../ui/src/m
 import { parseRoute } from "../../ui/src/route";
 
 describe("menuItems(スマホのメニュー)", () => {
-  it("カテゴリ・口座、税額、エクスポート・バックアップの順", () => {
-    expect(menuItems().map((i) => i.label)).toEqual(["カテゴリ・口座", "税額", "エクスポート・バックアップ"]);
-    expect(menuItems().map((i) => i.href)).toEqual(["/categories", "/tax", "/backup"]);
+  it("カテゴリ・口座、税額、エクスポート・バックアップ、AIとつなぐの順", () => {
+    expect(menuItems().map((i) => i.label)).toEqual(["カテゴリ・口座", "税額", "エクスポート・バックアップ", "AIとつなぐ(MCP)"]);
+    expect(menuItems().map((i) => i.href)).toEqual(["/categories", "/tax", "/backup", "/connect"]);
   });
 
   it("リンク先は、すべて実在のルート(notfound ではない)", () => {
@@ -34,7 +34,7 @@ describe("menuItems(スマホのメニュー)", () => {
 describe("sidebarItems(PCの左メニュー)", () => {
   it("ホーム・カレンダー・カテゴリ・口座・税額・エクスポート・バックアップ。ラベルはメニューと同じ", () => {
     const items = sidebarItems();
-    expect(items.map((i) => i.href)).toEqual(["/", "/calendar", "/categories", "/tax", "/backup"]);
+    expect(items.map((i) => i.href)).toEqual(["/", "/calendar", "/categories", "/tax", "/backup", "/connect"]);
     for (const m of MENU_ITEMS) expect(items.find((i) => i.href === m.href)?.label).toBe(m.label);
   });
 

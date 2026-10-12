@@ -8,7 +8,11 @@ import {
   summarizeImport,
   validateImportFile,
   validateImportText,
+  reportHref,
+  reportQuery,
   type ImportRow,
+  type ReportInput,
+  type ReportMode,
 } from "./backupLogic";
 import "./Backup.css";
 
@@ -35,7 +39,7 @@ export function Backup() {
     <section class="page backup">
       <header class="backup__header">
         <h1 class="backup__title brandmark-line"><BrandMark size={24} />エクスポートとバックアップ</h1>
-        <p class="backup__lead">記録は、いつでも自分の手元に取り出せます。写真は含まれません(別に保存してください)。</p>
+        <p class="backup__lead">記録は、いつでも自分の手元に取り出せます。バックアップ(JSONL)に写真は含まれません(別に保存してください)。</p>
       </header>
 
       <div class="backup__pair">
@@ -53,21 +57,87 @@ export function Backup() {
           </a>
         </section>
 
-        <section class="backup__card" aria-labelledby="backup-md-h">
-          <div class="backup__card-head backup__card-head--row">
-            <h2 id="backup-md-h" class="backup__h2">
-              日記として読む(Markdown)
-            </h2>
-            <span class="backup__badge">準備中</span>
-          </div>
-          <p class="backup__desc">月ごとに、日付・支出・出来事のメモを1つの文章にまとめます。ほかのメモアプリで読むのに向いています。</p>
-          <button type="button" class="backup__btn backup__btn--disabled" disabled aria-describedby="backup-md-h">
-            Markdownをダウンロード
-          </button>
-        </section>
+        <ReportCard />
       </div>
 
       <ImportCard />
+    </section>
+  );
+}
+
+const MODES: { value: ReportMode; label: string }[] = [
+  { value: "month", label: "月" },
+  { value: "year", label: "年" },
+  { value: "range", label: "期間" },
+];
+
+function thisMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// 読み物として書き出す(Markdown / HTML)。ブラウザのダウンロードに任せるので、リンクを出すだけ
+function ReportCard() {
+  const [mode, setMode] = useState<ReportMode>("month");
+  const [v, setV] = useState<ReportInput>(() => ({ month: thisMonth(), year: thisMonth().slice(0, 4), from: "", to: "" }));
+  const q = reportQuery(mode, v);
+  const set = (key: keyof ReportInput) => (e: Event) => setV({ ...v, [key]: (e.currentTarget as HTMLInputElement).value });
+
+  return (
+    <section class="backup__card" aria-labelledby="backup-md-h">
+      <div class="backup__card-head">
+        <h2 id="backup-md-h" class="backup__h2">
+          日記として読む(Markdown・HTML)
+        </h2>
+        <p class="backup__desc">期間を選んで、サマリ・カテゴリ別・カレンダー・期間メモ・日別の記録を1つの文章にまとめます。写真は枚数とキャプションだけです。</p>
+      </div>
+      <div class="backup__modes" role="radiogroup" aria-label="期間の選び方">
+        {MODES.map((m) => (
+          <label key={m.value} class={`backup__mode${mode === m.value ? " is-on" : ""}`}>
+            <input type="radio" name="report-mode" value={m.value} checked={mode === m.value} onChange={() => setMode(m.value)} />
+            {m.label}
+          </label>
+        ))}
+      </div>
+      <div class="backup__period">
+        {mode === "month" && <input class="backup__input" type="month" aria-label="月" value={v.month} onInput={set("month")} />}
+        {mode === "year" && <input class="backup__input" type="number" inputMode="numeric" min="2000" max="2099" aria-label="年" value={v.year} onInput={set("year")} />}
+        {mode === "range" && (
+          <>
+            <input class="backup__input" type="date" aria-label="はじまりの日" value={v.from} onInput={set("from")} />
+            <span aria-hidden="true">〜</span>
+            <input class="backup__input" type="date" aria-label="終わりの日" value={v.to} onInput={set("to")} />
+          </>
+        )}
+      </div>
+      {!q.ok && (
+        <p class="backup__hint" role="status">
+          {q.error}
+        </p>
+      )}
+      <div class="backup__actions">
+        {q.ok ? (
+          <>
+            <a class="backup__btn backup__btn--primary" href={reportHref("markdown", q.query)} download>
+              <Icon d={DOWNLOAD_ICON} />
+              Markdown
+            </a>
+            <a class="backup__btn" href={reportHref("html", q.query)} download>
+              <Icon d={DOWNLOAD_ICON} />
+              HTML
+            </a>
+          </>
+        ) : (
+          <>
+            <button type="button" class="backup__btn backup__btn--disabled" disabled>
+              Markdown
+            </button>
+            <button type="button" class="backup__btn backup__btn--disabled" disabled>
+              HTML
+            </button>
+          </>
+        )}
+      </div>
     </section>
   );
 }

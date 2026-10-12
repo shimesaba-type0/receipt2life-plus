@@ -227,6 +227,6 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 ## エクスポート・インポート
 
-`GET /export`(JSONL)、`POST /import`。docs/backup.md を参照。
+`GET /export`(JSONL)、`POST /import`。docs/backup.md を参照。読み物の書き出しは `GET /export/markdown`・`GET /export/html`(`month` / `year` / `from`+`to`。ファイルとして返す。読み取り専用)。
 
 ブラウザからは `/backup` 画面で操作できる(ダウンロードは `/export`、読み込みは `/import` を画面が呼ぶ)。画面は読み込みの前に上限(5MB・5000 行)だけ検査し、中身の判定はサーバーに任せる。

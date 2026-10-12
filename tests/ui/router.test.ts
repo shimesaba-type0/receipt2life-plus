@@ -25,6 +25,11 @@ describe("parseRoute", () => {
     expect(parseRoute("/tx/%E0%A4%A")).toEqual({ name: "notfound" });
     expect(parseRoute(`/tx/${"a".repeat(65)}`)).toEqual({ name: "notfound" });
   });
+  it("AIとつなぐ手順は /connect(/mcp はWorkerのAPI)", () => {
+    expect(parseRoute("/connect")).toEqual({ name: "connect" });
+    expect(parseRoute("/connect/")).toEqual({ name: "connect" });
+  });
+
   it("バックアップ画面は /backup(/export と /import はWorkerのAPIなので、SPAでは扱わない)", () => {
     expect(parseRoute("/backup")).toEqual({ name: "backup" });
     expect(parseRoute("/backup/")).toEqual({ name: "backup" });

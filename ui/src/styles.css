@@ -51,6 +51,8 @@ button.nav__item { background: transparent; border: 0; padding: 0; font: inherit
   .topbar { grid-column: 1 / -1; grid-row: 1; position: sticky; top: 0; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 32px 0 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
   .topbar__home { display: flex; align-items: center; min-height: 44px; }
   .topbar__logo { display: block; width: 280px; height: auto; }
+  .topbar__right { display: flex; align-items: center; gap: 20px; }
+  .topbar__github { font-size: 14px; color: var(--muted); }
   .topbar__today { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 22px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; }
   .topbar__today:hover { color: #fff; opacity: 0.9; }
   .nav { grid-column: 1; grid-row: 2; position: sticky; top: 72px; align-self: start; flex-direction: column; width: 272px; height: calc(100dvh - 72px); padding: 20px 16px; border-top: 0; border-right: 1px solid var(--line); gap: 4px; }

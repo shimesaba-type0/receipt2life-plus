@@ -6,6 +6,8 @@ import {
   formatErrorLine,
   formatFileSize,
   importHttpError,
+  reportHref,
+  reportQuery,
   summarizeImport,
   validateImportFile,
   validateImportText,
@@ -113,5 +115,26 @@ describe("importHttpError", () => {
     expect(importHttpError(400)).toContain("読み込めません");
     expect(importHttpError(403)).toContain("同じサイト");
     expect(importHttpError(500)).toContain("500");
+  });
+});
+
+describe("reportQuery(Markdown / HTML の期間)", () => {
+  const v = { month: "2026-10", year: "2026", from: "2026-10-01", to: "2026-10-31" };
+  it("月・年・期間のクエリを作る", () => {
+    expect(reportQuery("month", v)).toEqual({ ok: true, query: "month=2026-10" });
+    expect(reportQuery("year", v)).toEqual({ ok: true, query: "year=2026" });
+    expect(reportQuery("range", v)).toEqual({ ok: true, query: "from=2026-10-01&to=2026-10-31" });
+  });
+  it("足りない・逆順・366日超は理由つきで断る", () => {
+    expect(reportQuery("month", { ...v, month: "" }).ok).toBe(false);
+    expect(reportQuery("year", { ...v, year: "26" }).ok).toBe(false);
+    expect(reportQuery("range", { ...v, from: "" }).ok).toBe(false);
+    expect(reportQuery("range", { ...v, from: "2026-11-01" }).ok).toBe(false);
+    expect(reportQuery("range", { ...v, from: "2025-01-01", to: "2026-01-02" }).ok).toBe(false);
+    expect(reportQuery("range", { ...v, from: "2028-01-01", to: "2028-12-31" }).ok).toBe(true);
+  });
+  it("リンクは /export/<形式>?<クエリ>", () => {
+    expect(reportHref("markdown", "month=2026-10")).toBe("/export/markdown?month=2026-10");
+    expect(reportHref("html", "year=2026")).toBe("/export/html?year=2026");
   });
 });
