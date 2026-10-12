@@ -6,6 +6,7 @@
   --muted: #5b6762;
   --line: #dde3e0;
   --line-soft: #edf0ee;
+  --zebra: #f4f7f5; /* 一覧の偶数行の背景(縞模様) */
   --accent: #1f5c4b;
   --accent-soft: #e3efea;
   --warn-soft: #fff3dc;
@@ -58,6 +59,20 @@ button.nav__item { background: transparent; border: 0; padding: 0; font: inherit
   .nav__pc { display: flex; }
   .nav__item--mobile { display: none; }
 }
+
+/* 一覧の縞模様: 偶数行だけ薄く色を付けて、行の区切りを分かりやすくする。左右にはみ出す一覧は、行の左右に余白を足して、文字が縁にくっつかないようにする */
+.home__recent li:nth-child(even),
+.day__txlist > .day__item:nth-child(even),
+.cal__list > li:nth-child(even),
+.dp__list > .dp__tx:nth-child(even),
+.cat__list > .cat__row:nth-child(even),
+.tx__items > .tx__item:nth-child(even),
+.taxp__table tbody tr:nth-child(even),
+.tx__tax tbody tr:nth-child(even) { background: var(--zebra); }
+.dp__list > .dp__tx,
+.cat__list > .cat__row,
+.tx__items > .tx__item { padding-inline: 8px; margin-inline: -8px; border-radius: 10px; }
+.cat__list > .cat__row.is-editing { padding: 8px 8px 12px; }
 
 /* ページの共通部品 */
 .page { max-width: 880px; margin: 0 auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
