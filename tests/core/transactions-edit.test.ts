@@ -36,6 +36,7 @@ describe("updateTransaction", () => {
       clerk_name: null,
       receipt_no: null,
       items: [],
+      tax_lines: [],
     });
     expect(res.warnings).toEqual([]);
     expect(res.message).toBe("更新しました: A店 1,380円");

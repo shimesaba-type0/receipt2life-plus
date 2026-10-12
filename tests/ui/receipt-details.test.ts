@@ -152,6 +152,7 @@ describe("buildDetails / buildPatch", () => {
       clerk_name: null,
       receipt_no: "A-1",
       items: [],
+      tax_lines: [],
     };
     expect(txFormFromView(tx)).toMatchObject({ paid_time: "09:05", merchant_phone: "03-0000-0000", merchant_address: "", invoice_number: "T0000000000000", clerk_name: "", receipt_no: "A-1" });
   });

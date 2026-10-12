@@ -32,6 +32,43 @@ export interface ItemView {
   category: string | null;
   tax_flag: TaxFlag | null;
   memo: string | null;
+  // 消費税の税率(%。レシートの印字どおり。0〜100、小数可。不明は null)。tax_flag とは別物
+  tax_rate: number | null;
+  // 印字どおりの税率の記号(「※」「軽」など。20文字まで。なしは null)
+  tax_label: string | null;
+}
+
+// 対象金額が税込(included)か税抜(excluded)か
+export type AmountBasis = "included" | "excluded";
+
+// 税の内訳(レシート下部の税率別の内訳)の1行。印字どおりの数字で、こちらで計算しない
+export interface TaxLineView {
+  id: string;
+  // 税率(%)
+  rate: number;
+  // 対象金額(円)。印字が無ければ null
+  taxable_amount: number | null;
+  // 消費税額(円)。印字が無ければ null
+  tax_amount: number | null;
+  amount_basis: AmountBasis | null;
+  // 印字の記号(20文字まで)
+  label: string | null;
+}
+
+// 税の内訳の入力(税率ごとに1行。同じ税率は1つだけ。10行まで)
+export interface NewTaxLine {
+  rate: number;
+  taxable_amount?: number | null;
+  tax_amount?: number | null;
+  amount_basis?: AmountBasis | null;
+  label?: string | null;
+}
+
+// 税の内訳の合計が金額と合わないなどの注意(エラーにはしない)
+export interface TaxWarning {
+  index?: number;
+  field: string;
+  message: string;
 }
 
 export interface TransactionView {
@@ -60,6 +97,8 @@ export interface TransactionView {
   receipt_no: string | null;
   // 明細(position の順)。明細なしは空配列
   items: ItemView[];
+  // 税の内訳(税率の高い順)。なしは空配列
+  tax_lines: TaxLineView[];
 }
 
 export interface EventView {
@@ -297,6 +336,10 @@ export interface NewItem {
   // 省略または null で取引のフラグに従う
   tax_flag?: TaxFlag | null;
   memo?: string | null;
+  // 税率(%。0〜100、小数は第3位まで)。省略または null で不明
+  tax_rate?: number | null;
+  // 印字の記号(20文字まで)。空文字は値なし
+  tax_label?: string | null;
 }
 
 // POST /api/transactions の入力(add_transactions と同じ規則)
@@ -320,6 +363,8 @@ export interface NewTransaction {
   receipt_no?: string | null;
   // 明細(50行まで)。合計は amount と一致させる(合わなければ 400、field: "items" で差額が返る)
   items?: NewItem[];
+  // 税の内訳。合計が合わなくてもエラーにはせず、戻りの tax_warnings で知らせる
+  tax_lines?: NewTaxLine[];
   allow_duplicate?: boolean;
 }
 
@@ -343,6 +388,49 @@ export interface TransactionPatch {
   receipt_no?: string | null;
   // 明細の全置換。省略または null で変えない、[] で明細を全部消す。明細があるときは合計 = amount(金額だけ変えるときも)
   items?: NewItem[] | null;
+  // 税の内訳の全置換。省略または null で変えない、[] で全部消す
+  tax_lines?: NewTaxLine[] | null;
+}
+
+// GET /api/tax-summary?from=&to=&group_by=(rate / month。既定 rate)
+// 集計は税の内訳(tax_lines)の印字どおりの数字だけ。明細の税率から税額は計算しない
+export interface TaxableBasis {
+  included_total: number;
+  excluded_total: number;
+  unknown_total: number;
+}
+
+export interface TaxSummaryRow {
+  rate: number;
+  // group_by=month のときだけ(YYYY-MM)
+  month?: string;
+  tax_total: number;
+  taxable_total: number;
+  // その税率の行を持つ取引の件数
+  receipt_count: number;
+  // 税額が記録されていない行の件数
+  missing_tax_amount: number;
+  taxable_basis: TaxableBasis;
+  // 税込・税抜・不明のうち2種類以上が混ざっている
+  mixed_basis: boolean;
+}
+
+export interface TaxSummaryData {
+  group_by: "rate" | "month";
+  from: string | null;
+  to: string | null;
+  // 税率の高い順(月別は月の古い順 → 税率の高い順)
+  rows: TaxSummaryRow[];
+  totals: { tax_total: number; taxable_total: number; receipt_count: number; taxable_basis: TaxableBasis; mixed_basis: boolean };
+  coverage: {
+    transactions: { count: number; total: number };
+    with_tax_lines: { count: number; total: number };
+    // 税の内訳が無い取引(集計に含まれていない支出)
+    without_tax_lines: { count: number; total: number };
+    lines_missing_tax_amount: number;
+    lines_missing_taxable_amount: number;
+  };
+  message: string;
 }
 
 // DELETE /api/transactions/:id(?delete_photos=1 で写真もいっしょに消す。無ければ写真つきの取引は 400)

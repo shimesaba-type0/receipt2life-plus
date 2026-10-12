@@ -13,6 +13,7 @@ beforeEach(async () => {
   await e.DB.exec("DELETE FROM links");
   await e.DB.exec("DELETE FROM attachments");
   await e.DB.exec("DELETE FROM transaction_items");
+  await e.DB.exec("DELETE FROM transaction_tax_lines");
   await e.DB.exec("DELETE FROM events");
   await e.DB.exec("DELETE FROM transactions");
   // カテゴリは、テストで増減・改名するので初期データに戻す

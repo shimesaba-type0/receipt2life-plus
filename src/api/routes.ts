@@ -9,6 +9,7 @@ import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } fr
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
+import { summarizeTax } from "../core/tax-summary";
 import type { AppEnv } from "../env";
 import { noStoreJson, requireJson, sameOriginOnly, shortIdOnly } from "./guards";
 import type { FieldError } from "../core/schema";
@@ -52,6 +53,14 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.get("/api/calendar", async (c) => respond(c, await getCalendar(c.env.DB, c.req.query("month") || undefined)));
 
   app.get("/api/day/:date", async (c) => respond(c, await getDay(c.env.DB, c.req.param("date"))));
+
+  // 税率別の税額(レシートに印字された税の内訳の合計)とカバレッジ。from / to / group_by(rate / month)。空のクエリは省略扱い
+  app.get("/api/tax-summary", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["from", "to", "group_by"]) if (q[key]) input[key] = q[key];
+    return respond(c, await summarizeTax(c.env.DB, input));
+  });
 
   app.get("/api/categories", async (c) => {
     const { categories, accounts } = await listCategories(c.env.DB);

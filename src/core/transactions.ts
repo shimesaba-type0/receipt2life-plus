@@ -23,9 +23,11 @@ import {
   type TransactionInput,
 } from "./schema";
 import { ANY_TAX_FLAG, type TaxFlag } from "./tax-flags";
+import { insertTaxLineStatements, taxLineWarnings, toStoredTaxLines, type TaxLineInput, type TaxLineView, type TaxWarning } from "./tax-lines";
 import { deleteTransactionSchema, updateTransactionSchema } from "./transaction-edit-schema";
 
 export type { ItemView } from "./items";
+export type { TaxLineView, TaxWarning } from "./tax-lines";
 
 export interface CoreOptions {
   now?: Date;
@@ -45,9 +47,10 @@ export interface TransactionRow extends ReceiptDetails {
   tax_flag: TaxFlag | null;
 }
 
-// 取引の表現。items は明細(並び順。明細なしは空配列)
+// 取引の表現。items は明細(並び順。明細なしは空配列)、tax_lines は税の内訳(税率の高い順。なしは空配列)
 export interface TransactionView extends TransactionRow {
   items: ItemView[];
+  tax_lines: TaxLineView[];
 }
 
 // 登録の結果の1件。カテゴリを同じ店の直近の支出から引き継いだときだけ applied_default_category にその名前が入る
@@ -63,12 +66,13 @@ export interface DuplicateInfo {
 }
 
 export type AddResult =
-  | { ok: true; registered: RegisteredTransaction[]; skipped_duplicates: DuplicateInfo[]; message: string }
+  // tax_warnings: 税の内訳の合計が金額と合わないなどの注意(エラーにはしない。index は登録の配列の位置)
+  | { ok: true; registered: RegisteredTransaction[]; skipped_duplicates: DuplicateInfo[]; tax_warnings: TaxWarning[]; message: string }
   | { ok: false; errors: FieldError[] };
 
 export type ListResult =
-  // include_items: false のときは items を省く
-  | { ok: true; transactions: (TransactionRow & { items?: ItemView[] })[]; count: number }
+  // include_items: false のときは items と tax_lines を省く
+  | { ok: true; transactions: (TransactionRow & { items?: ItemView[]; tax_lines?: TaxLineView[] })[]; count: number }
   | { ok: false; errors: FieldError[] };
 
 interface NamedRow {
@@ -160,6 +164,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
   const statements: D1PreparedStatement[] = [];
   const seenInBatch = new Map<string, number>();
   const timestamp = now.toISOString();
+  const taxWarnings: TaxWarning[] = [];
 
   prepared.forEach(({ item, date, hash }, index) => {
     if (!item.allow_duplicate) {
@@ -181,6 +186,8 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     const applied = wantsDefaultCategory(item) ? defaults.get(normalizeMerchant(item.merchant)) : undefined;
     const category = item.category ?? applied ?? null;
     const stored = toStoredItems(item.items ?? [], categories);
+    const taxLines = toStoredTaxLines(item.tax_lines ?? []);
+    taxWarnings.push(...taxLineWarnings(item.amount, taxLines, index));
     const status = needsReview(item.merchant, category, stored.map((s) => s.view)) ? "needs_review" : "ok";
     statements.push(
       db
@@ -206,6 +213,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
           ...RECEIPT_DETAIL_KEYS.map((k) => item[k] ?? null),
         ),
       ...insertItemStatements(db, id, stored, timestamp),
+      ...insertTaxLineStatements(db, id, taxLines, timestamp),
     );
     registered.push({
       id,
@@ -220,6 +228,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
       tax_flag: item.tax_flag ?? null,
       ...detailsOf(item),
       items: stored.map((s) => s.view),
+      tax_lines: taxLines,
       ...(applied ? { applied_default_category: applied } : {}),
     });
   });
@@ -227,7 +236,8 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
   // 全件成功か全件ロールバック(D1のbatchはトランザクションとして実行される)。明細も同じ batch に入れる
   if (statements.length > 0) await db.batch(statements);
 
-  return { ok: true, registered, skipped_duplicates: skipped, message: buildMessage(registered, skipped, prepared) };
+  const message = buildMessage(registered, skipped, prepared) + (taxWarnings.length > 0 ? `。税の内訳に注意が${taxWarnings.length}件あります(tax_warnings)` : "");
+  return { ok: true, registered, skipped_duplicates: skipped, tax_warnings: taxWarnings, message };
 }
 
 /**
@@ -359,7 +369,8 @@ export interface DuplicateWarning {
 }
 
 export type UpdateResult =
-  | { ok: true; transaction: TransactionView; warnings: DuplicateWarning[]; message: string }
+  // tax_warnings: 税の内訳の合計が金額と合わないなどの注意(エラーにはしない)
+  | { ok: true; transaction: TransactionView; warnings: DuplicateWarning[]; tax_warnings: TaxWarning[]; message: string }
   | { ok: false; errors: FieldError[] };
 
 // 削除したもの。transaction は削除前の内容(明細つき)、items / photos / links はいっしょに消した件数
@@ -470,6 +481,10 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
   };
   const stored: StoredItem[] | null = replaceItems ? toStoredItems(replaceItems, categories) : null;
   next.items = stored ? stored.map((s) => s.view) : current.items;
+  // tax_lines も全置換。null と省略は「変えない」
+  const replaceTaxLines: TaxLineInput[] | null = patch.tax_lines ?? null;
+  const storedTaxLines: TaxLineView[] | null = replaceTaxLines ? toStoredTaxLines(replaceTaxLines) : null;
+  next.tax_lines = storedTaxLines ?? current.tax_lines;
 
   // 明細がある取引は、明細の合計 = 金額を保つ(金額だけ・カテゴリだけの変更でも確かめる)
   const mismatch = itemsTotalMismatch(next.amount, next.items);
@@ -510,6 +525,9 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
   if (stored) {
     statements.push(db.prepare("DELETE FROM transaction_items WHERE transaction_id = ?").bind(next.id), ...insertItemStatements(db, next.id, stored, timestamp));
   }
+  if (storedTaxLines) {
+    statements.push(db.prepare("DELETE FROM transaction_tax_lines WHERE transaction_id = ?").bind(next.id), ...insertTaxLineStatements(db, next.id, storedTaxLines, timestamp));
+  }
   // 取引と明細の置き換えは、1回の batch(全部成功か全部ロールバック)
   await db.batch(statements);
 
@@ -523,9 +541,11 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
     message: `取引 ${d.id} と同じ日・金額・店です。重複登録の可能性があります。重複なら delete_transaction で片方を削除してください`,
   }));
 
+  const taxWarnings = taxLineWarnings(next.amount, next.tax_lines);
   const itemNote = stored ? `(明細${stored.length}行${stored.length === 0 ? "。明細を消しました" : "に置き換えました"})` : "";
-  const message = `更新しました: ${label(next)}${itemNote}${warnings.length > 0 ? `。重複の疑いが${warnings.length}件あります` : ""}`;
-  return { ok: true, transaction: next, warnings, message };
+  const taxNote = storedTaxLines ? `(税の内訳${storedTaxLines.length === 0 ? "を消しました" : `${storedTaxLines.length}行に置き換えました`})` : "";
+  const message = `更新しました: ${label(next)}${itemNote}${taxNote}${warnings.length > 0 ? `。重複の疑いが${warnings.length}件あります` : ""}${taxWarnings.length > 0 ? `。税の内訳に注意が${taxWarnings.length}件あります(tax_warnings)` : ""}`;
+  return { ok: true, transaction: next, warnings, tax_warnings: taxWarnings, message };
 }
 
 export interface DeleteTransactionOptions {
@@ -569,6 +589,8 @@ export async function deleteTransaction(db: D1Database, input: unknown, options:
     db.prepare("DELETE FROM attachments WHERE transaction_id = ?").bind(id),
     db.prepare("DELETE FROM links WHERE transaction_id = ?").bind(id),
     db.prepare("DELETE FROM transaction_items WHERE transaction_id = ?").bind(id),
+    // 税の内訳は ON DELETE CASCADE でも消えるが、明細と同じく明示して消す
+    db.prepare("DELETE FROM transaction_tax_lines WHERE transaction_id = ?").bind(id),
     db.prepare("DELETE FROM transactions WHERE id = ?").bind(id),
   ]);
   const deleted: DeletedTransaction = { transaction: current, items: current.items.length, photos: photos.length, links: linkCount?.n ?? 0 };
