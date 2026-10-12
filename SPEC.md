@@ -127,7 +127,7 @@ receipt2life/
 
 Streamable HTTPで、ステートレスに実装する。ツールの説明文とスキーマがAIへの仕様書になるので、項目の意味、必須と任意、選べる値を必ず書く。
 
-現在は19個(取引4、集計・参照2、カテゴリ管理4、出来事3、写真3、リンク3)。`src/mcp/tools/*` が正。
+現在は22個(取引4、集計・参照2、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3)。`src/mcp/tools/*` が正。
 
 | ツール | 役割 |
 | --- | --- |
@@ -137,10 +137,11 @@ Streamable HTTPで、ステートレスに実装する。ツールの説明文�
 | summarize | 期間と group_by(category、group、month、merchant、event_id、tax_flag)で集計。単位は支出の行。件数、合計、全体に対する割合 |
 | list_categories | AIが既存カテゴリに寄せるために使う。大分類ごとのまとまりと使用数つき |
 | add_category / update_category / delete_category / rename_group | カテゴリ(大分類の下のサブカテゴリ)の管理 |
+| add_account / update_account / delete_account | 口座(支払方法)の管理。未知の口座名での登録はエラーのまま(自動追加しない) |
 | add_event / update_event / list_events | 日付や期間のメモ(色つき) |
 | create_photo_upload_link / list_photos / get_photos | 写真の登録は Web UI の /photos/add へのリンクを返す。一覧と画像の取得 |
 | add_link / list_links / delete_link | Xの投稿・YouTubeの動画のリンク |
-| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール19個には含まれない。入れるかは第13節の未決事項 |
+| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール22個には含まれない。入れるかは第13節の未決事項 |
 
 - **重複**: dedup_hash が既存と一致したら、登録せずに既存のIDを返して警告する。同日同額の正当な購入があり得るので、`allow_duplicate: true` で強制登録できるようにする
 - **検証**: 金額は整数、日付はISO形式、未来日付と極端な金額は拒否。エラーは何が悪いかを文章で返し、AIが直して再送できるようにする
@@ -340,3 +341,10 @@ backup/
   - キー: 英小文字の31個(食事・カフェ・食料品・日用品・電車/バス・タクシー・クルマ・ガソリン・交際・娯楽/音楽・映画・教育・本・服・美容・医療・保険・通信・水道/光熱・住まい・税金・大型出費・旅行・贈り物・子ども・ペット・スポーツ・趣味・サブスク・金融・その他)。正は `src/core/category-icons.ts` の `CATEGORY_ICONS`(Zodのスキーマ1つで検証。一覧にない値は選べるキーを日本語で返してエラー)。UI(`ui/src/categoryIcons.ts`)に同じ一覧を持ち、テストで一致を確かめる。キーを足すときは core・UI・絵(`ui/src/categoryIconPaths.ts`)・contract の型・MCPの説明(自動)をそろえる
   - 入出力: `add_category` / `update_category`(MCP)と `POST` / `PATCH /api/categories` に `icon`。省略は新規なら NULL、更新なら変えない。更新は null で外せる。今と同じアイコンだけの更新は「変更なし」のエラー。`list_categories` と `GET /api/categories` の各カテゴリに `icon`(NULL可)。MCP の説明に「キー=意味」の一覧を載せ、AI が名前に合うアイコンを選んで付ける。JSONL はカテゴリを名前で出すのでアイコンは含めず、復元で自動作成されるカテゴリは NULL
   - 画面: 絵は自作の線画(24px、`currentColor`、`aria-hidden`)。NULL・未知のキーは「その他」(・・・)。`/categories` は行の先頭に36pxの丸のアイコンと、追加・編集フォームのアイコン選択(5列のボタン、`aria-pressed`、選んだものをもう一度押すと外れる)。支出の行・明細・ホームの最近の記録のカテゴリには、16pxのアイコンを文字の前に付ける(文字は残す)。カテゴリの select の option にはアイコンを付けない。ホームの大分類別の内訳は色の丸のまま。アイコンは `GET /api/categories` の結果(名前→icon)から引く。一覧を読めない・一覧にないカテゴリ名のときは文字だけで表示する(Home は自分で1回読み込む)
+- フェーズ5(口座の管理): 口座(支払方法。`accounts`)を、カテゴリと同じ作りで MCP と Web UI から追加・名前変更・削除できる(ユーザー指示)。以下、項目ごと
+  - ツール: `add_account` / `update_account`(名前変更) / `delete_account`(MCP。ツールは19個から22個に)。API は `POST /api/accounts`、`PATCH /api/accounts/:name`、`DELETE /api/accounts/:name?move_to=`、一覧は `GET /api/accounts`(`{name, usage}[]`)。口座は名前で指す(カテゴリと同じ。名前の「.」だけは不可)。ロジックは `src/core/accounts.ts`、検証はZodのスキーマ1つ。`GET /api/categories` の `accounts`(`string[]`)と `list_categories` の `accounts` は変えない
+  - 名前: 前後の空白を除く・空不可・30文字まで(カテゴリ名と同じ規則)・重複不可。名前の変更は、取引が口座のIDで参照しているので表示に自動で反映される(取引の更新・`status`・`dedup_hash` への影響なし)。今と同じ名前への変更はエラー
+  - 削除: カテゴリの流儀に合わせる。使っている取引が無ければ削除。あるのに `move_to` が無ければ拒否(件数を返す)。`move_to` があれば、取引の口座を付け替えてから削除する(NULL にはしない)。存在しない `move_to` ・自分自身はエラー。カテゴリと違い「最後の1つは削除できない」とはしない(取引の口座は任意で、使われていなければ消しても取引に影響しないため)
+  - 未知の口座名は今までどおりエラー(選べる値を示す)。自動追加はしない。AI向けの説明には「利用者に確認してから追加する」「表記ゆれ(現金とげんきん)で増やさない」「先に `list_categories` で既存を確かめる」と書いた
+  - 画面: `/categories` の下に「支払方法」のカードを足した。行の見た目・編集・2段階の削除確認・移し先の選択はカテゴリと同じ(44px以上のタップ領域)。純粋な部分は `ui/src/pages/accountsLogic.ts`。使っているのに他に口座が無いときは、先に別の口座を追加するよう案内して削除をふさぐ
+  - テスト基盤: 各テストの前に口座も初期データ(現金・カード・Suica)に戻す(`tests/setup.ts`)

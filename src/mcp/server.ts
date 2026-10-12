@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerAccountTools } from "./tools/accounts";
 import { registerCategoryTools } from "./tools/categories";
 import { registerEventTools } from "./tools/events";
 import { registerLinkTools } from "./tools/links";
@@ -11,6 +12,7 @@ export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string
   const server = new McpServer({ name: "receipt2life", version: "0.1.0" });
   registerTransactionTools(server, db, bucket);
   registerCategoryTools(server, db);
+  registerAccountTools(server, db);
   registerEventTools(server, db);
   registerReportTools(server, db);
   registerPhotoTools(server, db, bucket, origin);

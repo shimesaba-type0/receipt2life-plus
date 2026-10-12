@@ -17,6 +17,7 @@ import {
   validateName,
   type GroupView,
 } from "./categoriesLogic";
+import { AccountsSection } from "./AccountsSection";
 import "./Categories.css";
 
 // いま開いているフォーム(同時に1つだけ)
@@ -152,6 +153,8 @@ export function Categories() {
           )}
         </>
       )}
+
+      <AccountsSection />
     </section>
   );
 }

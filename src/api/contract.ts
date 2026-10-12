@@ -200,6 +200,35 @@ export interface CategoryDeleted {
   message: string;
 }
 
+// GET /api/accounts(口座の管理画面用。GET /api/categories の accounts は名前だけの string[] のまま)
+// accounts は追加順。usage はその口座を使っている取引の件数
+export interface AccountView {
+  name: string;
+  usage: number;
+}
+
+export interface AccountsData {
+  accounts: AccountView[];
+}
+
+// POST /api/accounts の入力。戻りは account と message
+export interface NewAccount {
+  name: string;
+}
+
+// PATCH /api/accounts/:name の入力(パスの name が対象)。戻りは account と message
+export interface AccountPatch {
+  new_name: string;
+}
+
+// DELETE /api/accounts/:name?move_to= の戻り(使用中は move_to が必要)
+export interface AccountDeleted {
+  deleted: { name: string };
+  moved: number;
+  move_to: string | null;
+  message: string;
+}
+
 // 明細の入力(add_transactions / update_transaction の items の1行)
 export interface NewItem {
   // 品名(100文字まで)

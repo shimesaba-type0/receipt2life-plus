@@ -40,13 +40,14 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 1. 「500円のコーヒーを、現金で、今日付けで登録して」 → 「1件登録しました: …」と返る
 2. 「今月の取引を一覧して」
 
-## 使えるツール(19個)
+## 使えるツール(22個)
 
 | ツール | 役割 |
 | --- | --- |
 | `add_transactions` / `list_transactions` / `update_transaction` / `delete_transaction` | 取引の登録・一覧・修正・削除。明細(レシートの行)や、レシートの情報(時刻・電話・住所・登録番号など)つきで登録・修正できる。一覧は `keyword` で探せる。削除は `delete_photos` で写真もいっしょに |
 | `summarize` / `list_categories` | 集計(明細があれば行ごとのカテゴリ・フラグで数える)、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
 | `add_category` / `update_category` / `delete_category` / `rename_group` | カテゴリの管理。Zaim のように大分類の下にサブカテゴリを作る(アイコンつき)・名前や大分類やアイコンを変える・削除(使用中は `move_to` で支出を移す)・大分類の名前を変える |
+| `add_account` / `update_account` / `delete_account` | 口座(支払方法。現金・カードなど)の管理。追加・名前の変更・削除(使用中は `move_to` で支出を移す)。AI は利用者に確認してから使い、先に `list_categories` の `accounts` で既存を確かめて、表記ゆれで増やさない |
 | `add_event` / `update_event` / `list_events` | 日付や期間のメモ(出来事) |
 | `create_photo_upload_link` | 写真のアップロード用リンクを作る |
 | `list_photos` | 写真のメタ情報(id、日付、紐づけ先、説明、種類、サイズ)の一覧 |
@@ -121,7 +122,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 - `list_photos`: 読み取りだけ
 - `get_photos`: 読み取りだけ
 
-`list_transactions` / `list_events` / `list_categories` / `summarize` も読み取りだけです。データを変える・消すもの(`add_transactions`、`update_transaction`、`delete_transaction`(`delete_photos` を付けると写真も消える)、`add_event`、`update_event`、`add_category`、`update_category`、`delete_category`、`rename_group`)は、内容を見て許可するのがおすすめです。特に `delete_transaction` と `delete_category` は取り消せません。削除系は、毎回確認が出てかまいません(「常に許可」にしない)。
+`list_transactions` / `list_events` / `list_categories` / `summarize` も読み取りだけです。データを変える・消すもの(`add_transactions`、`update_transaction`、`delete_transaction`(`delete_photos` を付けると写真も消える)、`add_event`、`update_event`、`add_category`、`update_category`、`delete_category`、`rename_group`、`add_account`、`update_account`、`delete_account`)は、内容を見て許可するのがおすすめです。特に `delete_transaction`、`delete_category`、`delete_account` は取り消せません。削除系は、毎回確認が出てかまいません(「常に許可」にしない)。
 
 ## カテゴリを増やす
 
@@ -131,6 +132,15 @@ Zaim のように、大分類の下にサブカテゴリを作れます。例: �
 - アイコン: `add_category` / `update_category` の `icon` に、アイコンのキーを渡す(`update_category` は `null` で外す)。AI は名前に合うものを選ぶ(「タクシー」→ `taxi`)。`list_categories` の戻りの各カテゴリにも `icon` が入る(未設定は `null`)。選べるキー(キー=意味): `food`=食事、`cafe`=カフェ、`grocery`=食料品、`daily`=日用品、`transit`=電車・バス、`taxi`=タクシー、`car`=クルマ、`fuel`=ガソリン、`social`=交際、`entertainment`=娯楽・音楽、`movie`=映画、`education`=教育・教養、`book`=本、`clothes`=服、`beauty`=美容、`medical`=医療、`insurance`=保険、`phone`=通信、`utility`=水道・光熱、`home`=住まい、`tax`=税金、`bigspend`=大型出費、`travel`=旅行、`gift`=贈り物、`kids`=子ども、`pet`=ペット、`sports`=スポーツ、`hobby`=趣味、`subscription`=サブスク、`bank`=金融、`other`=その他。一覧にない値はエラー(選べるキーが返る)
 - 整理: `update_category`(名前の変更・大分類の移動)、`rename_group`(大分類の名前の変更。既存の大分類と同名にすると統合)、`delete_category`(使っている支出があるときは `move_to` に移し先を指定する。AI は先に `list_categories` の `usage` を見る)
 - 画面の `/categories`(ナビの「カテゴリ」)でも同じことができます
+
+## 口座(支払方法)を増やす
+
+「Suica のほかに『PayPay』の支払方法を作って」 → `add_account` で作ったあと、「500円のコーヒーを PayPay で登録して」で `add_transactions` の `account` に使われます。未知の口座名は自動では増えず、エラー(選べる値つき)になります。
+
+- AI は、利用者に確認してから追加します。先に `list_categories` の `accounts` で既存を見て、「現金」と「げんきん」のような表記ゆれで増やしません
+- 名前は全体で一意(30文字まで)。`update_account` で名前を変えると、その口座を使っている支出の表示も自動で新しい名前になります
+- `delete_account`: 使っている支出があるときは `move_to` に移し先の口座を指定します(支出そのものは消えません)
+- 画面の `/categories` の「支払方法」でも同じことができます
 
 ## うまくいかないとき
 

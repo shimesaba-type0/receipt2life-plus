@@ -19,7 +19,8 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `GET /api/calendar?month=YYYY-MM` | `CalendarData`: その月の日別の合計・件数・写真枚数(取引のある日だけ)、その月と重なる出来事。`month` 省略は今月 |
 | `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの) |
 | `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
-| `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`icon`=アイコンのキー(未設定は `null`)、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名 |
+| `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`icon`=アイコンのキー(未設定は `null`)、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名(`accounts: string[]`。口座の件数つきの一覧は `GET /api/accounts`) |
+| `GET /api/accounts` | `AccountsData`: 口座(支払方法)の一覧(`accounts: {name, usage}[]`。`usage`=使っている取引の件数。追加順) |
 
 ## 取引
 
@@ -92,6 +93,22 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - `icon` は `src/core/category-icons.ts` の31個のキー(`food`, `cafe`, … `other`。一覧とラベルは `docs/connect-claude.md`)のどれか。一覧にない値は 400(`field: "icon"`、選べるキーを日本語で返す)。省略は未設定(`null`。画面では `other` と同じ見た目)。PATCH で省略すると変えない、`null` で外す
 - カテゴリの名前・大分類を変えても、取引の `category_id` 参照は変わらないので、取引の `status` / `dedup_hash` への影響はない
 - JSON を受ける POST / PATCH は `application/json` 以外を 415、書き込みは同一オリジンのみ(他は取引・出来事と同じ)。応答は `Cache-Control: private, no-store`
+
+## 口座(支払方法)
+
+現金・カード・Suica など。取引の `account` は口座の名前で引く(`name` は全体で一意)。未知の口座名での登録・修正は今までどおりエラー(選べる値を返す)で、自動では増えない。ロジックは `src/core/accounts.ts`(MCP の `add_account` / `update_account` / `delete_account` と同じ関数)。
+
+| メソッド・パス | 入力 | 戻り |
+| --- | --- | --- |
+| `POST /api/accounts` | `NewAccount`(`name` 30文字まで。前後の空白は除く) | `account`, `message` |
+| `PATCH /api/accounts/:name` | `AccountPatch`(`new_name`。必須) | `account`, `message` |
+| `DELETE /api/accounts/:name?move_to=` | なし | `deleted`, `moved`, `move_to`, `message` |
+
+- `:name` は URL エンコードした口座名。パスの `name` が本文の `name` に優先する
+- 名前の重複・空・長すぎる・変更なしは 400(`field` は `name` / `new_name`)。存在しない口座(`name`)は 404。`move_to` が存在しない・自分自身は 400
+- 名前の変更は、取引が口座のIDで参照しているので、取引の表示に自動で反映される
+- 削除: 取引が1件も使っていなければそのまま削除。使っているのに `move_to` が無ければ 400(「N件の支出が使っています。move_to で移し先の口座を指定してください」)。`move_to` があれば取引の口座を付け替えてから削除(1回のバッチ)。カテゴリと違い、最後の1つでも(使われていなければ)削除できる(取引の口座は任意のため)
+- JSON を受ける POST / PATCH は `application/json` 以外を 415、書き込みは同一オリジンのみ。応答は `Cache-Control: private, no-store`
 
 ## 出来事(日付や期間のメモ)
 

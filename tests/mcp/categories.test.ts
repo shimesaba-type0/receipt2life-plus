@@ -26,8 +26,8 @@ describe("MCP のカテゴリ管理", () => {
     const tools = r.body.result.tools as { name: string; description: string }[];
     const names = tools.map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(["add_category", "update_category", "delete_category", "rename_group", "list_categories"]));
-    // 15個 + カテゴリ管理の4つ
-    expect(tools).toHaveLength(19);
+    // 15個 + カテゴリ管理の4つ + 口座管理の3つ
+    expect(tools).toHaveLength(22);
     const get = (n: string) => tools.find((t) => t.name === n)!.description;
     expect(get("add_category")).toContain("大分類");
     expect(get("add_category")).toContain("add_transactions");
@@ -99,5 +99,40 @@ describe("MCP のカテゴリのアイコン", () => {
     const r = await callTool("add_category", { name: "謎", group_name: "その他", icon: "rocket" });
     expect(r.body.result.isError).toBe(true);
     expect(JSON.stringify(r.body.result)).toContain("taxi=タクシー");
+  });
+});
+
+describe("MCP の口座管理", () => {
+  it("3つのツールがあり、説明に確認・表記ゆれ・list_categories が書かれている", async () => {
+    const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string }[];
+    const get = (n: string) => tools.find((t) => t.name === n)?.description ?? "";
+    expect(get("add_account")).toContain("利用者に確認");
+    expect(get("add_account")).toContain("表記ゆれ");
+    expect(get("add_account")).toContain("list_categories");
+    expect(get("update_account")).toContain("new_name");
+    expect(get("delete_account")).toContain("move_to");
+  });
+
+  it("追加 → 名前変更 → 登録に使う → 削除(使用中は move_to が必要)", async () => {
+    expect(text(await callTool("add_account", { name: "電子マネーA" }))).toMatchObject({ ok: true, account: { name: "電子マネーA", usage: 0 } });
+    expect(text(await callTool("list_categories", {})).accounts).toContain("電子マネーA");
+    expect(text(await callTool("update_account", { name: "電子マネーA", new_name: "電子マネーB" }))).toMatchObject({ ok: true, account: { name: "電子マネーB" } });
+
+    const tx = await callTool("add_transactions", { transactions: [{ amount: 300, merchant: "A店", category: "食費", account: "電子マネーB" }] });
+    expect(text(tx)).toMatchObject({ ok: true, registered: [{ account: "電子マネーB" }] });
+
+    const refused = await callTool("delete_account", { name: "電子マネーB" });
+    expect(refused.body.result.isError).toBe(true);
+    expect(text(refused).errors[0].message).toContain("move_to");
+    expect(text(await callTool("delete_account", { name: "電子マネーB", move_to: "現金" }))).toMatchObject({ ok: true, moved: 1, move_to: "現金" });
+  });
+
+  it("重複・未知の口座・空はエラー(isError)。未知の口座名での登録は従来どおりエラー", async () => {
+    expect((await callTool("add_account", { name: "現金" })).body.result.isError).toBe(true);
+    expect((await callTool("add_account", { name: "" })).body.result.isError).toBe(true);
+    expect((await callTool("update_account", { name: "なし", new_name: "x" })).body.result.isError).toBe(true);
+    expect((await callTool("delete_account", { name: "なし" })).body.result.isError).toBe(true);
+    const tx = await callTool("add_transactions", { transactions: [{ amount: 300, merchant: "A店", category: "食費", account: "未登録" }] });
+    expect(tx.body.result.isError).toBe(true);
   });
 });
