@@ -207,6 +207,8 @@ export interface HomeData {
   groups: SummaryRow[];
   // メモ(memo)がある取引の割合
   memo: { with_memo: number; total: number; percent: number };
+  // 今月(month と同じ範囲)の割引。レシートに印字された割引行(マイナスの明細)だけの合計(正の円)と行数
+  discounts: { month_total: number; month_line_count: number };
   // status が needs_review の取引の件数
   needs_review: number;
   // 直近の取引(日付の新しい順、最大5件)
@@ -397,6 +399,32 @@ export interface TransactionPatch {
   items?: NewItem[] | null;
   // 税の内訳の全置換。省略または null で変えない、[] で全部消す
   tax_lines?: NewTaxLine[] | null;
+}
+
+// GET /api/discounts?from=&to=&group_by=(none / merchant / category / month。既定 none)
+// 数えるのは、レシートに印字された割引行(amount < 0 の明細)だけ。明細のない取引のマイナスは数えない
+export interface DiscountRow {
+  key: string;
+  // 割引の合計(正の円)
+  total: number;
+  line_count: number;
+  receipt_count: number;
+}
+
+export interface DiscountsData {
+  group_by: "none" | "merchant" | "category" | "month";
+  from: string | null;
+  to: string | null;
+  // 割引の合計(正の円)
+  total: number;
+  line_count: number;
+  // 割引の行を持つ取引(レシート)の件数
+  receipt_count: number;
+  // 同じ期間の支出の合計(割合の参考)
+  spend_total: number;
+  // group_by=none のときは空。merchant・category は合計の大きい順、month は古い順
+  rows: DiscountRow[];
+  message: string;
 }
 
 // GET /api/tax-summary?from=&to=&group_by=(rate / month。既定 rate)

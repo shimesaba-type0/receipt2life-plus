@@ -1,5 +1,6 @@
 // ホーム画面の表示ロジック(DOMに触れない純関数。テストする)
 import type { HomeData, SummaryRow, TransactionView } from "../../../src/api/contract";
+import { formatYen } from "../format";
 
 // 内訳バーの色。主色の濃淡 → 砂色 → 灰。出来事の色(赤橙緑青紫)と混ざらないようにする
 export const GROUP_COLORS = ["#1F5C4B", "#5E9C86", "#A9CDBF", "#C9B27A", "#B8BEBB", "#9CA5A1"] as const;
@@ -113,4 +114,30 @@ export function monthRangeLabel(from: string, today: string): string {
 export function shortDate(date: string): string {
   const [, m, d] = date.split("-");
   return m && d ? `${Number(m)}/${Number(d)}` : date;
+}
+
+export interface DiscountsView {
+  // 今月の割引がないか(合計0かつ行数0)
+  empty: boolean;
+  // 「¥1,230」。ないときは空
+  amountText: string;
+  // 「3件の割引」。ないときは「今月の割引はまだありません」
+  countText: string;
+  // 小さな補足。数えられるのは印字された割引行だけ
+  note: string;
+  ariaLabel: string;
+}
+
+export const DISCOUNTS_NOTE = "印字された割引行のみ";
+
+// ホームの「今月の割引」カードの表示用。値が不正(負・小数・欠け)でも壊れないようにする
+export function discountsView(discounts: HomeData["discounts"] | undefined): DiscountsView {
+  const total = Number.isFinite(discounts?.month_total) ? Math.max(0, Math.round(discounts?.month_total ?? 0)) : 0;
+  const lines = Number.isFinite(discounts?.month_line_count) ? Math.max(0, Math.round(discounts?.month_line_count ?? 0)) : 0;
+  if (lines === 0 && total === 0) {
+    return { empty: true, amountText: "", countText: "今月の割引はまだありません", note: DISCOUNTS_NOTE, ariaLabel: "今月の割引はまだありません" };
+  }
+  const amountText = formatYen(total);
+  const countText = `${lines}件の割引`;
+  return { empty: false, amountText, countText, note: DISCOUNTS_NOTE, ariaLabel: `今月の割引 ${amountText}、${countText}` };
 }

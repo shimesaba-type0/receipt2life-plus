@@ -1,6 +1,7 @@
 import { monthRange } from "./calendar";
 import { todayJst } from "./dates";
 import type { FieldError } from "./schema";
+import { summarizeDiscounts } from "./discounts";
 import { summarize, type SummaryRow } from "./summarize";
 import { withItems } from "./items";
 import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionRow, type TransactionView } from "./transactions";
@@ -11,6 +12,8 @@ export interface HomeResult {
   month: { month: string; from: string; to: string; total: number; count: number };
   groups: SummaryRow[];
   memo: { with_memo: number; total: number; percent: number };
+  // 今月の割引(レシートに印字された割引行だけ。月の範囲は month と同じ)
+  discounts: { month_total: number; month_line_count: number };
   needs_review: number;
   recent: TransactionView[];
 }
@@ -22,8 +25,9 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
   const month = today.slice(0, 7);
   const { from, to } = monthRange(month);
 
-  const [byGroup, todayRow, memoRow, review, recent] = await Promise.all([
+  const [byGroup, discounts, todayRow, memoRow, review, recent] = await Promise.all([
     summarize(db, { from, to, group_by: "group" }),
+    summarizeDiscounts(db, { from, to }),
     db
       .prepare("SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE date = ?")
       .bind(today)
@@ -48,6 +52,7 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
       .all<TransactionRow>(),
   ]);
   if (!byGroup.ok) return byGroup;
+  if (!discounts.ok) return discounts;
 
   const memoTotal = memoRow?.total ?? 0;
   const withMemo = memoRow?.with_memo ?? 0;
@@ -57,6 +62,7 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
     month: { month, from, to, total: byGroup.total, count: byGroup.count },
     groups: byGroup.rows,
     memo: { with_memo: withMemo, total: memoTotal, percent: memoTotal === 0 ? 0 : Math.round((withMemo / memoTotal) * 1000) / 10 },
+    discounts: { month_total: discounts.total, month_line_count: discounts.line_count },
     needs_review: review?.n ?? 0,
     recent: await withItems(db, recent.results),
   };

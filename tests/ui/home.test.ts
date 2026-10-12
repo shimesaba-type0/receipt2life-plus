@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HomeData, SummaryRow, TransactionView } from "../../src/api/contract";
-import { GROUP_COLORS, barSegments, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, percentOf, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "../../ui/src/pages/homeLogic";
+import { DISCOUNTS_NOTE, GROUP_COLORS, barSegments, discountsView, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, percentOf, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "../../ui/src/pages/homeLogic";
 
 const row = (key: string, total: number, percent: number): SummaryRow => ({ key, label: key, count: 1, total, percent });
 const tx = (over: Partial<TransactionView>): TransactionView => ({
@@ -9,7 +9,7 @@ const tx = (over: Partial<TransactionView>): TransactionView => ({
 const home = (over: Partial<HomeData> = {}): HomeData => ({
   today: { date: "2026-10-11", total: 0, count: 0 },
   month: { month: "2026-10", from: "2026-10-01", to: "2026-10-31", total: 0, count: 0 },
-  groups: [], memo: { with_memo: 0, total: 0, percent: 0 }, needs_review: 0, recent: [], ...over,
+  groups: [], memo: { with_memo: 0, total: 0, percent: 0 }, discounts: { month_total: 0, month_line_count: 0 }, needs_review: 0, recent: [], ...over,
 });
 
 describe("formatPercent / percentOf", () => {
@@ -90,5 +90,29 @@ describe("要確認・最近の記録", () => {
   it("空の判定", () => {
     expect(isEmptyHome(home())).toBe(true);
     expect(isEmptyHome(home({ recent: [tx({})] }))).toBe(false);
+  });
+});
+
+describe("discountsView(今月の割引カード)", () => {
+  it("金額と件数と注記", () => {
+    const v = discountsView({ month_total: 1230, month_line_count: 3 });
+    expect(v.empty).toBe(false);
+    expect(v.amountText).toBe("¥1,230");
+    expect(v.countText).toBe("3件の割引");
+    expect(v.note).toBe(DISCOUNTS_NOTE);
+    expect(v.note).toContain("印字された割引行のみ");
+    expect(v.ariaLabel).toBe("今月の割引 ¥1,230、3件の割引");
+  });
+  it("割引がないときは「今月の割引はまだありません」", () => {
+    const v = discountsView(home().discounts);
+    expect(v.empty).toBe(true);
+    expect(v.countText).toBe("今月の割引はまだありません");
+    expect(v.amountText).toBe("");
+    expect(v.note).toBe(DISCOUNTS_NOTE);
+  });
+  it("不正な値は0として扱う", () => {
+    expect(discountsView(undefined).empty).toBe(true);
+    expect(discountsView({ month_total: -5, month_line_count: NaN }).empty).toBe(true);
+    expect(discountsView({ month_total: 100, month_line_count: 0 }).countText).toBe("0件の割引");
   });
 });

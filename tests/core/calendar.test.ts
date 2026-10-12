@@ -116,6 +116,24 @@ describe("getHome", () => {
     expect(res.recent).toHaveLength(6);
   });
 
+  it("今月の割引(印字された割引行の合計と行数)。月の外の割引は数えない", async () => {
+    await tx([
+      { date: "2026-10-02", amount: 900, merchant: "A店", category: "食費", items: [{ name: "品", amount: 1000 }, { name: "値引", amount: -100 }] },
+      { date: "2026-09-30", amount: 800, merchant: "B店", category: "食費", items: [{ name: "品", amount: 1000 }, { name: "割引", amount: -200 }] },
+    ]);
+    const res = await getHome(db(), { now: NOW });
+    if (!res.ok) throw new Error("home");
+    expect(res.discounts).toEqual({ month_total: 100, month_line_count: 1 });
+    expect(res.month.total).toBe(900);
+  });
+
+  it("割引がなければ今月の割引は0", async () => {
+    await tx([{ date: "2026-10-02", amount: 900, merchant: "A店", category: "食費" }]);
+    const res = await getHome(db(), { now: NOW });
+    if (!res.ok) throw new Error("home");
+    expect(res.discounts).toEqual({ month_total: 0, month_line_count: 0 });
+  });
+
   it("最近の記録は、購入日ではなく登録した順(新しい順)に並ぶ", async () => {
     await tx([
       { date: "2026-10-11", amount: 500, merchant: "新しい日付の店" },

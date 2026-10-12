@@ -1,5 +1,6 @@
 import { spendLines } from "./items";
-import { summarizeSchema, type GroupBy } from "./report-schema";
+import { summarizeDiscounts, type SummarizeDiscountsResult } from "./discounts";
+import { summarizeSchema, summarizeToolSchema, type GroupBy } from "./report-schema";
 import { NO_TAX_FLAG_LABEL, TAX_FLAG_LABELS, type TaxFlag } from "./tax-flags";
 import { toFieldErrors, type FieldError } from "./schema";
 
@@ -45,6 +46,15 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 // 支出の行の日付が出来事の範囲(start_date〜end_date、なければ単日)に入る、という条件
 const IN_EVENT = "l.date >= e.start_date AND l.date <= COALESCE(e.end_date, e.start_date)";
+
+// MCP の summarize の入口。discounts_only: true なら割引の集計(summarizeDiscounts)、それ以外は従来の summarize
+// 従来の入力・返り値は変えない(discounts_only を付けなければ、これまでと同じ結果)
+export async function summarizeForTool(db: D1Database, input: unknown): Promise<SummarizeResult | SummarizeDiscountsResult> {
+  const parsed = summarizeToolSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const { discounts_only: discountsOnly, ...rest } = parsed.data;
+  return discountsOnly ? summarizeDiscounts(db, rest) : summarize(db, rest);
+}
 
 export async function summarize(db: D1Database, input: unknown): Promise<SummarizeResult> {
   const parsed = summarizeSchema.safeParse(input ?? {});

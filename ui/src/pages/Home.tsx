@@ -6,7 +6,7 @@ import { chipIcon } from "../categoryIcons";
 import { CATEGORY_ICON, TAX_ICON } from "../components/Nav";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
-import { barSegments, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
+import { barSegments, discountsView, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
 import "./Home.css";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: HomeData };
@@ -106,6 +106,7 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
   const { data, cats } = props;
   const segments = barSegments(data.groups);
   const memo = memoView(data.memo);
+  const discounts = discountsView(data.discounts);
   const range = monthRangeLabel(data.month.from, data.today.date);
 
   return (
@@ -196,6 +197,21 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
           <div class="home__meter" role="img" aria-label={memo.text}>
             <span class="home__meter-fill" style={{ width: `${memo.percent}%` }} />
           </div>
+        </section>
+
+        <section class="card home__discounts" aria-label="今月の割引">
+          <span class="home__label">今月の割引</span>
+          {discounts.empty ? (
+            <span class="home__discounts-empty">{discounts.countText}</span>
+          ) : (
+            <>
+              <span class="home__discounts-amount num" aria-label={discounts.ariaLabel}>
+                {discounts.amountText}
+              </span>
+              <span class="home__label num">{discounts.countText}</span>
+            </>
+          )}
+          <span class="home__discounts-note">{discounts.note}</span>
         </section>
 
         <section class="home__recent-section" aria-label="最近の記録">

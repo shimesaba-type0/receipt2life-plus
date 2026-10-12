@@ -3,6 +3,7 @@ import { getCalendar, getDay } from "../core/calendar";
 import { addAccount, deleteAccount, listAccounts, updateAccount } from "../core/accounts";
 import { addCategory, deleteCategory, listCategories, renameGroup, updateCategory } from "../core/categories";
 import { addEvent, deleteEvent, updateEvent } from "../core/events";
+import { summarizeDiscounts } from "../core/discounts";
 import { getHome } from "../core/home";
 import { listMerchants } from "../core/merchants";
 import { addLink, deleteLink, updateLink } from "../core/links";
@@ -61,6 +62,14 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
     const input: Record<string, unknown> = {};
     for (const key of ["from", "to", "group_by"]) if (q[key]) input[key] = q[key];
     return respond(c, await summarizeTax(c.env.DB, input));
+  });
+
+  // 割引の集計(レシートに印字された割引行だけ)。from / to / group_by(none / merchant / category / month。既定 none)。空のクエリは省略扱い
+  app.get("/api/discounts", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["from", "to", "group_by"]) if (q[key]) input[key] = q[key];
+    return respond(c, await summarizeDiscounts(c.env.DB, input));
   });
 
   // 店名の候補(過去の取引から店名ごとにまとめる)。q / category / limit。空のクエリは省略扱い。limit は数値にして検証に渡す

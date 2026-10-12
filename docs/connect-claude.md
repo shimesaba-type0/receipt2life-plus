@@ -45,7 +45,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 | ツール | 役割 |
 | --- | --- |
 | `add_transactions` / `list_transactions` / `update_transaction` / `delete_transaction` | 取引の登録・一覧・修正・削除。明細(レシートの行)や、レシートの情報(時刻・電話・住所・登録番号など)つきで登録・修正できる。一覧は `keyword` で探せる。削除は `delete_photos` で写真もいっしょに |
-| `summarize` / `list_categories` | 集計(明細があれば行ごとのカテゴリ・フラグで数える)、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
+| `summarize` / `list_categories` | 集計(明細があれば行ごとのカテゴリ・フラグで数える。`discounts_only: true` で割引だけの集計)、カテゴリと口座の一覧(カテゴリは大分類ごとのまとまりと、使っている支出の件数 `usage` つき) |
 | `summarize_tax` | レシートに印字された消費税額を、期間ごとに税率別(`group_by: "rate"`。既定)または月別×税率別(`"month"`)に合計する。税の内訳が無い支出の件数・金額(カバレッジ)も返す |
 | `add_category` / `update_category` / `delete_category` / `rename_group` | カテゴリの管理。Zaim のように大分類の下にサブカテゴリを作る(アイコンつき)・名前や大分類やアイコンを変える・削除(使用中は `move_to` で支出を移す)・大分類の名前を変える |
 | `add_account` / `update_account` / `delete_account` | 口座(支払方法。現金・カードなど)の管理。追加・名前の変更・削除(使用中は `move_to` で支出を移す)。AI は利用者に確認してから使い、先に `list_categories` の `accounts` で既存を確かめて、表記ゆれで増やさない |
@@ -86,6 +86,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 - カテゴリを省略すると、同じ店の直近の支出のカテゴリが自動で使われる(結果の `applied_default_category` に出る。違えば「カテゴリを直して」と頼む)
 - 修正: 「さっきのレシートの明細を直して」→ `update_transaction` の `items` で明細を丸ごと置き換える(`[]` で明細を消す)。金額だけを変えるときも、明細の合計と合っている必要がある
 - 見返し: `list_transactions` の各取引に `items` が付く。`summarize` は明細の行ごとに数える(`rows` の `count` は行の数。`count` はレシートの数、`lines` は行の数)
+- 割引(お得金額): `summarize` に `discounts_only: true` を付ける(新しいツールではない)。レシートに印字された割引行(`amount < 0` の明細)だけを合計し、戻りは `total`(正の円)・`line_count`・`receipt_count`・`spend_total`(同じ期間の支出の合計)。`group_by` は省略可(`none`=合計だけ)、`merchant` / `category` / `month` で内訳。例: 「今月の割引はいくら?」「今年の割引を店別に出して」。明細のない取引のマイナスは数えない。最初から安い値段や印字されないポイント還元は見えないので、AI は「レシートに印字された割引だけ」と添えて伝える
 - 明細は任意。読み取れないレシートや1品だけの支出は、今までどおり合計だけで登録してよい
 
 ## レシートの情報(時刻・電話・住所・登録番号など)
