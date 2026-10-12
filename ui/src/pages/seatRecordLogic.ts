@@ -1,4 +1,4 @@
-import type { NewSeatRecord, SeatRecordPatch, SeatRecordView, SeatSummaryRow } from "../../../src/api/contract";
+import type { NewSeatRecord, SeatRecordPatch, SeatRecordView, VenueSummary } from "../../../src/api/contract";
 
 // 座席の記録(映画館のスクリーン・座席など)の、画面用の純粋なロジック
 
@@ -22,14 +22,27 @@ export function averageLabel(avg: number | null | undefined): string {
   return avg === null || avg === undefined ? "—" : `★${avg.toFixed(1)}`;
 }
 
-// 会場とスクリーンを1行にする(例「A映画館 スクリーン5」)
+// 会場とスクリーンを1行にする(読み上げ・確認ダイアログ用。例「A映画館 スクリーン5」。画面の一覧では別の行にする)
 export function placeLabel(r: Pick<SeatRecordView, "venue" | "screen">): string {
   return r.screen ? `${r.venue} ${r.screen}` : r.venue;
 }
 
-// 一覧の行の1行目: 作品名・公演名があればそれ、なければ従来どおり会場(とスクリーン)
-export function headLabel(r: Pick<SeatRecordView, "title" | "venue" | "screen">): string {
-  return r.title ? r.title : placeLabel(r);
+// 一覧の行の見出し部分(画面では、それぞれ別の行に出す): 1行目=作品名・公演名(あれば)、2行目=会場名、3行目=スクリーン名(あれば。特徴 note があれば添える)
+export interface SeatHeadLines {
+  title: string | null;
+  venue: string;
+  screen: string | null;
+  screenNote: string | null;
+}
+
+export function seatHeadLines(r: Pick<SeatRecordView, "title" | "venue" | "screen" | "screen_note">): SeatHeadLines {
+  return {
+    title: r.title ? r.title : null,
+    venue: r.venue,
+    screen: r.screen ? r.screen : null,
+    // スクリーンがないのに note だけ出ることはない
+    screenNote: r.screen && r.screen_note ? r.screen_note : null,
+  };
 }
 
 // 一覧の行の読み上げ用の説明(作品名があれば先頭に付ける)
@@ -37,17 +50,18 @@ export function seatRecordSummary(r: Pick<SeatRecordView, "title" | "venue" | "s
   return `${r.title ? `${r.title} ` : ""}${placeLabel(r)} ${r.seat} ${ratingLabel(r.rating)}`;
 }
 
-// 会場名の候補(既存の記録の会場名。重複なし、五十音・文字コード順)
-export function venueSuggestions(summary: Pick<SeatSummaryRow, "venue">[]): string[] {
-  return [...new Set(summary.map((s) => s.venue))].sort((a, b) => a.localeCompare(b, "ja"));
+const byJa = (a: string, b: string) => a.localeCompare(b, "ja", { numeric: true });
+
+// 会場名の候補(登録済みの会場。重複なし、五十音・文字コード順)
+export function venueSuggestions(venues: Pick<VenueSummary, "name">[]): string[] {
+  return [...new Set(venues.map((v) => v.name))].sort(byJa);
 }
 
-// 会場が決まったら、その会場のスクリーン名の候補。会場が空・未知なら全部
-export function screenSuggestions(summary: Pick<SeatSummaryRow, "venue" | "screen">[], venue: string): string[] {
+// スクリーン名の候補。選んだ会場のスクリーンだけ。会場が空ならすべて。登録のない会場(新しい名前)なら候補なし
+export function screenSuggestions(venues: Pick<VenueSummary, "name" | "screens">[], venue: string): string[] {
   const v = venue.trim();
-  const rows = v === "" ? summary : summary.filter((s) => s.venue === v);
-  const source = rows.length > 0 ? rows : summary;
-  return [...new Set(source.flatMap((s) => (s.screen ? [s.screen] : [])))].sort((a, b) => a.localeCompare(b, "ja", { numeric: true }));
+  const rows = v === "" ? venues : venues.filter((x) => x.name === v);
+  return [...new Set(rows.flatMap((x) => x.screens.map((s) => s.name)))].sort(byJa);
 }
 
 export interface SeatFormValues {

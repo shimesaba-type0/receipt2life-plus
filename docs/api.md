@@ -146,16 +146,29 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
 | `GET /api/seat-records` | クエリ(すべて任意・AND): `date`(その日だけ)、`title`(部分一致)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500) | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
-| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `rating?` / `note?` / `transaction_id?`) | `seat_record: SeatRecordView`, `message` |
-| `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`title` / `screen` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `message` |
+| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `rating?` / `note?` / `transaction_id?`)。`venue` / `screen` は名前で、無ければ会場・スクリーンを自動で作る | `seat_record: SeatRecordView`, `created_venue`, `created_screen`(新規に作ったか), `message` |
+| `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`title` / `screen` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `created_venue`, `created_screen`, `message` |
 | `DELETE /api/seat-records/:id` | なし | `deleted`, `message` |
 
-- `SeatRecordView`: `id`, `date`, `title`, `venue`, `screen`, `seat`, `rating`, `note`, `transaction_id`, `created_at`(無い項目は null)
+- `SeatRecordView`: `id`, `date`, `title`, `venue`(会場名), `venue_id`, `screen`(スクリーン名), `screen_id`, `screen_note`(そのスクリーンの特徴), `seat`, `rating`, `note`, `transaction_id`, `created_at`(無い項目は null)
 - 制限: `title` 100文字(空文字は未指定として NULL。更新では空文字・null で消去)・`venue` 100文字・`screen` 100文字・`seat` 50文字・`note` 200文字(いずれも前後の空白を除く。`title` 以外は空は不可)。`rating` は整数の1〜5(5が最良)で、範囲外・小数は 400
 - `transaction_id` が存在しなければ 400。存在しない座席の記録の id は 404
 - 取引を削除しても座席の記録は残り、`transaction_id` だけ NULL になる(`ON DELETE SET NULL`)。座席の記録の削除で取引は消えない
-- `GET /api/day/:date` の `seat_records` に、その日の記録が入る。MCP には `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`
-- `GET /api/seat-records?limit=1` の `summary` は、画面の会場名・スクリーン名の候補に使う(全期間の集計は `limit` に関わらず返る。最大200行)
+- `GET /api/day/:date` の `seat_records` に、その日の記録が入る。MCP には `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record` と、会場・スクリーンの `list_venues` / `update_venue` / `update_screen`
+- `summary`(`GET /api/seat-records`)は venue・screen・seat ごとの集計で、名前で返る(全件で集計。最大200行)。画面の会場名・スクリーン名の候補は、下の `GET /api/venues` から作る
+
+### 会場・スクリーン
+
+会場(`venues`)とスクリーン(`screens`)は座席の記録とは別のレコード(migration 0010)。スクリーンの `note` は、そのスクリーンの特徴(例「前方は首が疲れる」)。削除のAPIはない(記録も note も無くなった会場・スクリーンは、座席の記録を直す・消すときに自動で片づく)。
+
+| メソッド・パス | 入力 | 戻り |
+| --- | --- | --- |
+| `GET /api/venues` | なし | `VenuesData`: `count`, `venues`(各要素は `id`, `name`, `record_count`, `rated_count`, `avg_rating`(小数1桁。評価がなければ null), `screens`(`id`, `name`, `note`, `record_count`, `rated_count`, `avg_rating`))、`message` |
+| `PATCH /api/venues/:id` | `{ "name": "…" }`(会場名の変更。100文字まで) | `venue`(上と同じ形), `message` |
+| `PATCH /api/screens/:id` | `ScreenPatch`: `name?`(100文字まで) / `note?`(200文字まで。null か空文字で消去)。1つ以上必須 | `screen`(`id`, `venue_id`, `name`, `note`, `created_at`), `message` |
+
+- 存在しない id は 404。同じ名前の会場(スクリーンは同じ会場の中)が既にあると 400(統合はしない)。ガードは座席の記録と同じ(同一オリジン、JSON必須)
+- 画面には、会場・スクリーンの名前変更と note の編集はない(MCP の `update_venue` / `update_screen` とこのAPIのみ)
 
 ## 写真
 

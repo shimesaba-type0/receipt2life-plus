@@ -8,6 +8,8 @@ beforeEach(async () => {
   await applyD1Migrations(e.DB, e.TEST_MIGRATIONS);
   // 外部キーの順(子から先に)で、データを空にする。
   await e.DB.exec("DELETE FROM seat_records");
+  await e.DB.exec("DELETE FROM screens");
+  await e.DB.exec("DELETE FROM venues");
   await e.DB.exec("DELETE FROM links");
   await e.DB.exec("DELETE FROM attachments");
   await e.DB.exec("DELETE FROM transaction_items");

@@ -6,6 +6,7 @@ import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { getHome } from "../core/home";
 import { addLink, deleteLink, updateLink } from "../core/links";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
+import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import type { AppEnv } from "../env";
@@ -44,7 +45,7 @@ const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSON�
 export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -187,6 +188,21 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   });
 
   app.delete("/api/seat-records/:id", async (c) => respond(c, await deleteSeatRecord(c.env.DB, { id: c.req.param("id") })));
+
+  // 会場・スクリーン(座席の記録とは別のレコード)。削除はなし。座席の記録の venue / screen は名前で受けて、無ければ作る
+  app.get("/api/venues", async (c) => respond(c, await listVenues(c.env.DB)));
+
+  app.patch("/api/venues/:id", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateVenue(c.env.DB, { ...body.value, id: c.req.param("id") }));
+  });
+
+  app.patch("/api/screens/:id", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateScreen(c.env.DB, { ...body.value, id: c.req.param("id") }));
+  });
 
   // 写真
   app.post("/api/photos", async (c) => {
