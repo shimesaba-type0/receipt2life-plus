@@ -147,12 +147,19 @@ export function Calendar(props: { month: string | null }) {
                   if (wide) setPicked(date);
                   else navigate(`/day/${date}`);
                 };
+                // PC幅のダブルクリックで、その日の詳細ページへ移る(1回目のクリックで右ペインの選択は済んでいる)
+                const onDblClick = (e: MouseEvent) => {
+                  if (!wide || e.defaultPrevented || e.button !== 0) return;
+                  e.preventDefault();
+                  navigate(`/day/${date}`);
+                };
                 return (
                   <a
                     key={date}
                     href={`/day/${date}`}
                     class={`${cls}${wide && date === selected ? " is-selected" : ""}`}
                     onClick={onClick}
+                    onDblClick={onDblClick}
                     aria-current={wide && date === selected ? "date" : undefined}
                     aria-label={`${formatDateJa(date)}${holiday ? ` ${holiday}` : ""}${day ? ` ${formatYen(day.total)}(${day.count}件)` : ""}`}
                   >
