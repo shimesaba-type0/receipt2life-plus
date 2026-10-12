@@ -5,6 +5,7 @@ import { listLinksOnDay, type LinkView } from "./links";
 import { listPhotosOnDay, photoOnDay, type PhotoView } from "./photos";
 import { listSeatRecordsOnDay, type SeatRecordView } from "./seat-records";
 import type { FieldError } from "./schema";
+import { summarize, type SummaryRow } from "./summarize";
 import { withItems } from "./items";
 import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionRow, type TransactionView } from "./transactions";
 
@@ -18,7 +19,7 @@ export interface CalendarDay {
 }
 
 export type CalendarResult =
-  | { ok: true; month: string; total: number; days: CalendarDay[]; events: EventView[] }
+  | { ok: true; month: string; total: number; days: CalendarDay[]; events: EventView[]; groups: SummaryRow[] }
   | { ok: false; errors: FieldError[] };
 
 export type DayResult =
@@ -42,7 +43,7 @@ export async function getCalendar(db: D1Database, month: string | undefined, opt
   const { from, to } = monthRange(target);
 
   // 日ごとの集計と出来事は、続けて待たずに同時に問い合わせる
-  const [{ results }, events] = await Promise.all([
+  const [{ results }, events, byGroup] = await Promise.all([
     db
       .prepare(
         `SELECT d.date, d.total, d.count,
@@ -53,9 +54,12 @@ export async function getCalendar(db: D1Database, month: string | undefined, opt
       .bind(from, to)
       .all<CalendarDay>(),
     listEvents(db, { from, to, limit: 500 }),
+    // 大分類別の内訳(ホームの「今月の内訳」と同じ集計。月は表示している月)
+    summarize(db, { from, to, group_by: "group" }),
   ]);
   if (!events.ok) return events;
-  return { ok: true, month: target, total: results.reduce((s, d) => s + d.total, 0), days: results, events: events.events };
+  if (!byGroup.ok) return byGroup;
+  return { ok: true, month: target, total: results.reduce((s, d) => s + d.total, 0), days: results, events: events.events, groups: byGroup.rows };
 }
 
 // 取引は、決済時刻の昇順(時刻なしは末尾)。同じ時刻・時刻なしどうしは登録順

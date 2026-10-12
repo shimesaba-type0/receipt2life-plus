@@ -145,11 +145,14 @@ export const listTransactionsSchema = z.strictObject({
   include_items: z.boolean().default(true).describe("true(既定)で各取引の明細(items)も返す。false で明細を省く(件数の多い一覧を軽くするとき)"),
 });
 
+// 出来事のタイトルの上限(文字数)。1日のメモもタイトルに書くので、長めにとる
+export const MAX_EVENT_TITLE = 1000;
+
 export const COLORS = ["red", "orange", "green", "blue", "purple"] as const;
 
 // 出来事(日付や期間のメモ)。MCPの入力定義には eventFieldsSchema.shape を使い、検証は eventInputSchema で行う
 export const eventFieldsSchema = z.strictObject({
-  title: z.string().trim().min(1, "title は必須です").max(100).describe("出来事のタイトル(例: 出張、誕生日)"),
+  title: z.string().trim().min(1, "title は必須です").max(MAX_EVENT_TITLE).describe(`出来事のタイトル(例: 出張、誕生日。${MAX_EVENT_TITLE}文字まで)`),
   start_date: isoDate.describe("開始日(YYYY-MM-DD)。単日の出来事は、この日だけ"),
   end_date: isoDate.optional().describe("終了日(YYYY-MM-DD)。期間のときだけ。開始日以降"),
   note: z.string().max(1000).optional().describe("メモ(任意)"),

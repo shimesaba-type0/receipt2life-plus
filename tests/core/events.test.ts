@@ -11,6 +11,17 @@ async function addOk(input: unknown) {
   return res.event;
 }
 
+describe("title の長さ(1日のメモも title に書く)", () => {
+  it("1000文字まで登録・更新できる。1001文字はエラー", async () => {
+    const ev = await addOk({ title: "あ".repeat(1000), start_date: "2026-10-03" });
+    expect(ev.title).toHaveLength(1000);
+    expect((await add({ title: "あ".repeat(1001), start_date: "2026-10-03" })).ok).toBe(false);
+    const up = await updateEvent(db(), { id: ev.id, title: "い".repeat(1000) }, { now: NOW });
+    expect(up.ok).toBe(true);
+    expect((await updateEvent(db(), { id: ev.id, title: "い".repeat(1001) }, { now: NOW })).ok).toBe(false);
+  });
+});
+
 describe("addEvent", () => {
   it("期間の出来事を登録して、文章つきで返す", async () => {
     const res = await add({ title: "出張", start_date: "2026-10-03", end_date: "2026-10-05" });

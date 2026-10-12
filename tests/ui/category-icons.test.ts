@@ -10,8 +10,8 @@ describe("アイコンの一覧", () => {
     expect(UI_CATEGORY_ICONS.map((i) => ({ key: i.key, label: i.label }))).toEqual(CATEGORY_ICONS.map((i) => ({ key: i.key, label: i.label })));
     // contract の CategoryIconKey に core のキーが全部入る(型の検査)
     const keys: CategoryIconKey[] = [...CATEGORY_ICON_KEYS];
-    expect(keys).toHaveLength(31);
-    expect(new Set(keys).size).toBe(31);
+    expect(keys).toHaveLength(37);
+    expect(new Set(keys).size).toBe(37);
   });
 
   it("キーは英小文字だけ", () => {

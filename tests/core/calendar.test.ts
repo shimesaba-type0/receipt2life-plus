@@ -51,6 +51,22 @@ describe("getCalendar", () => {
     if (res.ok) expect(res.events.map((e) => e.title)).toEqual(["出張"]);
   });
 
+  it("その月の大分類別の内訳(groups)を返す。月の外の取引は含めない", async () => {
+    await tx([
+      { date: "2026-10-03", amount: 500, merchant: "A店", category: "食費" },
+      { date: "2026-10-05", amount: 1000, merchant: "C店", category: "日用品" },
+      { date: "2026-09-30", amount: 999, merchant: "D店", category: "食費" },
+    ]);
+    const res = await getCalendar(db(), "2026-10");
+    if (!res.ok) throw new Error("calendar");
+    expect(res.groups.reduce((sum, g) => sum + g.total, 0)).toBe(res.total);
+    expect(res.groups.reduce((sum, g) => sum + g.total, 0)).toBe(1500);
+    // 金額の降順
+    expect(res.groups.map((g) => g.total)).toEqual([...res.groups.map((g) => g.total)].sort((a, b) => b - a));
+    const empty = await getCalendar(db(), "2030-01");
+    if (empty.ok) expect(empty.groups).toEqual([]);
+  });
+
   it("month 省略は今月(JST)。不正な月はエラー", async () => {
     const res = await getCalendar(db(), undefined, { now: NOW });
     expect(res).toMatchObject({ ok: true, month: "2026-10" });

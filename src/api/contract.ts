@@ -10,7 +10,8 @@ export type TaxFlag = "medical" | "self_medication" | "donation";
 export type CategoryIconKey =
   | "food" | "cafe" | "grocery" | "daily" | "transit" | "taxi" | "car" | "fuel" | "social" | "entertainment"
   | "movie" | "education" | "book" | "clothes" | "beauty" | "medical" | "insurance" | "phone" | "utility" | "home"
-  | "tax" | "bigspend" | "travel" | "gift" | "kids" | "pet" | "sports" | "hobby" | "subscription" | "bank" | "other";
+  | "tax" | "bigspend" | "travel" | "gift" | "kids" | "pet" | "sports" | "hobby" | "subscription" | "bank"
+  | "manga" | "bicycle" | "express" | "shinkansen" | "airplane" | "hotel" | "other";
 
 export interface FieldError {
   index?: number;
@@ -231,6 +232,8 @@ export interface CalendarData {
   days: CalendarDay[];
   // その月と重なる出来事
   events: EventView[];
+  // その月の大分類(group)別の内訳。金額の降順(ホームの groups と同じ集計)
+  groups: SummaryRow[];
 }
 
 // GET /api/transactions/:id
