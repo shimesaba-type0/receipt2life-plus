@@ -8,6 +8,7 @@ import {
   ratingSpoken,
   screenSuggestions,
   seatFormFromRecord,
+  seatClassLabel,
   seatHeadLines,
   seatRecordSummary,
   toNewSeatRecord,
@@ -28,6 +29,7 @@ const record: SeatRecordView = {
   rating: 4,
   note: "見やすい",
   title: null,
+  seat_class: null,
   transaction_id: null,
   created_at: "2026-10-10T03:00:00.000Z",
 };
@@ -60,6 +62,12 @@ describe("評価の表示", () => {
   });
   it("読み上げ用の説明には作品名を付ける", () => {
     expect(seatRecordSummary({ ...record, title: "ダミー作品A" })).toBe("ダミー作品A A映画館 スクリーン5 F-5 ★4");
+  });
+  it("席種は座席の隣に添える(席種が無ければ従来どおり)", () => {
+    expect(seatClassLabel("プレミアムシート")).toBe("(プレミアムシート)");
+    expect(seatClassLabel(null)).toBe("");
+    expect(seatClassLabel("")).toBe("");
+    expect(seatRecordSummary({ ...record, seat_class: "プレミアムシート" })).toBe("A映画館 スクリーン5 F-5(プレミアムシート) ★4");
   });
   it("評価をもう一度押すと外れる", () => {
     expect(toggleRating(null, 3)).toBe(3);
@@ -95,15 +103,19 @@ describe("フォーム → API の入力", () => {
     expect(toNewSeatRecord("2026-10-10", form)).toEqual({ ok: true, value: { date: "2026-10-10", venue: "A映画館", seat: "F-5" } });
   });
   it("追加: 任意項目も送る", () => {
-    const form = { title: " ダミー作品A ", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 2, note: " 前すぎた " };
+    const form = { title: " ダミー作品A ", venue: "A映画館", screen: "スクリーン5", seat: "F-5", seatClass: " プレミアムシート ", rating: 2, note: " 前すぎた " };
     expect(toNewSeatRecord("2026-10-10", form)).toEqual({
       ok: true,
-      value: { date: "2026-10-10", title: "ダミー作品A", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 2, note: "前すぎた" },
+      value: { date: "2026-10-10", title: "ダミー作品A", venue: "A映画館", screen: "スクリーン5", seat: "F-5", seat_class: "プレミアムシート", rating: 2, note: "前すぎた" },
     });
   });
   it("作品名・公演名は100文字まで", () => {
     expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm("A映画館"), seat: "F-5", title: "あ".repeat(100) }).ok).toBe(true);
     expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm("A映画館"), seat: "F-5", title: "あ".repeat(101) })).toEqual({ ok: false, message: "作品名・公演名は100文字以内にしてください。" });
+  });
+  it("席種は50文字まで", () => {
+    expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm("A映画館"), seat: "F-5", seatClass: "あ".repeat(50) }).ok).toBe(true);
+    expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm("A映画館"), seat: "F-5", seatClass: "あ".repeat(51) })).toEqual({ ok: false, message: "席種は50文字以内にしてください。" });
   });
   it("必須(会場・座席)が空ならエラー、上限を超えてもエラー", () => {
     expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm(), seat: "F-5" })).toEqual({ ok: false, message: "会場名を入力してください。" });
@@ -114,15 +126,17 @@ describe("フォーム → API の入力", () => {
   });
   it("編集: 空にした任意項目は null で消す", () => {
     const form = { ...seatFormFromRecord(record), screen: "", note: " ", rating: null };
-    expect(toSeatRecordPatch(form)).toEqual({ ok: true, value: { title: null, venue: "A映画館", seat: "F-5", screen: null, rating: null, note: null } });
+    expect(toSeatRecordPatch(form)).toEqual({ ok: true, value: { title: null, venue: "A映画館", seat: "F-5", seat_class: null, screen: null, rating: null, note: null } });
     expect(toSeatRecordPatch({ ...form, title: " ダミー作品A " })).toMatchObject({ ok: true, value: { title: "ダミー作品A" } });
+    expect(toSeatRecordPatch({ ...form, seatClass: " 内野指定席 " })).toMatchObject({ ok: true, value: { seat_class: "内野指定席" } });
     expect(toSeatRecordPatch(seatFormFromRecord(record))).toEqual({
       ok: true,
-      value: { title: null, venue: "A映画館", seat: "F-5", screen: "スクリーン5", rating: 4, note: "見やすい" },
+      value: { title: null, venue: "A映画館", seat: "F-5", seat_class: null, screen: "スクリーン5", rating: 4, note: "見やすい" },
     });
   });
   it("記録からフォームを作る", () => {
-    expect(seatFormFromRecord({ ...record, screen: null, rating: null, note: null })).toEqual({ title: "", venue: "A映画館", screen: "", seat: "F-5", rating: null, note: "" });
+    expect(seatFormFromRecord({ ...record, screen: null, rating: null, note: null })).toEqual({ title: "", venue: "A映画館", screen: "", seat: "F-5", seatClass: "", rating: null, note: "" });
+    expect(seatFormFromRecord({ ...record, seat_class: "プレミアムシート" }).seatClass).toBe("プレミアムシート");
     expect(seatFormFromRecord({ ...record, title: "ダミー作品A" }).title).toBe("ダミー作品A");
   });
 });

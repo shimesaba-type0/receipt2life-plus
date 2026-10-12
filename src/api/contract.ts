@@ -94,7 +94,7 @@ export interface LinkView {
   created_at: string;
 }
 
-// 座席の記録(映画館のスクリーン・座席など。venue=会場、screen=スクリーン/ホール、seat=座席)
+// 座席の記録(映画館のスクリーン・座席など。venue=会場、screen=スクリーン/ホール/エリア、seat=座席、seat_class=席種)
 export interface SeatRecordView {
   id: string;
   date: string;
@@ -108,6 +108,8 @@ export interface SeatRecordView {
   // そのスクリーンの特徴(screens.note)。スクリーンがない・noteがなければ null
   screen_note: string | null;
   seat: string;
+  // 席種(プレミアムシート、内野指定席など。50文字まで)。なければ null
+  seat_class: string | null;
   // 席の評価(整数1〜5、5が最良)。未評価は null
   rating: number | null;
   // 一言(200文字まで)
@@ -397,7 +399,7 @@ export interface LinkPatch {
   title: string | null;
 }
 
-// GET /api/seat-records?date=&title=(部分一致)&venue=&screen=&seat=&min_rating=&max_rating=&from=&to=&transaction_id=&limit=
+// GET /api/seat-records?date=&title=(部分一致)&venue=&screen=&seat=&seat_class=(部分一致)&min_rating=&max_rating=&from=&to=&transaction_id=&limit=
 // date はその日だけ(from と to を同じ日にする)。並びは date の新しい順。
 // count は絞り込みに合う全件の数、records は limit まで、summary は venue・screen・seat ごとの件数と平均評価(全件で集計)
 export interface SeatRecordsData {
@@ -416,13 +418,15 @@ export interface NewSeatRecord {
   venue: string;
   screen?: string;
   seat: string;
+  // 席種(任意。空文字は未指定)
+  seat_class?: string;
   // 1〜5 の整数(5が最良)
   rating?: number;
   note?: string;
   transaction_id?: string;
 }
 
-// PATCH /api/seat-records/:id の入力(指定した項目だけ変える。title / screen / rating / note / transaction_id は null で消去)
+// PATCH /api/seat-records/:id の入力(指定した項目だけ変える。title / seat_class / screen / rating / note / transaction_id は null で消去)
 export interface SeatRecordPatch {
   date?: string;
   // null か空文字で消去
@@ -430,6 +434,8 @@ export interface SeatRecordPatch {
   venue?: string;
   screen?: string | null;
   seat?: string;
+  // null か空文字で消去
+  seat_class?: string | null;
   rating?: number | null;
   note?: string | null;
   transaction_id?: string | null;

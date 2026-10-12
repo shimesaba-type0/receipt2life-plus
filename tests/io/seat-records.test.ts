@@ -24,7 +24,7 @@ const seat = (over: Record<string, unknown> = {}) => ({ type: "seat_record", id:
 describe("座席の記録のエクスポート", () => {
   it("type=seat_record の行が最後に出る(直前に screen)。既存の type の順は変わらない", async () => {
     await doImport(jsonl(tx));
-    await addSeatRecord(db(), { date: "2026-10-10", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 4, note: "見やすい", title: "ダミー作品A", transaction_id: "tx1" }, { now: NOW });
+    await addSeatRecord(db(), { date: "2026-10-10", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 4, note: "見やすい", title: "ダミー作品A", seat_class: "プレミアムシート", transaction_id: "tx1" }, { now: NOW });
     const rows = await exportRecords();
     expect(rows.map((r) => r.type)).toEqual(["transaction", "screen", "seat_record"]);
     // 会場は id ではなく名前で持つ(往復・旧形式との互換)
@@ -36,6 +36,7 @@ describe("座席の記録のエクスポート", () => {
       venue: "A映画館",
       screen: "スクリーン5",
       seat: "F-5",
+      seat_class: "プレミアムシート",
       rating: 4,
       note: "見やすい",
       transaction_id: "tx1",
@@ -46,7 +47,7 @@ describe("座席の記録のエクスポート", () => {
   it("書き出して、空のDBに戻すと同じ内容になる(往復)", async () => {
     await doImport(jsonl(tx));
     await addSeatRecord(db(), { date: "2026-10-10", venue: "A映画館", seat: "F-5", transaction_id: "tx1" }, { now: NOW });
-    await addSeatRecord(db(), { date: "2026-10-11", venue: "B劇場", screen: "ホール", seat: "1列3番", rating: 5, note: "最高", title: "ダミーライブ" }, { now: NOW });
+    await addSeatRecord(db(), { date: "2026-10-11", venue: "B劇場", screen: "ホール", seat: "1列3番", rating: 5, note: "最高", title: "ダミーライブ", seat_class: "ボックスシート" }, { now: NOW });
     const before = await new Response(exportJsonl(db())).text();
     await db().exec("DELETE FROM seat_records");
     await db().exec("DELETE FROM screens");
@@ -91,6 +92,19 @@ describe("座席の記録のインポート", () => {
     const res = await doImport(jsonl(seat({ id: "old" }), seat({ id: "blank", title: "  " })));
     expect(res.results.map((r) => r.status)).toEqual(["ok", "ok"]);
     expect(await db().prepare("SELECT id, title FROM seat_records ORDER BY id").all()).toMatchObject({ results: [{ id: "blank", title: null }, { id: "old", title: null }] });
+  });
+
+  it("seat_class の無い旧形式の行も取り込める(NULL)。空文字・null も NULL。前後の空白は除く", async () => {
+    const res = await doImport(jsonl(seat({ id: "old" }), seat({ id: "blank", seat_class: "  " }), seat({ id: "nul", seat_class: null }), seat({ id: "has", seat_class: " 内野指定席 " })));
+    expect(res.results.map((r) => r.status)).toEqual(["ok", "ok", "ok", "ok"]);
+    expect(await db().prepare("SELECT id, seat_class FROM seat_records ORDER BY id").all()).toMatchObject({
+      results: [{ id: "blank", seat_class: null }, { id: "has", seat_class: "内野指定席" }, { id: "nul", seat_class: null }, { id: "old", seat_class: null }],
+    });
+  });
+
+  it("seat_class が50文字を超える行はその行だけエラー", async () => {
+    const res = await doImport(jsonl(seat({ id: "long", seat_class: "あ".repeat(51) }), seat({ id: "ok", seat_class: "あ".repeat(50) })));
+    expect(res.results.map((r) => r.status)).toEqual(["error", "ok"]);
   });
 
   it("title が長すぎる行はその行だけエラー", async () => {

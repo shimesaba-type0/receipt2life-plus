@@ -18,7 +18,7 @@ describe("座席の記録のAPI", () => {
     expect(add.status).toBe(200);
     expect(add.headers.get("cache-control")).toBe("private, no-store");
     const added = await json(add);
-    expect(added).toMatchObject({ ok: true, seat_record: { ...rec, title: null, transaction_id: null, created_at: expect.any(String) } });
+    expect(added).toMatchObject({ ok: true, seat_record: { ...rec, title: null, seat_class: null, transaction_id: null, created_at: expect.any(String) } });
     const id = added.seat_record.id as string;
 
     const day = await json(await call("/api/day/2026-10-10"));
@@ -57,6 +57,21 @@ describe("座席の記録のAPI", () => {
     expect(limited).toMatchObject({ count: 3, truncated: true });
     expect(limited.records).toHaveLength(1);
     expect(limited.summary).toHaveLength(3);
+  });
+
+  it("seat_class: 追加・日詳細・更新(null で消去)・GET の絞り込み(部分一致)", async () => {
+    const add = await json(await send("POST", "/api/seat-records", { ...rec, seat_class: " プレミアムシート " }));
+    expect(add.seat_record.seat_class).toBe("プレミアムシート");
+    const id = add.seat_record.id as string;
+    await send("POST", "/api/seat-records", { ...rec, seat: "G-1" });
+    expect((await json(await call("/api/day/2026-10-10"))).seat_records.map((r: { seat_class: string | null }) => r.seat_class)).toEqual(["プレミアムシート", null]);
+    expect((await json(await call("/api/seat-records?seat_class=" + encodeURIComponent("プレミア")))).count).toBe(1);
+    expect((await json(await call("/api/seat-records?seat_class=" + encodeURIComponent("%")))).count).toBe(0);
+    expect((await json(await call("/api/seat-records?seat_class=" + encodeURIComponent("プレミア") + "&venue=" + encodeURIComponent("A映画館")))).count).toBe(1);
+    expect((await json(await send("PATCH", `/api/seat-records/${id}`, { seat_class: "ボックスシート" }))).seat_record.seat_class).toBe("ボックスシート");
+    expect((await json(await send("PATCH", `/api/seat-records/${id}`, { seat_class: null }))).seat_record.seat_class).toBeNull();
+    expect((await send("POST", "/api/seat-records", { ...rec, seat_class: "あ".repeat(51) })).status).toBe(400);
+    expect((await call("/api/seat-records?seat_class=" + encodeURIComponent("あ".repeat(51)))).status).toBe(400);
   });
 
   it("title: 追加・日詳細・更新(null で消去)・GET の絞り込み(部分一致)", async () => {

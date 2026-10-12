@@ -6,6 +6,7 @@ import {
   emptySeatForm,
   ratingLabel,
   ratingSpoken,
+  seatClassLabel,
   seatHeadLines,
   screenSuggestions,
   seatFormFromRecord,
@@ -17,7 +18,7 @@ import {
 import "./SeatRecordsCard.css";
 
 // 座席の記録1件の表示(日の詳細とPCの詳細ペインで共通)。評価は「★4」の文字で出す(色に頼らない)
-// 行は、作品名(太字)→会場名→スクリーン名(あれば。特徴 note があれば小さく添える)→座席と評価→一言。会場とスクリーンは別の行にする
+// 行は、作品名(太字)→会場名→スクリーン・エリア名(あれば。特徴 note があれば小さく添える)→座席と評価→一言。会場とスクリーンは別の行にする
 export function SeatRecordLine(props: { record: SeatRecordView }) {
   const { record } = props;
   const head = seatHeadLines(record);
@@ -32,7 +33,10 @@ export function SeatRecordLine(props: { record: SeatRecordView }) {
         </span>
       )}
       <span class="seat__line">
-        <strong class="seat__seat num">{record.seat}</strong>
+        <span class="seat__place">
+          <strong class="seat__seat num">{record.seat}</strong>
+          {record.seat_class && <span class="seat__class">{seatClassLabel(record.seat_class)}</span>}
+        </span>
         <span class="seat__rating num" aria-label={ratingSpoken(record.rating)}>
           {ratingLabel(record.rating)}
         </span>
@@ -92,14 +96,14 @@ function SeatForm(props: {
           <option key={v} value={v} />
         ))}
       </datalist>
-      <label for={`${id}-screen`}>スクリーン・ホール(任意)</label>
+      <label for={`${id}-screen`}>スクリーン・エリア(任意。ホール・ブロックなど)</label>
       <input
         id={`${id}-screen`}
         type="text"
         list={`${id}-screens`}
         maxLength={SEAT_LIMITS.screen}
         autoComplete="off"
-        placeholder="例: スクリーン5"
+        placeholder="例: スクリーン5、内野エリア"
         value={f.screen}
         onInput={(e) => setF({ ...f, screen: (e.currentTarget as HTMLInputElement).value })}
       />
@@ -118,6 +122,16 @@ function SeatForm(props: {
         placeholder="例: F-5"
         value={f.seat}
         onInput={(e) => setF({ ...f, seat: (e.currentTarget as HTMLInputElement).value })}
+      />
+      <label for={`${id}-class`}>席種(任意)</label>
+      <input
+        id={`${id}-class`}
+        type="text"
+        maxLength={SEAT_LIMITS.seatClass}
+        autoComplete="off"
+        placeholder="例: プレミアムシート、内野指定席"
+        value={f.seatClass}
+        onInput={(e) => setF({ ...f, seatClass: (e.currentTarget as HTMLInputElement).value })}
       />
       <span class="seat__label" id={`${id}-rating`}>
         評価(任意。5が最良。もう一度押すと外れる)
