@@ -10,6 +10,7 @@ import type {
   CategoryPatch,
   CategoryView,
   DayData,
+  DiscountsData,
   GroupRename,
   EventPatch,
   EventView,
@@ -95,6 +96,8 @@ export const getDay = (date: string) => request<DayData>("GET", `/api/day/${enco
 export const getMerchants = (path: string) => request<MerchantsData>("GET", path);
 export const getCategories = () => request<CategoriesData>("GET", "/api/categories");
 // 税率別の税額(query は taxSummaryQuery で作る: from / to / group_by)
+// 割引の集計(query: from / to / group_by)。ホームは getHome の discounts を使うので、いまは画面からは呼ばない
+export const getDiscounts = (query: string) => request<DiscountsData>("GET", `/api/discounts${query ? `?${query}` : ""}`);
 export const getTaxSummary = (query: string) => request<TaxSummaryData>("GET", `/api/tax-summary${query ? `?${query}` : ""}`);
 
 // カテゴリの管理。name は日本語なので URL エンコードして送る

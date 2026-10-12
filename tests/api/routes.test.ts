@@ -119,12 +119,32 @@ describe("出来事", () => {
 describe("読み取り", () => {
   it("home / calendar / categories の形", async () => {
     const home = await json(await call("/api/home"));
-    expect(home).toMatchObject({ ok: true, today: { total: 0 }, groups: [], needs_review: 0, recent: [] });
+    expect(home).toMatchObject({ ok: true, today: { total: 0 }, groups: [], needs_review: 0, recent: [], discounts: { month_total: 0, month_line_count: 0 } });
     expect((await json(await call("/api/calendar"))).month).toBe(todayJst().slice(0, 7));
     const cats = await json(await call("/api/categories"));
     expect(cats.ok).toBe(true);
     expect(cats.categories.length).toBeGreaterThan(0);
     expect(cats.accounts.length).toBeGreaterThan(0);
+  });
+
+  it("discounts: 割引の集計。ホームの discounts と同じ数字、不正な値は400、no-store", async () => {
+    const date = todayJst();
+    await send("POST", "/api/transactions", {
+      transactions: [{ date, amount: 900, merchant: "A店", category: "食費", items: [{ name: "品", amount: 1000 }, { name: "値引", amount: -100 }] }],
+    });
+    const res = await call("/api/discounts");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    expect(await json(res)).toMatchObject({ ok: true, group_by: "none", total: 100, line_count: 1, receipt_count: 1, spend_total: 900, rows: [] });
+    const byMerchant = await json(await call(`/api/discounts?from=${date}&to=${date}&group_by=merchant&unknown=`));
+    expect(byMerchant).toMatchObject({ ok: true, rows: [{ key: "A店", total: 100, line_count: 1, receipt_count: 1 }] });
+    // 空のクエリは省略扱い
+    expect(await json(await call("/api/discounts?from=&to=&group_by="))).toMatchObject({ ok: true, total: 100 });
+    const home = await json(await call("/api/home"));
+    expect(home.discounts).toEqual({ month_total: 100, month_line_count: 1 });
+    expect((await call("/api/discounts?group_by=group")).status).toBe(400);
+    expect((await call("/api/discounts?from=2026-10-31&to=2026-10-01")).status).toBe(400);
+    expect((await call("/api/discounts?from=abc")).status).toBe(400);
   });
 
   it("不正な month / date は400", async () => {

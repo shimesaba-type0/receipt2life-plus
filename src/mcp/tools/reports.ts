@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listCategories } from "../../core/categories";
-import { summarizeSchema, summarizeTaxSchema } from "../../core/report-schema";
-import { summarize } from "../../core/summarize";
+import { summarizeTaxSchema, summarizeToolSchema } from "../../core/report-schema";
+import { summarizeForTool } from "../../core/summarize";
 import { summarizeTax } from "../../core/tax-summary";
 import { toResult } from "../result";
 
@@ -20,11 +20,12 @@ export function registerReportTools(server: McpServer, db: D1Database): void {
         "event_id は、支出の日付が出来事の期間(start_date〜end_date。単日なら当日)に入っているものをその出来事に数える。1つの取引が複数の出来事に入るときは、それぞれに数えるため、行の合計や割合の和が全体(total)を超えることがある(二重計上)。どの出来事にも入らない取引は「(出来事なし)」にまとまる。",
         "確定申告の準備には、group_by:\"tax_flag\" に年の範囲(例: from 2026-01-01、to 2026-12-31)を付けて、年ごとのフラグ別の合計を出す。出るのは記録した金額の合計だけで、控除の対象になるか・控除額・上限の判定はしない(利用者の責任)。total と割合はフラグなしを含む期間内の全取引が基準。",
         "戻りの total と count は、期間内の全取引の合計と件数(レシートの数)。lines は期間内の支出の行の数。percent は行の合計 ÷ total × 100(小数第1位)。message に上位数件の要約が入る。",
+        "割引だけを集計するときは discounts_only を true にする(お得金額)。レシートに印字された割引行(マイナスの明細)だけが対象で、最初から安い値段や印字されないポイント還元は含まれない。明細のない取引の金額がマイナスのもの(返品・払い戻しの可能性)は割引に数えない。この場合 group_by は省略でき(none=合計だけ)、merchant / category / month も選べる。戻りは total(割引の合計。正の円)、line_count(割引の行数)、receipt_count(割引の行を持つレシートの件数)、spend_total(同じ期間の支出の合計。割合の参考)、rows(group_by を指定したときのキー別の total / line_count / receipt_count。merchant・category は合計の大きい順、month は古い順)。伝えるときは「レシートに印字された割引だけ」と添える。",
         "この集計は「記録した範囲の傾向」であり、記録のない支出は含まれない。記録漏れがありうるので、断定せず傾向として伝える。",
       ].join("\n"),
-      inputSchema: summarizeSchema.shape,
+      inputSchema: summarizeToolSchema.shape,
     },
-    async (args) => toResult(await summarize(db, args)),
+    async (args) => toResult(await summarizeForTool(db, args)),
   );
 
   server.registerTool(

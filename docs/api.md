@@ -16,7 +16,8 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 
 | メソッド・パス | 戻り(`ok:true` に続けて) |
 | --- | --- |
-| `GET /api/home` | `HomeData`: 今日と今月の合計、大分類別(`summarize` の group)、メモ付き支出の割合、要確認の件数、最近の取引10件(登録した新しい順) |
+| `GET /api/home` | `HomeData`: 今日と今月の合計、大分類別(`summarize` の group)、メモ付き支出の割合、今月の割引(`discounts: {month_total, month_line_count}`。月の範囲は `month` と同じ)、要確認の件数、最近の取引10件(登録した新しい順) |
+| `GET /api/discounts?from=&to=&group_by=` | `DiscountsData`: レシートに印字された割引の合計。下の「割引の集計」 |
 | `GET /api/calendar?month=YYYY-MM` | `CalendarData`: その月の日別の合計・件数・写真枚数(取引のある日だけ)、その月と重なる出来事。`month` 省略は今月 |
 | `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの)・座席の記録(`seat_records: SeatRecordView[]`。`date` がその日のもの、登録順) |
 | `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
@@ -73,6 +74,14 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
   - `totals`: 全体の `tax_total` / `taxable_total` / `receipt_count`(内訳がある取引の件数)/ `taxable_basis` / `mixed_basis`
   - `coverage`(カバレッジ): `transactions`(期間内の全取引の `{count, total}`)、`with_tax_lines`、`without_tax_lines`(内訳が無く、集計に含まれていない取引)、`lines_missing_tax_amount`、`lines_missing_taxable_amount`
   - 集計は `tax_lines` の印字どおりの数字だけを足す。明細の `tax_rate` からは税額を計算しない
+
+## 割引の集計
+
+- `GET /api/discounts`: `from` / `to`(YYYY-MM-DD。省略は全期間。空のクエリは省略扱い)、`group_by`(`none`=合計だけ(既定)/ `merchant` / `category` / `month`)。不正な値・`from` > `to` は 400。戻り(`DiscountsData`): `total`(割引の合計。**正の円**)、`line_count`(割引の行数)、`receipt_count`(割引の行を持つ取引の件数)、`spend_total`(同じ期間の支出の合計。`summarize` の `total` と同じ定義。割合の参考)、`rows`(`group_by` が `none` 以外のとき。`key`・`total`・`line_count`・`receipt_count`。`merchant` / `category` は合計の大きい順、`month` は古い順。店名なしは「(店名なし)」、カテゴリなしは「(未分類)」)、`message`
+- 数えるのは、**明細の行で `amount < 0` のもの**(レシートに印字された値引き・割引・クーポンの行)だけ。カテゴリは明細の行のカテゴリ(なければ取引のカテゴリ)で分ける
+- 明細のない取引の金額がマイナスのものは、割引ではなく返品・払い戻しの可能性があるので数えない
+- 見えないもの: 最初から安い値段、印字されないポイント還元。印字された割引行だけの数字
+- MCP には専用のツールはなく、`summarize` の `discounts_only: true` で同じ集計を呼ぶ
 
 ## レシートの情報(決済時刻・店の連絡先・登録番号など)
 

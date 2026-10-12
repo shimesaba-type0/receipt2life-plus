@@ -59,6 +59,12 @@
 .home__meter { height: 8px; border-radius: 4px; background: #fff; overflow: hidden; }
 .home__meter-fill { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 
+/* 今月の割引(印字された割引行だけの合計。スマホはメモ付きの下) */
+.home__discounts { border-radius: 20px; padding: 16px 24px; display: flex; flex-direction: column; gap: 4px; }
+.home__discounts-amount { font-size: 28px; line-height: 1.15; font-weight: 700; color: var(--accent); }
+.home__discounts-empty { font-size: 15px; }
+.home__discounts-note { font-size: 12px; color: var(--muted); }
+
 /* 最近の記録(見出しはカードの外) */
 .home__recent-section { display: flex; flex-direction: column; gap: 4px; }
 .home__section-head--outer { padding: 0 4px 8px; }
@@ -103,11 +109,15 @@
   .home__memo-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .home__memo-label { color: #3f4b46; }
   .home__memo-value b { font-size: 32px; }
-  .home__review { grid-column: 1 / -1; grid-row: 2; min-height: 52px; }
-  .home__breakdown { grid-column: 1 / -1; grid-row: 3; padding: 24px 28px; gap: 18px; }
+  /* 今日/今月/メモの下に、横長の帯として置く */
+  .home__discounts { grid-column: 1 / -1; grid-row: 2; flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 20px; border-radius: 24px; padding: 18px 28px; }
+  .home__discounts-amount { font-size: 28px; }
+  .home__discounts-note { margin-left: auto; }
+  .home__review { grid-column: 1 / -1; grid-row: 3; min-height: 52px; }
+  .home__breakdown { grid-column: 1 / -1; grid-row: 4; padding: 24px 28px; gap: 18px; }
   .home__h2 { font-size: 17px; }
   .home__stack { height: 14px; border-radius: 7px; }
   .home__row-pct { width: 56px; }
-  .home__recent-section { grid-column: 1 / -1; grid-row: 4; gap: 6px; }
+  .home__recent-section { grid-column: 1 / -1; grid-row: 5; gap: 6px; }
   .home__section-head--outer { padding-bottom: 4px; }
 }

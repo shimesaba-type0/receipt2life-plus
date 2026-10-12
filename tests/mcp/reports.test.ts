@@ -62,6 +62,47 @@ describe("MCP 集計ツール", () => {
     });
   });
 
+  it("summarize の説明と入力に discounts_only があり、ツール数は増えていない", async () => {
+    const r = await rpc("tools/list");
+    const tools = r.body.result.tools as { name: string; description: string; inputSchema: { properties: Record<string, unknown>; required?: string[] } }[];
+    const s = tools.find((t) => t.name === "summarize");
+    expect(s?.description).toContain("discounts_only");
+    expect(s?.description).toContain("レシートに印字された割引行(マイナスの明細)だけが対象");
+    expect(Object.keys(s?.inputSchema.properties ?? {})).toEqual(expect.arrayContaining(["from", "to", "group_by", "discounts_only"]));
+    expect(tools.some((t) => /discount/.test(t.name))).toBe(false);
+    expect(tools).toHaveLength(30);
+  });
+
+  it("summarize の discounts_only: 割引の合計と、店別。通常の summarize の結果は変わらない", async () => {
+    await callTool("add_transactions", {
+      transactions: [
+        {
+          date: "2026-10-01",
+          amount: 1350,
+          merchant: "A店",
+          category: "食費",
+          items: [{ name: "品A", amount: 1000 }, { name: "品B", amount: 500 }, { name: "値引", amount: -100 }, { name: "クーポン", amount: -50 }],
+        },
+        { date: "2026-10-02", amount: 1000, merchant: "B店", category: "日用品" },
+      ],
+    });
+    const total = await callTool("summarize", { discounts_only: true, from: "2026-10-01", to: "2026-10-31" });
+    expect(total.body.result.isError).toBeFalsy();
+    expect(text(total)).toMatchObject({ ok: true, group_by: "none", total: 150, line_count: 2, receipt_count: 1, spend_total: 2350, rows: [] });
+    const byMerchant = await callTool("summarize", { discounts_only: true, group_by: "merchant" });
+    expect(text(byMerchant)).toMatchObject({ ok: true, rows: [{ key: "A店", total: 150, line_count: 2, receipt_count: 1 }] });
+    const normal = await callTool("summarize", { from: "2026-10-01", to: "2026-10-31", group_by: "category" });
+    expect(text(normal)).toMatchObject({ ok: true, total: 2350, count: 2 });
+    const off = await callTool("summarize", { discounts_only: false, group_by: "category" });
+    expect(text(off)).toMatchObject({ ok: true, total: 2350 });
+  });
+
+  it("discounts_only で割引にない group_by、discounts_only なしの group_by: none はエラー", async () => {
+    expect((await callTool("summarize", { discounts_only: true, group_by: "event_id" })).body.result.isError).toBe(true);
+    expect((await callTool("summarize", { group_by: "none" })).body.result.isError).toBe(true);
+    expect((await callTool("summarize", { discounts_only: "yes", group_by: "month" })).body.result.isError).toBe(true);
+  });
+
   it("group_by 未指定・未知の値は isError", async () => {
     const missing = await callTool("summarize", {});
     expect(missing.body.result.isError).toBe(true);
