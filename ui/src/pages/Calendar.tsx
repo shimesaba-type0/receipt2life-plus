@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { CalendarData, EventView, FieldError } from "../../../src/api/contract";
 import { getCalendar } from "../api";
 import { buildMonthGrid, defaultSelectedDate, eventEnd, formatCellAmount, formatPeriodShort, laneCount, layoutWeekBands } from "../calendar-layout";
 import { addMonths, formatDateJa, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
 import { formatHolidayDate, holidayName, holidaysInMonth } from "../holidays";
 import { DayPane } from "../components/DayPane";
-import { DaySheet } from "../components/DaySheet";
 import { MonthPicker } from "../components/MonthPicker";
 import { Link, navigate } from "../router";
 import "./Calendar.css";
@@ -52,15 +51,14 @@ export function Calendar(props: { month: string | null }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const wide = useWide();
   const [picked, setPicked] = useState<string | null>(null);
-  // スマホ幅でタップした日のプレビュー(下からのシート)
-  const [sheetDate, setSheetDate] = useState<string | null>(null);
+  const previewRef = useRef<HTMLElement>(null);
   // 月を移動したら、選択日は既定(今日か月初)に戻す
   useEffect(() => setPicked(null), [month]);
-  // 幅が広がってPCの右ペインに切り替わったら、シートは閉じる
-  useEffect(() => {
-    if (wide) setSheetDate(null);
-  }, [wide]);
   const selected = picked ?? defaultSelectedDate(month, today);
+  // スマホ幅: 日をタップしてプレビューが出たら、見える位置まで最小限だけスクロールする
+  useEffect(() => {
+    if (!wide && picked) previewRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [picked, wide]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,9 +148,8 @@ export function Calendar(props: { month: string | null }) {
                 const onClick = (e: MouseEvent) => {
                   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                   e.preventDefault();
-                  // PC幅は右ペインの選択を切り替え、モバイルは下からのプレビューを出す(詳細はそこから開く)
-                  if (wide) setPicked(date);
-                  else setSheetDate(date);
+                  // PC幅は右ペイン、スマホ幅は「今月の出来事」の下のプレビューを、タップした日に切り替える(詳細はそこから開く)
+                  setPicked(date);
                 };
                 // PC幅のダブルクリックで、その日の詳細ページへ移る(1回目のクリックで右ペインの選択は済んでいる)
                 const onDblClick = (e: MouseEvent) => {
@@ -164,10 +161,10 @@ export function Calendar(props: { month: string | null }) {
                   <a
                     key={date}
                     href={`/day/${date}`}
-                    class={`${cls}${wide && date === selected ? " is-selected" : ""}`}
+                    class={`${cls}${(wide || picked) && date === selected ? " is-selected" : ""}`}
                     onClick={onClick}
                     onDblClick={onDblClick}
-                    aria-current={wide && date === selected ? "date" : undefined}
+                    aria-current={(wide || picked) && date === selected ? "date" : undefined}
                     aria-label={`${formatDateJa(date)}${holiday ? ` ${holiday}` : ""}${day ? ` ${formatYen(day.total)}(${day.count}件)` : ""}`}
                   >
                     <span class="cal__date num">{Number(date.slice(8))}</span>
@@ -223,6 +220,12 @@ export function Calendar(props: { month: string | null }) {
         </Link>
       </section>
 
+      {!wide && picked && (
+        <section class="cal__preview" aria-label="タップした日のプレビュー" ref={previewRef}>
+          <DayPane date={picked} />
+        </section>
+      )}
+
       {holidays.length > 0 && (
         <section class="cal__events" aria-label="今月の祝日">
           <h2 class="cal__events-title">今月の祝日</h2>
@@ -245,7 +248,6 @@ export function Calendar(props: { month: string | null }) {
         </div>
       )}
       </div>
-      {!wide && sheetDate && <DaySheet date={sheetDate} onClose={() => setSheetDate(null)} />}
     </section>
   );
 }
