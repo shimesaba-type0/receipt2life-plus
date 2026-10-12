@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
-import type { TaxSummaryData, TaxSummaryRow } from "../../../src/api/contract";
-import { UnauthorizedError, getTaxSummary } from "../api";
+import type { DeductionsData, TaxSummaryData, TaxSummaryRow } from "../../../src/api/contract";
+import { UnauthorizedError, getDeductions, getTaxSummary } from "../api";
 import { formatMonthJa, formatYen, todayJst } from "../format";
 import { errorsMessage } from "./transactionLogic";
-import { PERIOD_OPTIONS, coverageNote, formatRate, groupRowsByMonth, isEmptySummary, periodRange, taxSummaryQuery, type PeriodKind } from "./taxLogic";
+import { PERIOD_OPTIONS, coverageNote, deductionRows, transportNote, formatRate, groupRowsByMonth, isEmptySummary, periodRange, taxSummaryQuery, type PeriodKind } from "./taxLogic";
 import "./Tax.css";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "invalid"; message: string } | { kind: "ready"; data: TaxSummaryData };
@@ -16,6 +16,8 @@ export function Tax() {
   const [custom, setCustom] = useState({ from: `${today.slice(0, 7)}-01`, to: today });
   const [byMonth, setByMonth] = useState(false);
   const [state, setState] = useState<State>({ kind: "loading" });
+  // 確定申告の参考(税額の表とは別に読み込む。片方が失敗しても、もう片方は出す)
+  const [ded, setDed] = useState<DeductionsData | null>(null);
   // 古い読み込みの結果で、新しい結果を上書きしない
   const seq = useRef(0);
 
@@ -28,6 +30,13 @@ export function Tax() {
     }
     const mine = (seq.current += 1);
     setState({ kind: "loading" });
+    getDeductions(taxSummaryQuery(range.from, range.to, "rate"))
+      .then((res) => {
+        if (mine === seq.current) setDed(res.ok ? res : null);
+      })
+      .catch(() => {
+        if (mine === seq.current) setDed(null);
+      });
     try {
       const res = await getTaxSummary(taxSummaryQuery(range.from, range.to, byMonth ? "month" : "rate"));
       if (mine !== seq.current) return;
@@ -79,6 +88,8 @@ export function Tax() {
           <span>月別に表示する</span>
         </label>
       </div>
+
+      {ded && <Deductions data={ded} />}
 
       {state.kind === "loading" && (
         <p class="muted" role="status">
@@ -185,5 +196,28 @@ function TaxTable(props: { rows: TaxSummaryRow[]; total?: TaxSummaryData["totals
         )}
       </table>
     </div>
+  );
+}
+
+// 確定申告の参考: 税金の控除用フラグ(医療費控除・セルフメディケーション税制)を付けた支出の合計。控除の判定はしない
+function Deductions(props: { data: DeductionsData }) {
+  const rows = deductionRows(props.data);
+  return (
+    <section class="card taxp__ded" aria-label="確定申告の参考">
+      <h2 class="day__h">確定申告の参考</h2>
+      <ul class="taxp__ded-list">
+        {rows.map((r) => (
+          <li key={r.key} class="taxp__ded-row">
+            <span class="taxp__ded-label">{r.label}</span>
+            <span class="num taxp__ded-amount" aria-label={`${r.label} ${r.total}円`}>
+              {formatYen(r.total)}
+            </span>
+            <span class="muted num taxp__ded-count">{r.count}件</span>
+          </li>
+        ))}
+      </ul>
+      <p class="muted taxp__ded-note">{transportNote(props.data)}</p>
+      <p class="muted taxp__ded-note">支出に付けた「税金のフラグ」(医療費控除・セルフメディケーション税制)の合計です。控除の対象になるか、控除額、上限は、ご自身で確認してください。</p>
+    </section>
   );
 }

@@ -2,7 +2,7 @@
 // 方針はサーバーと同じ: レシートに印字された数字をそのまま記録し、こちらで税額を計算しない。税率の表は持たない
 // (選択肢は入力の手間を減らすためだけ。どんな数字でも「その他」で入れられ、選択肢に無い既存の値もそのまま表示・保存する)
 // 規則はサーバー(src/core/tax-lines.ts)と同じ値を持つ(UI は core を import しない。tests/ui/tax-logic.test.ts が一致を確かめる)
-import type { AmountBasis, NewTaxLine, TaxLineView, TaxSummaryData, TaxSummaryRow } from "../../../src/api/contract";
+import type { AmountBasis, DeductionsData, NewTaxLine, TaxLineView, TaxSummaryData, TaxSummaryRow } from "../../../src/api/contract";
 import { addMonths, formatYen, monthRange } from "../format";
 
 export const MAX_TAX_RATE = 100;
@@ -148,12 +148,13 @@ export function buildTaxLines(rows: TaxLineRow[]): TaxBuild {
 
 // ---- 税額のページ(/tax) ----
 
-export type PeriodKind = "this_month" | "last_month" | "this_year" | "custom";
+export type PeriodKind = "this_month" | "last_month" | "this_year" | "last_year" | "custom";
 
 export const PERIOD_OPTIONS: { value: PeriodKind; label: string }[] = [
   { value: "this_month", label: "今月" },
   { value: "last_month", label: "先月" },
   { value: "this_year", label: "今年" },
+  { value: "last_year", label: "昨年" },
   { value: "custom", label: "期間指定" },
 ];
 
@@ -169,6 +170,10 @@ export function periodRange(kind: PeriodKind, today: string, custom: { from: str
       return { ok: true, ...monthRange(addMonths(month, -1)) };
     case "this_year":
       return { ok: true, from: `${today.slice(0, 4)}-01-01`, to: `${today.slice(0, 4)}-12-31` };
+    case "last_year": {
+      const year = Number(today.slice(0, 4)) - 1;
+      return { ok: true, from: `${year}-01-01`, to: `${year}-12-31` };
+    }
     case "custom":
       if (!DATE.test(custom.from) || !DATE.test(custom.to)) return { ok: false, error: "開始日と終了日を入力してください。" };
       if (custom.from > custom.to) return { ok: false, error: "開始日は終了日以前にしてください。" };
@@ -209,4 +214,29 @@ export function groupRowsByMonth(rows: TaxSummaryRow[]): { month: string; rows: 
     group.tax_total += r.tax_total;
   }
   return out;
+}
+
+// ---- 確定申告の参考(税額のページの上のカード) ----
+
+export interface DeductionRow {
+  key: "self_medication" | "medical_with" | "medical_without";
+  label: string;
+  total: number;
+  count: number;
+}
+
+// カードに並べる3行(セルフメディケーション、医療費(交通費を含む)、医療費(交通費を含まず))
+export function deductionRows(d: DeductionsData): DeductionRow[] {
+  return [
+    { key: "self_medication", label: "セルフメディケーション税制", ...d.self_medication },
+    { key: "medical_with", label: "医療費(交通費を含む)", ...d.medical.including_transport },
+    { key: "medical_without", label: "医療費(交通費を含まず)", ...d.medical.excluding_transport },
+  ];
+}
+
+// 交通費の注記。医療費のうち、大分類が「交通」の支出の合計
+export function transportNote(d: DeductionsData): string {
+  const t = d.medical.transport;
+  if (t.count === 0) return `医療費のうち、大分類が「${d.transport_group}」のカテゴリの支出を交通費とします(この期間はありません)。`;
+  return `医療費のうち交通費は ${formatYen(t.total)}(${t.count}件)です。大分類が「${d.transport_group}」のカテゴリの支出を交通費としています。`;
 }

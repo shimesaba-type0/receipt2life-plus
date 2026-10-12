@@ -29,3 +29,13 @@
 .taxp__coverage.is-warn { padding: 10px 12px; border-radius: 12px; background: var(--warn-soft); }
 .taxp__empty-title { margin: 0 0 6px; font-weight: 700; }
 .taxp__empty p:last-child { margin: 0; }
+
+/* 確定申告の参考 */
+.taxp__ded { display: flex; flex-direction: column; gap: 8px; }
+.taxp__ded-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.taxp__ded-row { display: flex; align-items: baseline; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.taxp__ded-row:first-child { border-top: 0; }
+.taxp__ded-label { flex: 1; min-width: 0; font-size: 15px; }
+.taxp__ded-amount { font-size: 20px; font-weight: 700; }
+.taxp__ded-count { width: 3.5em; text-align: right; font-size: 13px; }
+.taxp__ded-note { margin: 0; font-size: 12px; line-height: 1.7; }
