@@ -20,9 +20,13 @@ import type {
   NewCategory,
   NewEvent,
   NewLink,
+  NewSeatRecord,
   NewTransaction,
   PhotoMeta,
   PhotoView,
+  SeatRecordPatch,
+  SeatRecordsData,
+  SeatRecordView,
   TransactionDeleted,
   TransactionDetailData,
   TransactionPatch,
@@ -120,6 +124,18 @@ export const deletePhoto = (id: string) => request<{ deleted: PhotoView }>("DELE
 export const addLink = (link: NewLink) => request<{ link: LinkView; duplicate: boolean; message: string }>("POST", "/api/links", link);
 export const updateLink = (id: string, patch: LinkPatch) => request<{ link: LinkView; duplicate: false; message: string }>("PATCH", `/api/links/${encodeURIComponent(id)}`, patch);
 export const deleteLink = (id: string) => request<{ deleted: LinkView; message: string }>("DELETE", `/api/links/${encodeURIComponent(id)}`);
+
+// 座席の記録(映画館などの席の評価)。getSeatRecords は絞り込み(date / venue / limit など)つきの一覧と、会場・スクリーン・座席ごとの集計
+export function getSeatRecords(filter: { date?: string; venue?: string; screen?: string; seat?: string; limit?: number } = {}) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") params.set(k, String(v));
+  const qs = params.toString();
+  return request<SeatRecordsData>("GET", `/api/seat-records${qs ? `?${qs}` : ""}`);
+}
+export const addSeatRecord = (record: NewSeatRecord) => request<{ seat_record: SeatRecordView; message: string }>("POST", "/api/seat-records", record);
+export const updateSeatRecord = (id: string, patch: SeatRecordPatch) =>
+  request<{ seat_record: SeatRecordView; message: string }>("PATCH", `/api/seat-records/${encodeURIComponent(id)}`, patch);
+export const deleteSeatRecord = (id: string) => request<{ deleted: SeatRecordView; message: string }>("DELETE", `/api/seat-records/${encodeURIComponent(id)}`);
 
 // バックアップ(JSONL)の読み込み。本文はファイルの中身そのまま(JSONLかJSON配列)。上限の検査は呼び出し側で済ませる
 // 全体のエラー(413 など)は ok: false で返る。行ごとの結果は ok: true の results に入る

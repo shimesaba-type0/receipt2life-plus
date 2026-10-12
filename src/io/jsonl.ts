@@ -17,6 +17,7 @@ import {
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
+import { MAX_NOTE_LENGTH, MAX_SCREEN_LENGTH, MAX_SEAT_LENGTH, MAX_VENUE_LENGTH } from "../core/seat-records";
 import { dedupHash } from "../core/transactions";
 
 // ---- 上限 ----
@@ -64,6 +65,10 @@ const EXPORT_TABLES: TableSpec[] = [
     sql: `SELECT 'link' AS type, id, url, kind, title, date, transaction_id, event_id, created_at
           FROM links WHERE id > ? ORDER BY id LIMIT ?`,
   },
+  {
+    sql: `SELECT 'seat_record' AS type, id, date, venue, screen, seat, rating, note, transaction_id, created_at
+          FROM seat_records WHERE id > ? ORDER BY id LIMIT ?`,
+  },
 ];
 
 async function* exportChunks(db: D1Database): AsyncGenerator<string> {
@@ -80,7 +85,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link → seat_record の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -129,7 +134,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link"] as const;
+const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "seat_record"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -187,6 +192,19 @@ const linkSchema = z
     path: ["transaction_id"],
   });
 
+// 座席の記録。core の座席の記録と同じ上限・トリム。評価は1〜5の整数
+const seatRecordSchema = z.strictObject({
+  id: idField.optional(),
+  date: isoDate,
+  venue: z.string().trim().min(1).max(MAX_VENUE_LENGTH),
+  screen: z.string().trim().min(1).max(MAX_SCREEN_LENGTH).optional(),
+  seat: z.string().trim().min(1).max(MAX_SEAT_LENGTH),
+  rating: z.number().int().min(1, "1〜5の整数にしてください").max(5, "1〜5の整数にしてください").optional(),
+  note: z.string().trim().min(1).max(MAX_NOTE_LENGTH).optional(),
+  transaction_id: z.string().min(1).optional(),
+  created_at: timestampField.optional(),
+});
+
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function tooLarge(error: string): ImportResponse {
@@ -239,7 +257,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links", ids: string[]): Promise<Set<string>> {
+async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "seat_records", ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (const part of chunks([...new Set(ids)], IN_CHUNK)) {
     const { results } = await db
@@ -740,9 +758,55 @@ async function importLinks(db: D1Database, entries: Entry[], report: Report, now
   await insertAll(db, pending, report);
 }
 
+async function importSeatRecords(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
+  if (entries.length === 0) return;
+  const valid: { entry: Entry; id: string; given: boolean; data: z.infer<typeof seatRecordSchema> }[] = [];
+  for (const entry of entries) {
+    const r = seatRecordSchema.safeParse(entry.record);
+    if (!r.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
+      continue;
+    }
+    valid.push({ entry, id: r.data.id ?? crypto.randomUUID(), given: r.data.id !== undefined, data: r.data });
+  }
+
+  // 取引は先に取り込み済みなので、DBを見れば参照先の有無が分かる
+  const [existing, txIds] = await Promise.all([
+    existingIds(db, "seat_records", valid.filter((v) => v.given).map((v) => v.id)),
+    existingIds(db, "transactions", valid.flatMap((v) => (v.data.transaction_id ? [v.data.transaction_id] : []))),
+  ]);
+
+  const seen = new Set<string>();
+  const pending: Pending[] = [];
+  for (const v of valid) {
+    if (existing.has(v.id) || seen.has(v.id)) {
+      report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」の座席の記録は既にあるためスキップしました` });
+      continue;
+    }
+    if (v.data.transaction_id && !txIds.has(v.data.transaction_id)) {
+      report(v.entry, {
+        status: "error",
+        message: `transaction_id: 「${v.data.transaction_id}」という取引はありません。先に取引を取り込むか、id を確認してください`,
+      });
+      continue;
+    }
+    seen.add(v.id);
+    pending.push({
+      entry: v.entry,
+      id: v.id,
+      statements: [
+        db
+          .prepare("INSERT INTO seat_records (id, date, venue, screen, seat, rating, note, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.data.date, v.data.venue, v.data.screen ?? null, v.data.seat, v.data.rating ?? null, v.data.note ?? null, v.data.transaction_id ?? null, v.data.created_at ?? nowIso),
+      ],
+    });
+  }
+  await insertAll(db, pending, report);
+}
+
 /**
  * JSONL(または JSON 配列)を取り込む。行ごとに結果を返し、一部の行がエラーでも他の行は取り込む。
- * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link(外部キーの都合)。結果は元の行の順。
+ * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → seat_record(外部キーの都合)。結果は元の行の順。
  */
 export async function importRecords(db: D1Database, text: string, options: ImportOptions = {}): Promise<ImportResponse> {
   if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
@@ -758,7 +822,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], seat_record: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -790,6 +854,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
   await importTransactions(db, byType.transaction, byType.item, report, now);
   await importAttachments(db, byType.attachment, report, nowIso);
   await importLinks(db, byType.link, report, nowIso);
+  await importSeatRecords(db, byType.seat_record, report, nowIso);
 
   const summary: ImportSummary = { total: results.length, ok: 0, skipped: 0, errors: 0 };
   for (const r of results) {

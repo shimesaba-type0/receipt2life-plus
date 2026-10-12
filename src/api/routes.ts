@@ -5,6 +5,7 @@ import { addCategory, deleteCategory, listCategories, renameGroup, updateCategor
 import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { getHome } from "../core/home";
 import { addLink, deleteLink, updateLink } from "../core/links";
+import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import type { AppEnv } from "../env";
@@ -43,7 +44,7 @@ const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSON�
 export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -157,6 +158,35 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   });
 
   app.delete("/api/links/:id", async (c) => respond(c, await deleteLink(c.env.DB, { id: c.req.param("id") })));
+
+  // 座席の記録(映画館などの席の評価)。一覧は絞り込み: date(その日)/ venue / screen / seat / min_rating / max_rating / from / to / transaction_id / limit
+  app.get("/api/seat-records", async (c) => {
+    const q = c.req.query();
+    const filter: Record<string, unknown> = {};
+    for (const key of ["venue", "screen", "seat", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
+    // date は「その日だけ」(from と to を同じ日にする)
+    if (q.date) {
+      filter.from = q.date;
+      filter.to = q.date;
+    }
+    // 数値は文字列で届くので変換する。数値にならないものは NaN になり、検証でエラーになる
+    for (const key of ["min_rating", "max_rating", "limit"]) if (q[key]) filter[key] = Number(q[key]);
+    return respond(c, await listSeatRecords(c.env.DB, filter));
+  });
+
+  app.post("/api/seat-records", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addSeatRecord(c.env.DB, body.value));
+  });
+
+  app.patch("/api/seat-records/:id", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateSeatRecord(c.env.DB, { ...body.value, id: c.req.param("id") }));
+  });
+
+  app.delete("/api/seat-records/:id", async (c) => respond(c, await deleteSeatRecord(c.env.DB, { id: c.req.param("id") })));
 
   // 写真
   app.post("/api/photos", async (c) => {

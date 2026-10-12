@@ -3,6 +3,7 @@ import { isRealDate, todayJst } from "./dates";
 import { listEvents, type EventView } from "./events";
 import { listLinksOnDay, type LinkView } from "./links";
 import { listPhotosOnDay, photoOnDay, type PhotoView } from "./photos";
+import { listSeatRecordsOnDay, type SeatRecordView } from "./seat-records";
 import type { FieldError } from "./schema";
 import { withItems } from "./items";
 import { TX_VIEW_COLUMNS, type CoreOptions, type TransactionRow, type TransactionView } from "./transactions";
@@ -21,7 +22,7 @@ export type CalendarResult =
   | { ok: false; errors: FieldError[] };
 
 export type DayResult =
-  | { ok: true; date: string; total: number; count: number; transactions: TransactionView[]; events: EventView[]; photos: PhotoView[]; links: LinkView[] }
+  | { ok: true; date: string; total: number; count: number; transactions: TransactionView[]; events: EventView[]; photos: PhotoView[]; links: LinkView[]; seat_records: SeatRecordView[] }
   | { ok: false; errors: FieldError[] };
 
 const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
@@ -60,7 +61,7 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
   if (!isRealDate(date)) {
     return { ok: false, errors: [{ field: "date", message: "date: YYYY-MM-DD 形式の実在する日付で指定してください(例: 2026-10-11)" }] };
   }
-  const [txs, events, photos, links] = await Promise.all([
+  const [txs, events, photos, links, seatRecords] = await Promise.all([
     db
       .prepare(
         `SELECT ${TX_VIEW_COLUMNS}
@@ -75,10 +76,11 @@ export async function getDay(db: D1Database, date: string): Promise<DayResult> {
     listEvents(db, { from: date, to: date, limit: 500 }),
     listPhotosOnDay(db, date),
     listLinksOnDay(db, date),
+    listSeatRecordsOnDay(db, date),
   ]);
   if (!events.ok) return events;
   // 日の合計と件数は取引(レシート)で数える
   const total = txs.results.reduce((s, t) => s + t.amount, 0);
   const transactions = await withItems(db, txs.results);
-  return { ok: true, date, total, count: txs.results.length, transactions, events: events.events, photos, links };
+  return { ok: true, date, total, count: txs.results.length, transactions, events: events.events, photos, links, seat_records: seatRecords };
 }

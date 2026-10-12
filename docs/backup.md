@@ -13,7 +13,7 @@
 
 ファイルの中身:
 
-- 1行1レコードで、`type` が `event` → `transaction` → `item` → `attachment` → `link` の順に並ぶ(`item` はレシートの明細の行。`id`, `transaction_id`, `position`, `name`, `amount`, `category`, `tax_flag`, `memo`, `created_at`。`category` と `tax_flag` は行自身の値で、`null` は取引の値に従う。`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`)
+- 1行1レコードで、`type` が `event` → `transaction` → `item` → `attachment` → `link` → `seat_record` の順に並ぶ(`item` はレシートの明細の行。`id`, `transaction_id`, `position`, `name`, `amount`, `category`, `tax_flag`, `memo`, `created_at`。`category` と `tax_flag` は行自身の値で、`null` は取引の値に従う。`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`。`seat_record` は映画館などの座席の記録。`id`, `date`, `venue`, `screen`, `seat`, `rating`, `note`, `transaction_id`, `created_at`。取引に紐づけたものは、読み込み時に先に取引が入る)
 - カテゴリと口座は、名前で書き出される
 - `transaction` の行には、レシートの情報 `paid_time` / `merchant_phone` / `merchant_address` / `invoice_number` / `clerk_name` / `receipt_no`(なしは `null`)も入る
 - `transaction` の行には `tax_flag`(税金の控除用フラグ。`medical` / `self_medication` / `donation`、なしは `null`)が入る
@@ -53,5 +53,6 @@
 - 未知のカテゴリの名前も、その行だけエラーになる。ただし**エクスポートした行(`id` と `created_at` がある取引)**は復元とみなし、取り込み先に無いカテゴリを自動で作る。バックアップの行には大分類が入っていないので、大分類は「その他」になる(必要なら、あとで `/categories` の画面か MCP の `update_category` で移す)。名前が30文字を超える・前後に空白があるものは作らず、その行がエラーになる。実際に取り込む行が使うカテゴリだけを作る(スキップされる行のぶんは作らない)
 - `link` の行は、URLを登録時と同じ規則で検証・正規化する(許可リスト外のURL、`http:`、`user:pass@` 付き、`kind` がURLと合わないものは、その行だけエラー)。紐づけ先の取引・出来事が無い行もエラー
 - `link` の重複: 同じ `id` は `skipped_exists`。`id` が違っても、同じ紐づけ先に同じ正規化URLがあれば `skipped_duplicate`(バックアップを同じDBに何度戻しても増えない)
+- `seat_record` の行は、座席の記録と同じ規則で検証する(`date` `venue` `seat` が必須、`rating` は1〜5の整数、`venue` 100文字・`screen` 100文字・`seat` 50文字・`note` 200文字まで。範囲外や未知の項目は、その行だけエラー)。`transaction_id` がある行は、その取引が取り込み先に無ければその行だけエラー(取引はファイルの順に関係なく先に入る)。同じ `id` は `skipped_exists`(何度戻しても増えない)
 
 ブラウザ以外(`curl` など)から POST するには、サービストークンが必要です。ステージング環境(別の Worker・D1・R2・サービストークン)がまだ作られていないため、その手順は未記入です。ステージングを作ったあとに、ここへ書きます。

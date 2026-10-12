@@ -94,6 +94,32 @@ export interface LinkView {
   created_at: string;
 }
 
+// 座席の記録(映画館のスクリーン・座席など。venue=会場、screen=スクリーン/ホール、seat=座席)
+export interface SeatRecordView {
+  id: string;
+  date: string;
+  venue: string;
+  screen: string | null;
+  seat: string;
+  // 席の評価(整数1〜5、5が最良)。未評価は null
+  rating: number | null;
+  // 一言(200文字まで)
+  note: string | null;
+  // 紐づけた取引(取引が消えたら null になる)
+  transaction_id: string | null;
+  created_at: string;
+}
+
+// 会場・スクリーン・座席ごとの集計。avg_rating は評価のある記録の平均(小数1桁。評価がなければ null)
+export interface SeatSummaryRow {
+  venue: string;
+  screen: string | null;
+  seat: string;
+  count: number;
+  rated_count: number;
+  avg_rating: number | null;
+}
+
 export interface SummaryRow {
   key: string;
   label: string;
@@ -155,6 +181,8 @@ export interface DayData {
   photos: PhotoView[];
   // その日のリンク(日付、その日の取引、その日と重なる出来事に紐づくもの)
   links: LinkView[];
+  // その日の座席の記録(date が一致するもの。登録順)
+  seat_records: SeatRecordView[];
 }
 
 // GET /api/categories
@@ -340,4 +368,38 @@ export interface NewLink {
 // PATCH /api/links/:id の入力(表題だけ変えられる。null で消去)
 export interface LinkPatch {
   title: string | null;
+}
+
+// GET /api/seat-records?date=&venue=&screen=&seat=&min_rating=&max_rating=&from=&to=&transaction_id=&limit=
+// date はその日だけ(from と to を同じ日にする)。並びは date の新しい順。
+// count は絞り込みに合う全件の数、records は limit まで、summary は venue・screen・seat ごとの件数と平均評価(全件で集計)
+export interface SeatRecordsData {
+  count: number;
+  records: SeatRecordView[];
+  summary: SeatSummaryRow[];
+  truncated: boolean;
+  message: string;
+}
+
+// POST /api/seat-records の入力。戻りは seat_record と message
+export interface NewSeatRecord {
+  date: string;
+  venue: string;
+  screen?: string;
+  seat: string;
+  // 1〜5 の整数(5が最良)
+  rating?: number;
+  note?: string;
+  transaction_id?: string;
+}
+
+// PATCH /api/seat-records/:id の入力(指定した項目だけ変える。screen / rating / note / transaction_id は null で消去)
+export interface SeatRecordPatch {
+  date?: string;
+  venue?: string;
+  screen?: string | null;
+  seat?: string;
+  rating?: number | null;
+  note?: string | null;
+  transaction_id?: string | null;
 }
