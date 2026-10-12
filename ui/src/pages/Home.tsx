@@ -3,6 +3,7 @@ import { BrandMark } from "../components/BrandMark";
 import type { CategoriesData, HomeData } from "../../../src/api/contract";
 import { getCategories, getHome } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
+import { DiscountIcon } from "../components/DiscountIcon";
 import { DonutChart } from "../components/DonutChart";
 import { chipIcon } from "../categoryIcons";
 import { formatDateJa, formatYen, todayJst } from "../format";
@@ -162,7 +163,7 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
         </section>
 
         <section class="card home__discounts" aria-label="今月の割引">
-          <span class="home__label">今月の割引</span>
+          <span class="home__label home__discounts-label"><DiscountIcon />今月の割引</span>
           {discounts.empty ? (
             <span class="home__discounts-empty">{discounts.countText}</span>
           ) : (

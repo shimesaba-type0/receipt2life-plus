@@ -3,6 +3,7 @@ import type { ApiResult, CategoriesData, FieldError, PhotoView, TransactionDetai
 import { UnauthorizedError, deleteLink, deleteTransaction, getCategories, getTransaction, photoUrl, updateLink, updateTransaction } from "../api";
 import { CopyValue } from "../components/CopyValue";
 import { CategoryChip } from "../components/CategoryIcon";
+import { DiscountIcon } from "../components/DiscountIcon";
 import { chipIcon } from "../categoryIcons";
 import { LinkCard } from "../components/LinkCard";
 import { PhotoLightbox } from "../components/PhotoLightbox";
@@ -313,7 +314,7 @@ function TransactionBody(props: {
                   return (
                     <li key={it.id} class="tx__item">
                       <div class="tx__item-main">
-                        <span class="tx__item-name">{it.name}</span>
+                        <span class="tx__item-name">{it.amount < 0 && <DiscountIcon size={16} />}{it.name}</span>
                         <span class="day__tags">
                           {catLabel ? <CategoryChip label={catLabel} icon={chipIcon(props.cats, cat)} /> : <span class="chip chip--warn">カテゴリ未設定</span>}
                           {flag && <span class="chip day__taxflag">{flag}</span>}
