@@ -1,12 +1,12 @@
 {
-  "name": "receipt2life+",
-  "short_name": "receipt2life+",
+  "name": "Receipt to Life +",
+  "short_name": "Receipt to Life +",
   "description": "日々の支出を中心に、出来事や思い出も一緒に記録するライフログ",
   "lang": "ja",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#F3F5F4",
+  "background_color": "#F1F4F2",
   "theme_color": "#1F5C4B",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 // sw.js は import を使わない単一ファイル。読んで評価し、判定関数を取り出す(Service Worker 環境が無いのでイベント登録はされない)
 import code from "../../ui/public/sw.js?raw";
-const sandbox = new Function(`${code}\nreturn { isCacheableRequest, isCacheableResponse, CACHE_NAME };`)() as Record<string, unknown>;
+const sandbox = new Function(`${code}\nreturn { isCacheableRequest, isCacheableResponse, CACHE_NAME, CACHE_VERSION };`)() as Record<string, unknown>;
 const isReq = sandbox.isCacheableRequest as (m: string, u: string, o: string) => boolean;
 const isRes = sandbox.isCacheableResponse as (r: unknown) => boolean;
 
@@ -59,5 +59,11 @@ describe("sw: レスポンスの保存判定", () => {
 describe("sw: 版つきキャッシュ名", () => {
   it("キャッシュ名に版が入っている", () => {
     expect(String(sandbox.CACHE_NAME)).toMatch(/^r2l-static-v\d+$/);
+  });
+
+  it("アイコンを入れ替えたので、版は v2 以上(古いアイコンが残らない)", () => {
+    expect(String(sandbox.CACHE_VERSION)).toMatch(/^v\d+$/);
+    expect(Number(String(sandbox.CACHE_VERSION).slice(1))).toBeGreaterThanOrEqual(2);
+    expect(String(sandbox.CACHE_NAME)).toBe(`r2l-static-${String(sandbox.CACHE_VERSION)}`);
   });
 });

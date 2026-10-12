@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { BrandMark } from "../components/BrandMark";
 import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
   UnauthorizedError,
@@ -344,7 +345,12 @@ export function Day(props: { date: string }) {
                 <AddTxForm date={date} cats={cats} busy={busy} onSubmit={addTx} onCancel={() => setAdding(false)} />
               </div>
             )}
-            {data.transactions.length === 0 && !adding && <p class="muted">この日の支出はありません。</p>}
+            {data.transactions.length === 0 && !adding && (
+              <p class="muted">
+                <BrandMark size={48} faint class="brandmark-empty" />
+                この日の支出はありません。
+              </p>
+            )}
             {data.transactions.length > 0 && (
             <ul class="day__list day__txlist">
               {data.transactions.map((tx) => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { BrandMark } from "../components/BrandMark";
 import type { CalendarData, EventView, FieldError } from "../../../src/api/contract";
 import { getCalendar } from "../api";
 import { buildMonthGrid, defaultSelectedDate, eventEnd, formatCellAmount, formatPeriodShort, laneCount, layoutWeekBands } from "../calendar-layout";
@@ -122,7 +123,7 @@ export function Calendar(props: { month: string | null }) {
           </button>
         </div>
       )}
-      {state.status === "loading" && <p class="muted" role="status">読み込み中…</p>}
+      {state.status === "loading" && <p class="muted" role="status"><BrandMark size={20} faint />{" "}読み込み中…</p>}
 
       <div class="cal__layout">
       <div class="cal__main">

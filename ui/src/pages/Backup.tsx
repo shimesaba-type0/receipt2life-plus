@@ -1,4 +1,5 @@
 import { useRef, useState } from "preact/hooks";
+import { BrandMark } from "../components/BrandMark";
 import { importBackup } from "../api";
 import {
   errorLines,
@@ -33,7 +34,7 @@ export function Backup() {
   return (
     <section class="page backup">
       <header class="backup__header">
-        <h1 class="backup__title">エクスポートとバックアップ</h1>
+        <h1 class="backup__title brandmark-line"><BrandMark size={24} />エクスポートとバックアップ</h1>
         <p class="backup__lead">記録は、いつでも自分の手元に取り出せます。写真は含まれません(別に保存してください)。</p>
       </header>
 

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
+import { BrandMark } from "../components/BrandMark";
 import type { CategoriesData, HomeData } from "../../../src/api/contract";
 import { getCategories, getHome } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { DonutChart } from "../components/DonutChart";
 import { chipIcon } from "../categoryIcons";
-import { CATEGORY_ICON, TAX_ICON } from "../components/Nav";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
 import { discountsView, formatPercent, groupColor, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
@@ -49,33 +49,9 @@ export function Home() {
     <section class="page home">
       <header class="home__header">
         <div class="home__heading">
-          <span class="home__brand">receipt2life+</span>
+          <img class="home__brand" src="/brand/wordmark.svg" alt="Receipt to Life +" />
           <span class="home__kicker">今日</span>
           <h1 class="home__date">{formatDateJa(today)}</h1>
-        </div>
-        {/* スマホだけ(PCは左メニューにある) */}
-        <div class="home__tools">
-          <Link href="/categories" class="home__export" aria-label="カテゴリ">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              {CATEGORY_ICON.map((d) => (
-                <path d={d} key={d} />
-              ))}
-            </svg>
-          </Link>
-          <Link href="/tax" class="home__export" aria-label="税額">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              {TAX_ICON.map((d) => (
-                <path d={d} key={d} />
-              ))}
-            </svg>
-          </Link>
-          <Link href="/backup" class="home__export" aria-label="エクスポート">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 4v11" />
-              <path d="M7 11l5 5 5-5" />
-              <path d="M5 20h14" />
-            </svg>
-          </Link>
         </div>
         <Link href={`/day/${today}`} class="home__open-today">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -87,6 +63,7 @@ export function Home() {
 
       {state.kind === "loading" && (
         <p class="home__status" role="status">
+          <BrandMark size={20} faint />{" "}
           読み込み中です…
         </p>
       )}
@@ -113,6 +90,7 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
     <>
       {isEmptyHome(data) && (
         <div class="card home__empty" role="status">
+          <BrandMark size={48} faint class="brandmark-empty" />
           <p class="home__empty-title">まだ記録がありません</p>
           <p class="muted">レシートを登録すると、ここに合計や内訳が表示されます。</p>
         </div>

@@ -1,4 +1,4 @@
-# AGENTS.md — receipt2life+ の共通ルール
+# AGENTS.md — Receipt to Life + の共通ルール
 
 どのエージェント(Claude Code、Codex など)にも共通のルール。まだ最小限で、育てていく。
 仕様の正は `SPEC.md`(置いたらそれが優先)。迷ったらここと SPEC.md に戻る。

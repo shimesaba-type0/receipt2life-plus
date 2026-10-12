@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { BrandMark } from "../components/BrandMark";
 import type { TaxSummaryData, TaxSummaryRow } from "../../../src/api/contract";
 import { UnauthorizedError, getTaxSummary } from "../api";
 import { formatMonthJa, formatYen, todayJst } from "../format";
@@ -81,6 +82,7 @@ export function Tax() {
 
       {state.kind === "loading" && (
         <p class="muted" role="status">
+          <BrandMark size={20} faint />{" "}
           読み込み中…
         </p>
       )}
@@ -111,6 +113,7 @@ function Summary(props: { data: TaxSummaryData; byMonth: boolean }) {
     <>
       {isEmptySummary(data) ? (
         <div class="card taxp__empty" role="status">
+          <BrandMark size={48} faint class="brandmark-empty" />
           <p class="taxp__empty-title">この期間に、税額の記録はありません</p>
           <p class="muted">支出の明細ページの「編集」から、レシートの税の内訳(税率ごとの対象金額と消費税額)を入れると、ここに集計されます。</p>
         </div>
