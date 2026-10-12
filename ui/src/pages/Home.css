@@ -36,28 +36,23 @@
 .home__month { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .home__range { font-size: 13px; color: var(--muted); text-align: right; line-height: 1.5; }
 
-/* 内訳 */
+/* 内訳(ドーナツ。スマホは中央に置いて、一覧は下。PCは左にドーナツ、右に一覧) */
 .home__breakdown { border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 .home__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .home__h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .home__note { font-size: 12px; color: var(--muted); }
-.home__stack { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; }
-.home__stack-seg { display: block; height: 100%; min-width: 2px; }
+.home__donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.home__donut { display: block; width: 240px; max-width: 100%; height: auto; }
+.home__donut-pct { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.home__donut-cap { font-size: 10px; fill: var(--muted); }
+.home__donut-total { font-size: 15px; font-weight: 700; fill: var(--ink); font-variant-numeric: tabular-nums; }
+.home__donut-wrap .home__list { align-self: stretch; }
 .home__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .home__row { display: flex; align-items: center; gap: 10px; }
 .home__swatch { flex: none; width: 10px; height: 10px; border-radius: 5px; }
 .home__row-name { flex: 1; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
 .home__row-amount { font-size: 15px; font-weight: 500; }
 .home__row-pct { width: 52px; text-align: right; font-size: 13px; color: var(--muted); }
-
-/* メモ付きの支出(ミント・枠なし) */
-.home__memo { background: var(--accent-soft); border-radius: 20px; padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
-.home__memo-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.home__memo-label { font-size: 14px; font-weight: 500; }
-.home__memo-value { font-size: 14px; }
-.home__memo-value b { font-size: 20px; font-weight: 700; }
-.home__meter { height: 8px; border-radius: 4px; background: #fff; overflow: hidden; }
-.home__meter-fill { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 
 /* 今月の割引(印字された割引行だけの合計。スマホはメモ付きの下) */
 .home__discounts { border-radius: 20px; padding: 16px 24px; display: flex; flex-direction: column; gap: 4px; }
@@ -105,19 +100,16 @@
   .home__divider { display: none; }
   .home__big { font-size: 56px; }
   .home__mid { font-size: 40px; line-height: 1.15; }
-  .home__memo { grid-column: 9 / span 2; grid-row: 1; align-self: stretch; border-radius: 24px; padding: 24px 28px; gap: 12px; justify-content: center; }
-  .home__memo-head { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .home__memo-label { color: #3f4b46; }
-  .home__memo-value b { font-size: 32px; }
-  /* 今日/今月/メモの下に、横長の帯として置く */
-  .home__discounts { grid-column: 1 / -1; grid-row: 2; flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 20px; border-radius: 24px; padding: 18px 28px; }
-  .home__discounts-amount { font-size: 28px; }
-  .home__discounts-note { margin-left: auto; }
-  .home__review { grid-column: 1 / -1; grid-row: 3; min-height: 52px; }
-  .home__breakdown { grid-column: 1 / -1; grid-row: 4; padding: 24px 28px; gap: 18px; }
+  /* 今月の割引は、今日・今月の右(以前のメモ付きの場所) */
+  .home__discounts { grid-column: 9 / span 2; grid-row: 1; align-self: stretch; justify-content: center; gap: 8px; border-radius: 24px; padding: 24px 28px; }
+  .home__discounts-amount { font-size: 30px; }
+  .home__review { grid-column: 1 / -1; grid-row: 2; min-height: 52px; }
+  .home__breakdown { grid-column: 1 / -1; grid-row: 3; padding: 24px 28px; gap: 18px; }
+  .home__donut-wrap { flex-direction: row; justify-content: center; align-items: center; gap: 48px; }
+  .home__donut { width: 260px; flex: none; }
+  .home__donut-wrap .home__list { align-self: center; flex: 1 1 0; max-width: 420px; }
   .home__h2 { font-size: 17px; }
-  .home__stack { height: 14px; border-radius: 7px; }
-  .home__row-pct { width: 56px; }
-  .home__recent-section { grid-column: 1 / -1; grid-row: 5; gap: 6px; }
+    .home__row-pct { width: 56px; }
+  .home__recent-section { grid-column: 1 / -1; grid-row: 4; gap: 6px; }
   .home__section-head--outer { padding-bottom: 4px; }
 }

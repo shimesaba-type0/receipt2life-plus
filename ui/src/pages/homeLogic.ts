@@ -50,6 +50,88 @@ export function barSegments(groups: SummaryRow[]): BarSegment[] {
   }));
 }
 
+// ---- ドーナツグラフ ----
+// 目に優しい白・黒(真っ白・真っ黒は使わない)。ドーナツの中の文字色に使う
+export const PAPER = "#F1F4F2";
+export const INK = "#1B2420";
+
+// "#RRGGBB" の相対輝度(WCAG)
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * (ch[0] as number) + 0.7152 * (ch[1] as number) + 0.0722 * (ch[2] as number);
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// 背景色の上で、読みやすいほう(明るい白か暗い黒)の文字色
+export function textColorOn(bg: string): string {
+  return contrast(PAPER, bg) >= contrast(INK, bg) ? PAPER : INK;
+}
+
+export const DONUT = { size: 160, r: 56, stroke: 26 } as const;
+// ドーナツの中に % を入れる区分: 大きいほうから最大 5 つ、かつ 10% 以上(小さい区分は一覧で見る)
+export const DONUT_MAX_LABELS = 5;
+export const DONUT_MIN_LABEL_PERCENT = 10;
+
+export interface DonutSlice {
+  key: string;
+  label: string;
+  color: string;
+  percent: number;
+  // 円周に沿った線の長さと、始まりのずれ(stroke-dasharray / stroke-dashoffset)
+  dash: number;
+  gap: number;
+  offset: number;
+  // リングの中の % の文字。入れない区分は null
+  inner: { x: number; y: number; text: string; color: string } | null;
+}
+
+// 大分類別の内訳を、ドーナツの区分にする。金額が0以下は出さない。上から時計回り(12時から)
+export function donutSlices(groups: SummaryRow[]): DonutSlice[] {
+  const segs = barSegments(groups);
+  const { size, r } = DONUT;
+  const c = size / 2;
+  const circ = 2 * Math.PI * r;
+  const single = segs.length === 1;
+  const gapLen = single ? 0 : 1.6;
+  // % を入れる区分(大きい順で最大5つ、10%以上)
+  const labeled = new Set(
+    [...segs]
+      .sort((a, b) => b.total - a.total)
+      .filter((s) => s.width >= DONUT_MIN_LABEL_PERCENT)
+      .slice(0, DONUT_MAX_LABELS)
+      .map((s) => s.key),
+  );
+  let start = 0; // 0〜1
+  return segs.map((s) => {
+    const frac = s.width / 100;
+    const len = circ * frac;
+    const mid = start + frac / 2;
+    const angle = mid * 2 * Math.PI - Math.PI / 2;
+    const slice: DonutSlice = {
+      key: s.key,
+      label: s.label,
+      color: s.color,
+      percent: s.percent,
+      dash: Math.max(len - gapLen, 0.01),
+      gap: circ - Math.max(len - gapLen, 0.01),
+      offset: -circ * start,
+      inner: labeled.has(s.key)
+        ? { x: c + r * Math.cos(angle), y: c + r * Math.sin(angle), text: `${Math.round(s.percent)}%`, color: textColorOn(s.color) }
+        : null,
+    };
+    start += frac;
+    return slice;
+  });
+}
+
 export interface MemoView {
   withMemo: number;
   total: number;

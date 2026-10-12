@@ -2,11 +2,12 @@ import { useEffect, useState } from "preact/hooks";
 import type { CategoriesData, HomeData } from "../../../src/api/contract";
 import { getCategories, getHome } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
+import { DonutChart } from "../components/DonutChart";
 import { chipIcon } from "../categoryIcons";
 import { CATEGORY_ICON, TAX_ICON } from "../components/Nav";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
-import { barSegments, discountsView, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
+import { discountsView, formatPercent, groupColor, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
 import "./Home.css";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: HomeData };
@@ -104,8 +105,7 @@ export function Home() {
 
 function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
   const { data, cats } = props;
-  const segments = barSegments(data.groups);
-  const memo = memoView(data.memo);
+  const hasBreakdown = data.groups.some((g) => g.total > 0);
   const discounts = discountsView(data.discounts);
   const range = monthRangeLabel(data.month.from, data.today.date);
 
@@ -164,15 +164,11 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
             <h2 class="home__h2">今月の内訳</h2>
             <span class="home__note">記録した範囲の傾向</span>
           </div>
-          {segments.length === 0 ? (
+          {!hasBreakdown ? (
             <p class="muted">今月の支出はまだありません。</p>
           ) : (
-            <>
-              <div class="home__stack" role="img" aria-label={`大分類別の内訳: ${segments.map((s) => `${s.label} ${formatPercent(s.percent)}`).join("、")}`}>
-                {segments.map((s) => (
-                  <span key={s.key} class="home__stack-seg" style={{ width: `${s.width}%`, background: s.color }} />
-                ))}
-              </div>
+            <div class="home__donut-wrap">
+              <DonutChart groups={data.groups} total={data.month.total} />
               <ul class="home__list">
                 {data.groups.map((g, i) => (
                   <li key={g.key} class="home__row">
@@ -183,20 +179,8 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           )}
-        </section>
-
-        <section class="home__memo" aria-label="メモ付きの支出">
-          <div class="home__memo-head">
-            <span class="home__memo-label">メモ付きの支出</span>
-            <span class="home__memo-value num">
-              <b>{memo.percentText}</b> {memo.ratioText}
-            </span>
-          </div>
-          <div class="home__meter" role="img" aria-label={memo.text}>
-            <span class="home__meter-fill" style={{ width: `${memo.percent}%` }} />
-          </div>
         </section>
 
         <section class="card home__discounts" aria-label="今月の割引">

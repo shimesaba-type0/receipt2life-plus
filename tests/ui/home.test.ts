@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HomeData, SummaryRow, TransactionView } from "../../src/api/contract";
-import { DISCOUNTS_NOTE, GROUP_COLORS, barSegments, discountsView, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, percentOf, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "../../ui/src/pages/homeLogic";
+import { DISCOUNTS_NOTE, DONUT, GROUP_COLORS, INK, PAPER, barSegments, discountsView, donutSlices, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, percentOf, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate, textColorOn } from "../../ui/src/pages/homeLogic";
 
 const row = (key: string, total: number, percent: number): SummaryRow => ({ key, label: key, count: 1, total, percent });
 const tx = (over: Partial<TransactionView>): TransactionView => ({
@@ -114,5 +114,55 @@ describe("discountsView(今月の割引カード)", () => {
     expect(discountsView(undefined).empty).toBe(true);
     expect(discountsView({ month_total: -5, month_line_count: NaN }).empty).toBe(true);
     expect(discountsView({ month_total: 100, month_line_count: 0 }).countText).toBe("0件の割引");
+  });
+});
+
+describe("ドーナツグラフ", () => {
+  const rows = (...totals: number[]) => {
+    const sum = totals.reduce((a, b) => a + b, 0);
+    return totals.map((t, i) => ({ key: `g${i}`, label: `区分${i}`, total: t, count: 1, percent: Math.round((t / sum) * 1000) / 10 }));
+  };
+
+  it("区分の長さは円周の比で、合計が円周になる(区分の間の隙間を足すと1周)", () => {
+    const slices = donutSlices(rows(500, 300, 200));
+    const circ = 2 * Math.PI * DONUT.r;
+    const sum = slices.reduce((a, s) => a + s.dash + 1.6, 0);
+    expect(sum).toBeCloseTo(circ, 5);
+    expect(slices[0]?.offset).toBeCloseTo(0, 5);
+    expect(slices[1]?.offset).toBeCloseTo(-circ * 0.5, 5);
+  });
+
+  it("%は大きい順に最大5つ、10%以上の区分だけリングの中に入れる", () => {
+    const s = donutSlices(rows(30, 25, 15, 10, 8, 7, 5));
+    const labeled = s.filter((x) => x.inner).map((x) => x.key);
+    expect(labeled).toEqual(["g0", "g1", "g2", "g3"]); // 10% 以上は4つ。8%以下は入れない
+    expect(s[0]?.inner?.text).toBe("30%");
+    const many = donutSlices(rows(20, 20, 20, 15, 15, 10));
+    expect(many.filter((x) => x.inner)).toHaveLength(5); // 10%以上が6つあっても5つまで
+  });
+
+  it("区分が1つだけなら、隙間なしで1周し、100%を入れる", () => {
+    const [only] = donutSlices(rows(1234));
+    expect(only?.dash).toBeCloseTo(2 * Math.PI * DONUT.r, 5);
+    expect(only?.inner?.text).toBe("100%");
+  });
+
+  it("金額が0以下の区分は出さない。空なら空", () => {
+    expect(donutSlices(rows(100, 0))).toHaveLength(1);
+    expect(donutSlices([])).toEqual([]);
+  });
+
+  it("%の位置は、区分の真ん中の角度のリング上(最初の区分は12時から右回り)", () => {
+    const [a] = donutSlices(rows(50, 50));
+    const c = DONUT.size / 2;
+    // 先頭の区分は 0〜50%(12時→6時)。真ん中は3時の位置
+    expect(a?.inner?.x).toBeCloseTo(c + DONUT.r, 5);
+    expect(a?.inner?.y).toBeCloseTo(c, 5);
+  });
+
+  it("文字色は、背景に対して読みやすいほう(真っ白・真っ黒は使わない)", () => {
+    expect(textColorOn("#1F5C4B")).toBe(PAPER);
+    expect(textColorOn("#A9CDBF")).toBe(INK);
+    for (const color of GROUP_COLORS) expect([PAPER, INK]).toContain(textColorOn(color));
   });
 });
