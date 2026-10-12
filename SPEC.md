@@ -115,6 +115,21 @@ receipt2life/
 | tax_flag | TEXT | transactions.tax_flag と同じ値。NULLなら取引のフラグに従う |
 | memo | TEXT | |
 | created_at | TEXT NOT NULL | |
+| tax_rate | REAL CHECK(0〜100) | 消費税の税率(%)。レシートの印字どおり。小数可。NULL=不明(migration 0012)。tax_flag とは別物 |
+| tax_label | TEXT CHECK(20文字まで) | 印字どおりの税率の記号(「※」「軽」など)。任意(migration 0012) |
+
+**transaction_tax_lines**(税の内訳。レシート下部の税率別の内訳。migration 0012)
+
+| 列 | 型・制約 | 備考 |
+| --- | --- | --- |
+| id | TEXT PK | |
+| transaction_id | TEXT NOT NULL | transactionsへのFK(ON DELETE CASCADE。core でも明示して消す)。索引あり |
+| rate | REAL NOT NULL CHECK(0〜100) | 税率(%)。印字どおり。(transaction_id, rate) は UNIQUE |
+| taxable_amount | INTEGER | その税率の対象金額(円)。印字が無ければ NULL |
+| tax_amount | INTEGER | その税率の消費税額(円)。印字が無ければ NULL |
+| amount_basis | TEXT CHECK IN ('included','excluded') | 対象金額が税込か税抜か。印字から分かる場合だけ |
+| label | TEXT CHECK(20文字まで) | 印字の記号 |
+| created_at | TEXT NOT NULL | |
 
 **categories**: id, name(UNIQUE), group_name(集計用の大分類)。初期データは seed で入れる(例: 食費、日用品、交通・チャージ、娯楽、その他)
 **accounts**: id, name(UNIQUE)。現金、カード、Suica程度のラベル。残高は持たない
@@ -130,7 +145,7 @@ receipt2life/
 
 Streamable HTTPで、ステートレスに実装する。ツールの説明文とスキーマがAIへの仕様書になるので、項目の意味、必須と任意、選べる値を必ず書く。
 
-現在は29個(取引4、集計・参照2、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3、座席の記録4、会場・スクリーン3)。`src/mcp/tools/*` が正。
+現在は30個(取引4、集計・参照3、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3、座席の記録4、会場・スクリーン3)。`src/mcp/tools/*` が正。
 
 | ツール | 役割 |
 | --- | --- |
@@ -138,6 +153,7 @@ Streamable HTTPで、ステートレスに実装する。ツールの説明文�
 | list_transactions | from、to、category、tax_flag、keyword(任意)で一覧。明細(items)つき |
 | update_transaction / delete_transaction | 修正(明細は全置換)と削除(delete_photos で写真もいっしょに) |
 | summarize | 期間と group_by(category、group、month、merchant、event_id、tax_flag)で集計。単位は支出の行。件数、合計、全体に対する割合 |
+| summarize_tax | 期間と group_by(rate=税率別、month=月別×税率別)で、レシートに印字された消費税額・対象金額を合計する。集計は tax_lines の数字だけ。税の内訳が無い支出の件数・金額(カバレッジ)を必ず返す |
 | list_categories | AIが既存カテゴリに寄せるために使う。大分類ごとのまとまりと使用数つき |
 | add_category / update_category / delete_category / rename_group | カテゴリ(大分類の下のサブカテゴリ)の管理 |
 | add_account / update_account / delete_account | 口座(支払方法)の管理。未知の口座名での登録はエラーのまま(自動追加しない) |
@@ -146,7 +162,7 @@ Streamable HTTPで、ステートレスに実装する。ツールの説明文�
 | add_link / list_links / delete_link | Xの投稿・YouTubeの動画のリンク |
 | add_seat_record / list_seat_records / update_seat_record / delete_seat_record | 映画館・球場などの座席の記録(会場・スクリーン/エリア・座席・席種 `seat_class`・評価1〜5・一言)。`seat_class` は席種で、一覧は部分一致で絞り込める。venue / screen は名前で受け、無ければ会場・スクリーンを自動で作る(応答の `created_venue` / `created_screen`)。一覧は venue・screen・seat ごとの平均評価(summary)つき。次の席選びの参考にする |
 | list_venues / update_venue / update_screen | 会場とその下のスクリーン(ホール・ブロック・エリアなどの区画)の一覧(記録件数・平均評価・スクリーンの特徴 note つき)、会場名の変更、スクリーン名の変更と note の設定・消去。削除のツールはない。登録前に `list_venues` で既存の名前を確かめ、新しい名前を作る前にユーザーに確認する |
-| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール29個には含まれない。入れるかは第13節の未決事項 |
+| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール30個には含まれない。入れるかは第13節の未決事項 |
 
 - **重複**: dedup_hash が既存と一致したら、登録せずに既存のIDを返して警告する。同日同額の正当な購入があり得るので、`allow_duplicate: true` で強制登録できるようにする
 - **検証**: 金額は整数、日付はISO形式、未来日付と極端な金額は拒否。エラーは何が悪いかを文章で返し、AIが直して再送できるようにする
@@ -202,10 +218,11 @@ AIで読み取る場所ではなく、カレンダーで振り返りながら、
 - **エクスポート**(`/backup`、ナビの文言は「エクスポート」): JSONLのダウンロード、JSONL・JSON配列の読み込みと結果表示。暫定: Markdownは「準備中」
 - **期間メモ**: カレンダー上に帯で描き、重なる場合は段を分ける
 - **リンク**: 日付・取引・出来事に、Xの投稿・YouTubeの動画のURLを付けられる。カードのタップで新しいタブを開き、埋め込みやサムネイルは出さない
+- **税額**(`/tax`): レシートに印字された消費税額を、期間(今月・先月・今年・期間指定)ごとに税率別(切り替えで月別)の表で出す。税の内訳の無い支出の件数・金額を注記する。明細ページでは、明細の行に税率を添え、税の内訳を表で出し、編集モードで入力する
 - **税金フラグ**: 取引と明細の行に、医療費控除・セルフメディケーション税制・寄附金控除のフラグを1つ付けられる(取引の追加・編集のフォーム、明細ページ)。年ごとの集計はMCPの `summarize`(`group_by: "tax_flag"`)で行い、画面には集計を出さない
 - 写真は、ブラウザ側で長辺1600px程度に縮小してからアップロードする。配信は認証を通したWorker経由で、R2は公開しない
 - 簡易集計は `summarize` と同じ関数を使う。凝った分析はUIに作り込まない
-- 暫定: UIは Vite + Preact のSPA(第13節「フェーズ5(UI)」)。スマホは下のタブ(ホーム / カレンダー / 今日)、PCは左のメニュー(ホーム / カレンダー / カテゴリ / エクスポート)
+- 暫定: UIは Vite + Preact のSPA(第13節「フェーズ5(UI)」)。スマホは下のタブ(ホーム / カレンダー / 今日)、PCは左のメニュー(ホーム / カレンダー / カテゴリ / 税額 / エクスポート)
 
 ## 9. エクスポートとインポート
 
@@ -394,3 +411,16 @@ backup/
 - フェーズ5(カレンダー): スマホ幅のカレンダーで日をタップすると、PC幅の右ペインと同じ中身(`DayPane`)を、下からのシート(`DaySheet`、`role="dialog"`、フォーカストラップ、Esc・背景・×で閉じる)で出す。「詳細を開く」でその日のページ(`/day/:date`)へ移る。PC幅に切り替わったらシートは閉じる。以前のスマホ幅は、タップで直接 `/day/:date` へ移っていた
 - フェーズ5(カレンダー): スマホ幅のプレビューを、下からのシートから、ページ内(「今月の出来事」の下、「今月の祝日」の上)に差し込む形へ変えた。タップした日は背景色で示し、プレビューが見えるまで最小限スクロールする。下からのシート版(`DaySheet`)は、使わないがコードとして残してある(ユーザーの希望)。PC幅の右ペインは変更なし
 - フェーズ5(速さ): 画面側に、メモリだけの短時間キャッシュを足した(`ui/src/api-cache.ts`、TTL 30秒、100件まで)。成功した GET だけをおぼえ、失敗はおぼえない。書き込み(POST/PATCH/DELETE、写真、インポート)をしたらすべて捨てる(書き込み前に始まった通信の結果も保存しない)。同じ GET が飛行中なら通信を共有する。取り出すたびに複製して返す。サーバーの応答は `private, no-store` のまま(共有の保存先に残さない)。他の端末や MCP からの書き込みは、最大30秒のあいだ見えないことがある。ページを読み込み直すと消える。サーバー側: `/api/*` に `Server-Timing: app;dur=ミリ秒` を付け、300ms 以上かかったものは「slow api: メソッド ルートの形 ステータス ミリ秒」としてログに残す(値は載せない)。カレンダーの月の問い合わせは、集計と出来事を同時に待つようにした
+- 消費税の税率と税額(ユーザー指示): レシートに印字された税率と税額を記録し、期間ごとに税率別の税額を集計できるようにした。MCP と Web UI(手入力・編集)の両方から使う。以下、項目ごと
+  - 方針: **レシートがマスター**。税率も税額も印字どおりに記録し、こちらで税額を計算して補わない。税率の表は持たない(税率は変わる。2年限定で食料品だけ1%にするような将来の税率も、0.5% のような小数も、そのまま入る)。既存の `tax_flag`(医療費控除・セルフメディケーション・寄附金控除)とは別物で、名前(`tax_rate` / `tax_lines`)と説明で区別する
+  - データ: migration `0012_tax_lines.sql`(追加のみ。既存データはバックフィルしない)。`transaction_items` に `tax_rate`(REAL、0〜100、NULL=不明)と `tax_label`(TEXT、20文字まで)を ALTER TABLE ADD COLUMN で足した(CHECK 付き)。新テーブル `transaction_tax_lines`(第5節)。外部キーは依頼どおり `ON DELETE CASCADE` にした(既存の `transaction_items` は CASCADE なしで、core が明示して消している。内訳も core の削除の batch で明示して消すので、どちらでも同じ結果になる)
+  - 検証(`src/core/tax-lines.ts` の Zod スキーマ1つで、add / update / API / JSONL を兼ねる): 税率は 0〜100 の数で、**小数第3位まで**(それより細かい値は誤読とみなしてエラー。依頼にない判断)。8 と 8.0 は同じ数(同じ税率)。記号は前後の空白を除き、空文字は値なし(null)、20文字まで。内訳の金額は0以上の整数(円)、10,000,000円まで。1取引の内訳は**10行まで**(依頼にない上限)。同じ税率の行が2つあればエラー。`amount_basis` は印字から分かるときだけ(省略可)
+  - 合計の一致は強制しない。全行が税込で対象金額があるときは「対象金額の合計 = 取引の amount」、全行が税抜で対象金額と税額があるときは「対象金額+税額の合計 = amount」だけを確かめ、合わなければ `tax_warnings`(`{index?, field, message}[]`。add / update の戻りに常に入る。空配列もある)で知らせる。混在・欠けがあるときは確かめない。明細の tax_rate と内訳の税率の対応も確かめない
+  - 表現: `ItemView` に `tax_rate` / `tax_label`、`TransactionView` に `tax_lines`(税率の高い順。なしは `[]`)。明細を付けるところ(`withItems`)で一緒に付けるので、取引を返す API・MCP の戻りにはすべて入る。`list_transactions` の `include_items: false` では items と tax_lines の両方を省く
+  - 更新: `update_transaction` の `tax_lines` は全置換(省略・`null` は変更なし、`[]` で全消し、`tax_lines: null` だけの更新は「変更なし」のエラー)。items と同じ流儀
+  - 集計 `summarizeTax`(MCP `summarize_tax`、API `GET /api/tax-summary`): 期間 from / to(省略は全期間)、`group_by` は `rate`(既定)/ `month`。**集計は tax_lines の印字どおりの数字だけを足す**(明細の tax_rate からは計算しない)。行ごとに `tax_total`・`taxable_total`(NULL は足さない)・`receipt_count`・`missing_tax_amount`・`taxable_basis`(税込 / 税抜 / 不明ごとの対象金額)・`mixed_basis`。`taxable_basis` は混在の有無にかかわらず常に出す(依頼は「混在する場合は分けて出す」。形をそろえるため常に出し、混在は `mixed_basis` で示す)。**カバレッジを必ず出す**: `coverage.without_tax_lines`(期間内の取引のうち、内訳が無い取引の件数と金額の合計)、`lines_missing_tax_amount` など。message にもカバレッジを書き、MCP の説明で AI に必ず伝えるよう指示した
+  - MCP: ツールは29個から30個(`summarize_tax` を追加)。`add_transactions` / `update_transaction` / `list_transactions` / `delete_transaction` の入力と説明を更新。説明に「税率はレシートに印字された数字をそのまま入れる(計算しない)」「軽減税率の記号の書き方は店ごとに違うので、凡例を読んで数字にする。記号は tax_label に入れてよい」「税率別の内訳は tax_lines、税込か税抜かが分かるときは amount_basis」「内税・外税の別、記号の意味が不明、印字が薄い場合は推測せずユーザーに聞く」「tax_flag とは別物」を書いた
+  - API: 既存の取引の POST / PATCH / GET に反映(旧形式の入力もそのまま通る)。`GET /api/tax-summary` を足した(既存のガードと no-store に乗る。空のクエリは省略扱い)
+  - 画面: 明細ページの編集で、明細の行ごとに「税率」(未設定・10%・8%・0%・その他=数字の入力。選択肢は入力の手間を減らすだけで表ではない。選択肢に無い既存の値は「その他」に入れて表示・保存する)と「印字の記号」、レシート全体の「税の内訳」(行の追加・削除。税率・対象金額・消費税額・税込/税抜・記号)。保存後に `tax_warnings` があれば注意を出す。見るだけのビューは、明細の行に「8% ※」を小さく添え、税の内訳を表で出す。新しいページ `/tax`「税額」(期間の選択、税率別の表と合計、月別の切り替え、カバレッジの注記「税額の記録がない支出: N件(¥…)」、読み込み中・エラー・空の状態)。入口はホームの右上(スマホ)と PC の左メニュー。「今月」「先月」は月の初日〜末日、「今年」は1月1日〜12月31日(ホームの「今月」は月初〜今日だが、未来の支出は無いので結果は同じ)。日の詳細の「支出を追加」には税の欄を付けない(明細と同じく、登録後に明細ページで入れる)。純粋な部分は `ui/src/pages/taxLogic.ts`(上限は core と同じ値を持ち、テストで一致を確かめる)
+  - バックアップ(JSONL): 明細の `item` 行に `tax_rate` / `tax_label` を足した。税の内訳は、明細と違って**取引の行に入れ子の配列 `tax_lines`**(`rate`, `taxable_amount`, `tax_amount`, `amount_basis`, `label`。id は出さない。税率の高い順。なしは `[]`)で持たせた(「取引の行に tax_lines を含める」という指示に合わせた。小さな表で取引と一緒に読み書きするため。往復で内訳の id は変わる)。旧形式(項目なし)の行もそのまま取り込める。往復一致のテストあり
+  - テスト基盤: 各テストの前に `transaction_tax_lines` も空にする(`tests/setup.ts`)。0005 の移行テストは、`transaction_items` を作り直すとき 0012 も当て直す

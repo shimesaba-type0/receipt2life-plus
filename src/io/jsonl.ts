@@ -107,7 +107,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link → screen → seat_record の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction(税の内訳 tax_lines を入れ子で持つ)→ item(明細)→ attachment → link → screen → seat_record の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {

@@ -21,7 +21,7 @@ function Icon(props: { d: string[] }) {
 export function Nav(props: { route: Route }) {
   const { route } = props;
   const today = todayJst();
-  // 下のタブは「ホーム/カレンダー/今日」、左メニューは「ホーム/カレンダー/エクスポート」(今日はホームの緑ボタンで開く)
+  // 下のタブは「ホーム/カレンダー/今日」、左メニューは「ホーム/カレンダー/カテゴリ/税額/エクスポート」(今日はホームの緑ボタンで開く)
   const items = [
     { href: "/", label: "ホーム", active: route.name === "home", d: ["M4 11l8-7 8 7", "M6 10v10h12V10"] },
     { href: "/calendar", label: "カレンダー", active: route.name === "calendar", d: ["M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M4 10h16M9 3v4M15 3v4"] },
