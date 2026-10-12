@@ -1,11 +1,15 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
 import { accessAuth, type KeyResolver } from "./auth/access";
+import { routePath } from "hono/route";
 import type { AppEnv } from "./env";
 import { registerIoRoutes } from "./api/io";
 import { sameOriginOnly } from "./api/guards";
 import { registerApiRoutes } from "./api/routes";
 import { createMcpServer } from "./mcp/server";
+
+// これ以上かかった /api/* は、ログに残す(ダッシュボードの Observability で、どのルートが遅いか見るため)
+const SLOW_API_MS = 300;
 
 export interface AppOptions {
   // テスト用: JWTの鍵の取得を差し替える
@@ -30,6 +34,16 @@ export function createApp(options: AppOptions = {}) {
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);
+  });
+
+  // /api/* の応答時間を測る。Server-Timing(ブラウザの開発者ツールで見える)と、遅いときだけログ(原因調査用)
+  app.use("/api/*", async (c, next) => {
+    const start = Date.now();
+    await next();
+    const ms = Date.now() - start;
+    c.res.headers.set("server-timing", `app;dur=${ms}`);
+    // パスの値(日付・id)は載せず、ルートの形だけを記録する
+    if (ms >= SLOW_API_MS) console.log(`slow api: ${c.req.method} ${routePath(c, -1)} ${c.res.status} ${ms}ms`);
   });
 
   registerApiRoutes(app);
