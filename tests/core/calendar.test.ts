@@ -114,7 +114,19 @@ describe("getHome", () => {
     expect(res.memo).toEqual({ with_memo: 1, total: 4, percent: 25 });
     expect(res.needs_review).toBe(1);
     expect(res.recent).toHaveLength(6);
-    expect(res.recent[0]?.date).toBe("2026-10-11");
+  });
+
+  it("最近の記録は、購入日ではなく登録した順(新しい順)に並ぶ", async () => {
+    await tx([
+      { date: "2026-10-11", amount: 500, merchant: "新しい日付の店" },
+      { date: "2026-10-03", amount: 300, merchant: "古い日付の店" },
+    ]);
+    // 古い日付の店のほうを、後から登録したことにする
+    await db().prepare("UPDATE transactions SET created_at = ? WHERE merchant = ?").bind("2026-10-12T01:00:00.000Z", "新しい日付の店").run();
+    await db().prepare("UPDATE transactions SET created_at = ? WHERE merchant = ?").bind("2026-10-12T02:00:00.000Z", "古い日付の店").run();
+    const res = await getHome(db(), { now: NOW });
+    if (!res.ok) throw new Error("home");
+    expect(res.recent.map((r) => r.merchant)).toEqual(["古い日付の店", "新しい日付の店"]);
   });
 
   it("データがなくても 0 で返す", async () => {

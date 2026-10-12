@@ -42,7 +42,7 @@ export async function getHome(db: D1Database, options: CoreOptions = {}): Promis
          FROM transactions t
          LEFT JOIN categories c ON c.id = t.category_id
          LEFT JOIN accounts a ON a.id = t.account_id
-         ORDER BY t.date DESC, t.created_at DESC, t.id
+         ORDER BY t.created_at DESC, t.id
          LIMIT 10`,
       )
       .all<TransactionRow>(),
