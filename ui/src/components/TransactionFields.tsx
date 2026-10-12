@@ -1,8 +1,11 @@
-import type { CategoriesData } from "../../../src/api/contract";
+import { useState } from "preact/hooks";
+import type { CategoriesData, MerchantView } from "../../../src/api/contract";
+import { autofillNotice, planAutofill } from "../merchantSuggest";
+import { MerchantCombobox } from "./MerchantCombobox";
 import { Link } from "../router";
 import { groupCategories } from "../pages/categoriesLogic";
 import { TAX_FLAG_OPTIONS } from "../pages/dayLogic";
-import { invoiceHint, normalizeInvoiceNumber, MAX_ADDRESS, MAX_CLERK, MAX_PHONE, MAX_RECEIPT_NO } from "../receiptDetails";
+import { invoiceHint, normalizeInvoiceNumber, MAX_ADDRESS, MAX_CLERK, MAX_PHONE, MAX_RECEIPT_NO, MAX_REGISTER_NO, MAX_STORE_CODE } from "../receiptDetails";
 import type { TxFormValues } from "../pages/transactionLogic";
 import { RATE_OPTIONS, RATE_OTHER } from "../pages/taxLogic";
 import "../pages/Day.css";
@@ -95,12 +98,33 @@ export function TransactionFields(props: {
   const { idPrefix: id, values: f, cats } = props;
   const input = (k: keyof TxFormValues) => (e: Event) => props.onChange({ [k]: (e.currentTarget as HTMLInputElement).value });
   const accountKnown = cats.accounts.includes(f.account);
+  // 候補を選んだときの自動入力の通知(「前回の内容を入れました: …」)。店名を打ち直したら消す
+  const [filledNotice, setFilledNotice] = useState<string | null>(null);
+  function pickMerchant(m: MerchantView) {
+    const plan = planAutofill(f, m, cats);
+    props.onChange(plan.patch);
+    setFilledNotice(autofillNotice(plan.filled));
+  }
   return (
     <>
       <label for={`${id}-amount`}>金額(円)</label>
       <input id={`${id}-amount`} type="text" inputMode="numeric" required value={f.amount} onInput={input("amount")} />
       <label for={`${id}-merchant`}>店名</label>
-      <input id={`${id}-merchant`} type="text" value={f.merchant} onInput={input("merchant")} />
+      <MerchantCombobox
+        id={`${id}-merchant`}
+        value={f.merchant}
+        cats={cats}
+        onInput={(merchant) => {
+          setFilledNotice(null);
+          props.onChange({ merchant });
+        }}
+        onPick={pickMerchant}
+      />
+      {filledNotice && (
+        <p class="mcombo__filled" role="status">
+          {filledNotice}
+        </p>
+      )}
       {props.showDate && (
         <>
           <label for={`${id}-date`}>日付</label>
@@ -140,7 +164,7 @@ function ReceiptDetailFields(props: { idPrefix: string; values: TxFormValues; on
     <fieldset class="day__details">
       <legend class="day__h">レシートの情報</legend>
       <p class="muted day__note">レシートに印字されているものだけ入れます(後から店に問い合わせるときの手がかり)。</p>
-      <label for={`${id}-paidtime`}>決済時刻(日本時間)</label>
+      <label for={`${id}-paidtime`}>時刻(日本時間)</label>
       <input id={`${id}-paidtime`} type="time" value={f.paid_time} onInput={input("paid_time")} />
       <label for={`${id}-phone`}>店の電話番号</label>
       <input id={`${id}-phone`} type="tel" inputMode="tel" autoComplete="off" maxLength={MAX_PHONE} placeholder="例: 03-0000-0000" value={f.merchant_phone} onInput={input("merchant_phone")} />
@@ -170,7 +194,11 @@ function ReceiptDetailFields(props: { idPrefix: string; values: TxFormValues; on
       <label for={`${id}-clerk`}>対応した人(担当・責任者・レジ)</label>
       <input id={`${id}-clerk`} type="text" maxLength={MAX_CLERK} value={f.clerk_name} onInput={input("clerk_name")} />
       <label for={`${id}-receiptno`}>レシート番号・伝票番号</label>
-      <input id={`${id}-receiptno`} type="text" autoComplete="off" maxLength={MAX_RECEIPT_NO} value={f.receipt_no} onInput={input("receipt_no")} />
+      <input id={`${id}-receiptno`} type="text" autoComplete="off" maxLength={MAX_RECEIPT_NO} placeholder="例: P20261003152814" value={f.receipt_no} onInput={input("receipt_no")} />
+      <label for={`${id}-registerno`}>レジ番号</label>
+      <input id={`${id}-registerno`} type="text" autoComplete="off" maxLength={MAX_REGISTER_NO} placeholder="例: 0005" value={f.register_no} onInput={input("register_no")} />
+      <label for={`${id}-storecode`}>店番号・店舗コード</label>
+      <input id={`${id}-storecode`} type="text" autoComplete="off" maxLength={MAX_STORE_CODE} placeholder="例: 007832" value={f.store_code} onInput={input("store_code")} />
     </fieldset>
   );
 }

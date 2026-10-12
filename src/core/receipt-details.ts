@@ -8,8 +8,10 @@ export const MAX_PHONE = 30;
 export const MAX_ADDRESS = 200;
 export const MAX_CLERK = 50;
 export const MAX_RECEIPT_NO = 50;
+export const MAX_REGISTER_NO = 30;
+export const MAX_STORE_CODE = 30;
 
-export const RECEIPT_DETAIL_KEYS = ["paid_time", "merchant_phone", "merchant_address", "invoice_number", "clerk_name", "receipt_no"] as const;
+export const RECEIPT_DETAIL_KEYS = ["paid_time", "merchant_phone", "merchant_address", "invoice_number", "clerk_name", "receipt_no", "register_no", "store_code"] as const;
 export type ReceiptDetailKey = (typeof RECEIPT_DETAIL_KEYS)[number];
 
 export const PAID_TIME_MESSAGE = "決済時刻は HH:MM 形式(00:00〜23:59、日本時間。例: 14:32)で指定してください";
@@ -76,6 +78,18 @@ export const receiptNoField = z
   .min(1, "レシート番号が空です(空にするときは null を指定してください)")
   .max(MAX_RECEIPT_NO, `レシート番号は${MAX_RECEIPT_NO}文字以内にしてください`);
 
+export const registerNoField = z
+  .string({ error: "レジ番号は文字列で指定してください" })
+  .trim()
+  .min(1, "レジ番号が空です(空にするときは null を指定してください)")
+  .max(MAX_REGISTER_NO, `レジ番号は${MAX_REGISTER_NO}文字以内にしてください`);
+
+export const storeCodeField = z
+  .string({ error: "店番号は文字列で指定してください" })
+  .trim()
+  .min(1, "店番号が空です(空にするときは null を指定してください)")
+  .max(MAX_STORE_CODE, `店番号は${MAX_STORE_CODE}文字以内にしてください`);
+
 // 取引に足す項目(すべて任意・null可)。add_transactions の各取引に展開する。null は「値なし」(登録では省略と同じ)
 export const receiptDetailShape = {
   paid_time: paidTimeField
@@ -103,7 +117,15 @@ export const receiptDetailShape = {
   receipt_no: receiptNoField
     .nullable()
     .optional()
-    .describe(`レシート番号・伝票番号(${MAX_RECEIPT_NO}文字まで)。印字が無ければ省略`),
+    .describe(`レシート番号・伝票番号(例: P20261003152814。${MAX_RECEIPT_NO}文字まで)。印字が無ければ省略`),
+  register_no: registerNoField
+    .nullable()
+    .optional()
+    .describe(`レジ番号(例: 0005。「レジ」の後ろの番号。${MAX_REGISTER_NO}文字まで)。印字が無ければ省略。伝票番号 receipt_no とは別`),
+  store_code: storeCodeField
+    .nullable()
+    .optional()
+    .describe(`店番号・店舗コード(例: 007832。${MAX_STORE_CODE}文字まで)。印字が無ければ省略`),
 };
 
 // update_transaction 用: 渡さなければ変えない、null で空にする
@@ -120,6 +142,8 @@ export const receiptDetailPatchShape = {
     .describe("適格請求書発行事業者の登録番号(T + 数字13桁。全角・小文字・ハイフンや空白入りは正規化する)。null で空にする"),
   clerk_name: clerkNameField.nullable().optional().describe(`対応した店員の名前(${MAX_CLERK}文字まで)。null で空にする`),
   receipt_no: receiptNoField.nullable().optional().describe(`レシート番号・伝票番号(${MAX_RECEIPT_NO}文字まで)。null で空にする`),
+  register_no: registerNoField.nullable().optional().describe(`レジ番号(例: 0005。${MAX_REGISTER_NO}文字まで)。null で空にする`),
+  store_code: storeCodeField.nullable().optional().describe(`店番号・店舗コード(例: 007832。${MAX_STORE_CODE}文字まで)。null で空にする`),
 };
 
 // 保存・返却用の形(未指定は null)
@@ -130,6 +154,8 @@ export interface ReceiptDetails {
   invoice_number: string | null;
   clerk_name: string | null;
   receipt_no: string | null;
+  register_no: string | null;
+  store_code: string | null;
 }
 
 export function detailsOf(input: { [K in ReceiptDetailKey]?: string | null | undefined }): ReceiptDetails {
@@ -140,5 +166,7 @@ export function detailsOf(input: { [K in ReceiptDetailKey]?: string | null | und
     invoice_number: input.invoice_number ?? null,
     clerk_name: input.clerk_name ?? null,
     receipt_no: input.receipt_no ?? null,
+    register_no: input.register_no ?? null,
+    store_code: input.store_code ?? null,
   };
 }

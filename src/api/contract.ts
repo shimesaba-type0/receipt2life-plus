@@ -95,6 +95,9 @@ export interface TransactionView {
   clerk_name: string | null;
   // レシート番号・伝票番号
   receipt_no: string | null;
+  // レジ番号(例: 0005)・店番号/店舗コード(例: 007832)。receipt_no(伝票番号)とは別
+  register_no: string | null;
+  store_code: string | null;
   // 明細(position の順)。明細なしは空配列
   items: ItemView[];
   // 税の内訳(税率の高い順)。なしは空配列
@@ -361,6 +364,8 @@ export interface NewTransaction {
   invoice_number?: string | null;
   clerk_name?: string | null;
   receipt_no?: string | null;
+  register_no?: string | null;
+  store_code?: string | null;
   // 明細(50行まで)。合計は amount と一致させる(合わなければ 400、field: "items" で差額が返る)
   items?: NewItem[];
   // 税の内訳。合計が合わなくてもエラーにはせず、戻りの tax_warnings で知らせる
@@ -386,6 +391,8 @@ export interface TransactionPatch {
   invoice_number?: string | null;
   clerk_name?: string | null;
   receipt_no?: string | null;
+  register_no?: string | null;
+  store_code?: string | null;
   // 明細の全置換。省略または null で変えない、[] で明細を全部消す。明細があるときは合計 = amount(金額だけ変えるときも)
   items?: NewItem[] | null;
   // 税の内訳の全置換。省略または null で変えない、[] で全部消す
@@ -553,4 +560,23 @@ export interface VenuePatch {
 export interface ScreenPatch {
   name?: string;
   note?: string | null;
+}
+
+// GET /api/merchants?q=&category=&limit= の戻り。過去の取引から店名ごとにまとめた候補(入力中の絞り込み用)
+// q: 店名・電話番号(数字だけでも可)・住所・カテゴリ名の部分一致。空なら、よく使う順。limit は既定8・最大20
+// category: その店のいちばん多く使ったカテゴリがこれの店だけに絞る
+// 並び: 店名の前方一致 → 件数の多い順 → 最後に使った日の新しい順
+export interface MerchantView {
+  merchant: string;
+  count: number;
+  last_date: string;
+  category: string | null;
+  account: string | null;
+  phone: string | null;
+  address: string | null;
+  invoice_number: string | null;
+}
+
+export interface MerchantsData {
+  merchants: MerchantView[];
 }

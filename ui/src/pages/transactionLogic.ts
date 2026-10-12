@@ -5,6 +5,8 @@ import {
   MAX_ADDRESS,
   MAX_CLERK,
   MAX_RECEIPT_NO,
+  MAX_REGISTER_NO,
+  MAX_STORE_CODE,
   parseInvoiceNumber,
   parsePaidTime,
   parsePhone,
@@ -87,6 +89,8 @@ export interface TxFormValues {
   invoice_number: string;
   clerk_name: string;
   receipt_no: string;
+  register_no: string;
+  store_code: string;
 }
 
 export interface ItemRow {
@@ -119,6 +123,8 @@ export function emptyTxForm(date: string): TxFormValues {
     invoice_number: "",
     clerk_name: "",
     receipt_no: "",
+    register_no: "",
+    store_code: "",
   };
 }
 
@@ -137,6 +143,8 @@ export function txFormFromView(tx: TransactionView): TxFormValues {
     invoice_number: tx.invoice_number ?? "",
     clerk_name: tx.clerk_name ?? "",
     receipt_no: tx.receipt_no ?? "",
+    register_no: tx.register_no ?? "",
+    store_code: tx.store_code ?? "",
   };
 }
 
@@ -252,7 +260,7 @@ export function buildItems(rows: ItemRow[]): BuildResult<NewItem[]> {
   return { ok: true, value: out };
 }
 
-type DetailsPatch = Pick<TransactionPatch, "paid_time" | "merchant_phone" | "merchant_address" | "invoice_number" | "clerk_name" | "receipt_no">;
+type DetailsPatch = Pick<TransactionPatch, "paid_time" | "merchant_phone" | "merchant_address" | "invoice_number" | "clerk_name" | "receipt_no" | "register_no" | "store_code">;
 
 // レシートの情報の入力を、正規化・検証して API の入力にする(規則はサーバーと同じ。空欄は null = 空にする)
 export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
@@ -263,6 +271,8 @@ export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
     ["invoice_number", parseInvoiceNumber(form.invoice_number)],
     ["clerk_name", parseText(form.clerk_name, MAX_CLERK, "対応した人")],
     ["receipt_no", parseText(form.receipt_no, MAX_RECEIPT_NO, "レシート番号")],
+    ["register_no", parseText(form.register_no, MAX_REGISTER_NO, "レジ番号")],
+    ["store_code", parseText(form.store_code, MAX_STORE_CODE, "店番号")],
   ];
   const out: DetailsPatch = {};
   for (const [key, r] of checks) {
@@ -270,6 +280,11 @@ export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
     out[key] = r.value;
   }
   return { ok: true, value: out };
+}
+
+// null の項目を省く(新規登録では、値なしは省略と同じ)
+export function omitNulls<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[K], null> } {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null)) as { [K in keyof T]?: Exclude<T[K], null> };
 }
 
 // 編集フォーム → PATCH の入力。明細が0行のとき、元々明細があれば [](全消し)、なければ items を省略する

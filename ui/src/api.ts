@@ -16,6 +16,7 @@ import type {
   HomeData,
   LinkPatch,
   LinkView,
+  MerchantsData,
   NewAccount,
   NewCategory,
   NewEvent,
@@ -90,6 +91,8 @@ export const photoUrl = (id: string): string => `/api/photos/${encodeURIComponen
 export const getHome = () => request<HomeData>("GET", "/api/home");
 export const getCalendar = (month?: string) => request<CalendarData>("GET", `/api/calendar${month ? `?month=${encodeURIComponent(month)}` : ""}`);
 export const getDay = (date: string) => request<DayData>("GET", `/api/day/${encodeURIComponent(date)}`);
+// 店名の候補。path は merchantsPath() が作る(同じ入力は短時間のキャッシュが効く)
+export const getMerchants = (path: string) => request<MerchantsData>("GET", path);
 export const getCategories = () => request<CategoriesData>("GET", "/api/categories");
 // 税率別の税額(query は taxSummaryQuery で作る: from / to / group_by)
 export const getTaxSummary = (query: string) => request<TaxSummaryData>("GET", `/api/tax-summary${query ? `?${query}` : ""}`);

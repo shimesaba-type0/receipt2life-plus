@@ -54,6 +54,7 @@ export function registerReportTools(server: McpServer, db: D1Database): void {
         "カテゴリは、大分類(group_name)の下にサブカテゴリ(name)が並ぶ構造。groups は大分類ごとのまとまり(各サブカテゴリの usage=そのカテゴリを使っている支出の件数つき)、categories は同じ内容を name / group_name / icon(アイコンのキー。未設定は null) / usage の平らな一覧にしたもの。並びは大分類ごと・追加順で安定している。",
         "add_transactions で取引を登録する前に、決められた名前から category と account を選ぶために呼ぶ。category にはサブカテゴリの名前(name)を使う。",
         "一覧にない名前は登録できないので、近いものに寄せる。合うものが本当に無いときは、add_category で新しいカテゴリを作ってから登録する。決められなければ category は省略する(needs_review になる)。",
+        "口座(accounts)は支払方法の一覧。レシートの支払方法は、メモに書かず account に入れる。合う口座が無ければ、表記ゆれに注意して一覧を確かめたうえで、ユーザーに確認してから add_account で追加する。",
         "カテゴリを整理する前(update_category / delete_category / rename_group)に usage を確かめるのにも使う。",
       ].join("\n"),
       inputSchema: {},

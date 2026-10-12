@@ -45,6 +45,8 @@ const tx = (p: Partial<TransactionView> = {}): TransactionView => ({
   invoice_number: null,
   clerk_name: null,
   receipt_no: null,
+  register_no: null,
+  store_code: null,
   items: [],
   tax_lines: [],
   ...p,

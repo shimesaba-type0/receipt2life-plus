@@ -31,7 +31,7 @@ import { Link } from "../router";
 import { categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
 import { clockLabel } from "../receiptDetails";
 import { toNewSeatRecord, toSeatRecordPatch, type SeatFormValues } from "./seatRecordLogic";
-import { dayItemsSub, emptyTxForm, parseAmount, type TxFormValues } from "./transactionLogic";
+import { buildDetails, dayItemsSub, emptyTxForm, omitNulls, parseAmount, type TxFormValues } from "./transactionLogic";
 import "./Day.css";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -157,11 +157,17 @@ export function Day(props: { date: string }) {
       setError("金額は整数(円)で入力してください。");
       return false;
     }
+    // 店名の候補から入った電話・住所・登録番号があれば、いっしょに登録する(追加の画面には入力欄を出さない)
+    const details = buildDetails(form);
+    if (!details.ok) {
+      setError(details.error);
+      return false;
+    }
     const ok = await guarded(
       async () =>
         failOf(
           await run(() =>
-            addTransactions([{ date, amount, merchant: optional(form.merchant), category: optional(form.category), account: optional(form.account), memo: optional(form.memo), tax_flag: parseTaxFlagField(form.tax_flag), source: "manual", allow_duplicate: true }]),
+            addTransactions([{ ...omitNulls(details.value), date, amount, merchant: optional(form.merchant), category: optional(form.category), account: optional(form.account), memo: optional(form.memo), tax_flag: parseTaxFlagField(form.tax_flag), source: "manual", allow_duplicate: true }]),
           ),
         ),
       "支出を追加しました。",
