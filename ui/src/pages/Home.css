@@ -83,7 +83,8 @@
   .home__brand { display: none; }
   .home__kicker { display: block; }
   .home__date { font-size: 26px; }
-  .home__open-today { display: inline-flex; }
+  /* 今日の記録を開くボタンは、PC幅では上の横長のヘッダーにある */
+  .home__open-today { display: none; }
   .home__header { align-items: flex-end; }
   .home__pc-only { display: inline; }
   .home__range { display: none; }

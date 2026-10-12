@@ -38,9 +38,6 @@ export function Nav(props: { route: Route }) {
   return (
     <>
       <nav class="nav" aria-label="メイン">
-        <div class="nav__brand">
-          <img class="nav__logo" src="/brand/wordmark.svg" alt="Receipt to Life +" />
-        </div>
         {items.map((item) => (
           // 下のタブは「ホーム/カレンダー/今日/メニュー」。カテゴリ・税額・エクスポートは PC の左メニューだけに並べる
           <Link href={item.href} class={`nav__item${item.active ? " is-active" : ""}${item.route === "home" || item.route === "calendar" ? "" : " nav__pc"}`} aria-current={item.active ? "page" : undefined}>

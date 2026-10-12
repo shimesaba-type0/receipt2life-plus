@@ -1,4 +1,5 @@
 import { Nav } from "./components/Nav";
+import { Topbar } from "./components/Topbar";
 import { Backup } from "./pages/Backup";
 import { Calendar } from "./pages/Calendar";
 import { Categories } from "./pages/Categories";
@@ -13,6 +14,7 @@ export function App() {
   const route = useRoute();
   return (
     <div class="shell">
+      <Topbar />
       <Nav route={route} />
       <main class="shell__main">
         {route.name === "home" && <Home />}

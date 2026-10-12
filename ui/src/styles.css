@@ -37,19 +37,23 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
 .shell { display: flex; flex-direction: column; min-height: 100dvh; }
 .shell__main { flex: 1; min-width: 0; padding-bottom: 88px; }
 .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; height: 72px; padding-bottom: env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--line); }
-.nav__brand { display: none; }
 .nav__item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 44px; color: var(--muted); font-size: 12px; }
 .nav__item.is-active { color: var(--accent); font-weight: 700; }
 .nav__pc { display: none; }
 button.nav__item { background: transparent; border: 0; padding: 0; font: inherit; font-size: 12px; cursor: pointer; }
-.nav__logo { display: block; width: 210px; height: auto; }
+.topbar { display: none; }
 
 @media (min-width: 900px) {
-  .shell { flex-direction: row; }
-  .shell__main { padding-bottom: 32px; }
-  .nav { position: sticky; top: 0; align-self: flex-start; flex-direction: column; width: 240px; height: 100dvh; padding: 28px 16px; border-top: 0; border-right: 1px solid var(--line); gap: 4px; }
-  .nav__brand { display: block; padding: 0 12px 20px; }
-  .nav__item { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
+  /* 上に横長のヘッダー(ロゴ + 今日の記録)、その下に左メニューと本文 */
+  .shell { display: grid; grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: 72px minmax(0, 1fr); min-height: 100dvh; }
+  .shell__main { grid-column: 2; grid-row: 2; padding-bottom: 32px; }
+  .topbar { grid-column: 1 / -1; grid-row: 1; position: sticky; top: 0; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 32px 0 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .topbar__home { display: flex; align-items: center; min-height: 44px; }
+  .topbar__logo { display: block; width: 280px; height: auto; }
+  .topbar__today { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 22px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; }
+  .topbar__today:hover { color: #fff; opacity: 0.9; }
+  .nav { grid-column: 1; grid-row: 2; position: sticky; top: 72px; align-self: start; flex-direction: column; width: 272px; height: calc(100dvh - 72px); padding: 20px 16px; border-top: 0; border-right: 1px solid var(--line); gap: 4px; }
+  .nav__item { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; border-radius: 12px; font-size: 14px; white-space: nowrap; }
   .nav__item.is-active { background: var(--accent-soft); }
   .nav__pc { display: flex; }
   .nav__item--mobile { display: none; }
