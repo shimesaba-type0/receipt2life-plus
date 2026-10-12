@@ -1,5 +1,6 @@
 import { Nav } from "./components/Nav";
 import { Topbar } from "./components/Topbar";
+import { Accounts } from "./pages/Accounts";
 import { Backup } from "./pages/Backup";
 import { Connect } from "./pages/Connect";
 import { Calendar } from "./pages/Calendar";
@@ -26,6 +27,7 @@ export function App() {
         {route.name === "backup" && <Backup />}
         {route.name === "connect" && <Connect />}
         {route.name === "categories" && <Categories />}
+        {route.name === "accounts" && <Accounts />}
         {route.name === "tax" && <Tax />}
         {route.name === "notfound" && (
           <section class="page">

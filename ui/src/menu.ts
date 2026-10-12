@@ -1,6 +1,6 @@
 // メニューの項目(純粋な部分。DOMに触れない。テストする)。
 // スマホは下のタブ「メニュー」から出るシート、PCは左メニューにそのまま並べる。どちらも既存のページへのリンクだけ
-import { CALENDAR_ICON, CATEGORY_ICON, CONNECT_ICON, EXPORT_ICON, HOME_ICON, TAX_ICON } from "./icons";
+import { ACCOUNT_ICON, CALENDAR_ICON, CATEGORY_ICON, CONNECT_ICON, EXPORT_ICON, HOME_ICON, TAX_ICON } from "./icons";
 import type { Route } from "./route";
 
 export interface MenuItem {
@@ -12,7 +12,8 @@ export interface MenuItem {
 
 // 毎日は使わない機能の置き場。順番は、このまま表示する(ラベルはスマホ・PCで同じ)
 export const MENU_ITEMS: MenuItem[] = [
-  { route: "categories", href: "/categories", label: "カテゴリ・支払方法", d: CATEGORY_ICON },
+  { route: "categories", href: "/categories", label: "カテゴリ", d: CATEGORY_ICON },
+  { route: "accounts", href: "/accounts", label: "支払方法", d: ACCOUNT_ICON },
   { route: "tax", href: "/tax", label: "税額", d: TAX_ICON },
   { route: "backup", href: "/backup", label: "エクスポート・バックアップ", d: EXPORT_ICON },
   { route: "connect", href: "/connect", label: "AIとつなぐ(MCP)", d: CONNECT_ICON },
