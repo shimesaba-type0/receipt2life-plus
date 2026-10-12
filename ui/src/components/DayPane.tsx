@@ -10,7 +10,7 @@ import "./DayPane.css";
 
 type State = { status: "loading" } | { status: "error"; errors: FieldError[] } | { status: "ready"; data: DayData };
 
-// PC幅のカレンダー右側に出す、選択した日の読み取り専用の詳細。編集は Day ページで行う
+// カレンダーに出す、選択した日の読み取り専用の詳細(PC幅は右側、スマホ幅は「今月の出来事」の下)。日付・各支出・下のボタンから、その日のページ・明細ページへ移る。編集はそちらで行う
 export function DayPane(props: { date: string }) {
   const { date } = props;
   const [state, setState] = useState<State>({ status: "loading" });
@@ -40,7 +40,11 @@ export function DayPane(props: { date: string }) {
     <aside class="dp" aria-label={`${formatDateJa(date)}の詳細`} aria-busy={state.status === "loading"}>
       <section class="dp__card">
         <div class="dp__head">
-          <h2 class="dp__date">{formatDateJa(date)}</h2>
+          <h2 class="dp__date">
+            <Link href={`/day/${date}`} class="dp__date-link">
+              {formatDateJa(date)}
+            </Link>
+          </h2>
           <span class="dp__total num">{data ? formatYen(data.total) : "—"}</span>
         </div>
         {holiday && (
@@ -71,11 +75,16 @@ export function DayPane(props: { date: string }) {
           <ul class="dp__list">
             {data.transactions.map((t) => (
               <li key={t.id} class="dp__tx">
-                <div class="dp__tx-main">
-                  <span class="dp__tx-name">{t.merchant ?? "店名なし"}</span>
-                  <span class="dp__tx-sub muted">{txSubline(t)}</span>
-                </div>
-                <span class="dp__tx-amount num">{formatYen(t.amount)}</span>
+                <Link href={`/tx/${encodeURIComponent(t.id)}`} class="dp__tx-link" aria-label={`${t.merchant ?? "店名なし"} ${t.amount}円。明細を開く`}>
+                  <div class="dp__tx-main">
+                    <span class="dp__tx-name">{t.merchant ?? "店名なし"}</span>
+                    <span class="dp__tx-sub muted">{txSubline(t)}</span>
+                  </div>
+                  <span class="dp__tx-amount num">{formatYen(t.amount)}</span>
+                  <svg class="dp__tx-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </Link>
               </li>
             ))}
           </ul>
@@ -123,7 +132,7 @@ export function DayPane(props: { date: string }) {
       )}
 
       <Link class="btn dp__open" href={`/day/${date}`}>
-        この日を開いて編集
+        この日を確認する
       </Link>
     </aside>
   );
