@@ -24,6 +24,8 @@
 /* 日セル: 日付が上、金額が下。帯が増えたぶんだけ高くなる */
 .cal__day { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-width: 0; min-height: calc(var(--cell-h) + max(var(--lanes, 0) - 1, 0) * (var(--lane-h) + var(--lane-gap))); padding: 4px 0 6px; }
 .cal__day:hover { background: var(--accent-soft); color: inherit; }
+.cal__day.is-selected { background: #f1f7f4; }
+.cal__preview { scroll-margin-bottom: 16px; }
 .cal__date { display: inline-flex; align-items: center; justify-content: center; width: var(--date-size); height: var(--date-size); border-radius: calc(var(--date-size) / 2); font-size: 14px; font-weight: 500; }
 .cal__amount { font-size: 11px; line-height: 14px; min-height: 14px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; }
 .cal__wd.is-sun, .cal__day.is-sun .cal__date { color: var(--danger); }
