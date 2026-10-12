@@ -2,7 +2,7 @@
 .home { gap: 12px; padding-top: 28px; }
 .home__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 4px; }
 .home__heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.home__brand { display: block; width: 140px; height: auto; margin-bottom: 4px; }
+.home__brand { display: block; width: 190px; height: auto; margin-bottom: 4px; }
 .home__kicker { display: none; font-size: 13px; color: var(--muted); }
 .home__date { margin: 0; font-size: 20px; font-weight: 700; }
 .home__open-today { display: none; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 22px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; }
