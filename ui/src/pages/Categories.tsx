@@ -98,7 +98,7 @@ export function Categories() {
   return (
     <section class="page cat">
       <header class="cat__header">
-        <h1 class="cat__title">カテゴリ</h1>
+        <h1 class="cat__title">カテゴリ・支払方法</h1>
         <p class="cat__lead">大分類の下に、サブカテゴリを並べます。支出に付けるのはサブカテゴリです。AI(Claude など)からも同じように増やせます。</p>
       </header>
 

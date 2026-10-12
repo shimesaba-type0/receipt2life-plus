@@ -12,7 +12,7 @@ describe("checkNewAccount", () => {
     expect(checkNewAccount(sample, "あ".repeat(MAX_ACCOUNT_NAME + 1))).toMatchObject({ ok: false });
     expect(checkNewAccount(sample, "あ".repeat(MAX_ACCOUNT_NAME))).toMatchObject({ ok: true });
     expect(checkNewAccount(sample, "..")).toMatchObject({ ok: false });
-    expect(checkNewAccount(sample, " 現金 ")).toEqual({ ok: false, error: "「現金」という口座は既にあります" });
+    expect(checkNewAccount(sample, " 現金 ")).toEqual({ ok: false, error: "「現金」という支払方法は既にあります" });
   });
   it("上限はカテゴリ名と同じ30", () => {
     expect(MAX_ACCOUNT_NAME).toBe(30);

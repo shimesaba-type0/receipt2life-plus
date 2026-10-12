@@ -5,7 +5,7 @@ import { MAX_CATEGORY_NAME, validateName, type NameCheck } from "./categoriesLog
 
 export const MAX_ACCOUNT_NAME = MAX_CATEGORY_NAME;
 
-const duplicateMessage = (name: string) => `「${name}」という口座は既にあります`;
+const duplicateMessage = (name: string) => `「${name}」という支払方法は既にあります`;
 
 // 口座の追加。名前は全体で一意
 export function checkNewAccount(accounts: AccountView[], raw: string): NameCheck {
