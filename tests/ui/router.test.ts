@@ -30,6 +30,12 @@ describe("parseRoute", () => {
     expect(parseRoute("/accounts/")).toEqual({ name: "accounts" });
   });
 
+  it("サブスク・固定費は /subscriptions(/api/subscriptions はAPI)", () => {
+    expect(parseRoute("/subscriptions")).toEqual({ name: "subscriptions" });
+    expect(parseRoute("/subscriptions/")).toEqual({ name: "subscriptions" });
+    expect(parseRoute("/subscriptions/abc")).toEqual({ name: "notfound" });
+  });
+
   it("AIとつなぐ手順は /connect(/mcp はWorkerのAPI)", () => {
     expect(parseRoute("/connect")).toEqual({ name: "connect" });
     expect(parseRoute("/connect/")).toEqual({ name: "connect" });
