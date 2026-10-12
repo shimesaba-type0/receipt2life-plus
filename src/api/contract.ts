@@ -98,6 +98,8 @@ export interface LinkView {
 export interface SeatRecordView {
   id: string;
   date: string;
+  // 作品名・公演名(映画のタイトル、ライブ名など。100文字まで)。なければ null
+  title: string | null;
   venue: string;
   screen: string | null;
   seat: string;
@@ -370,7 +372,7 @@ export interface LinkPatch {
   title: string | null;
 }
 
-// GET /api/seat-records?date=&venue=&screen=&seat=&min_rating=&max_rating=&from=&to=&transaction_id=&limit=
+// GET /api/seat-records?date=&title=(部分一致)&venue=&screen=&seat=&min_rating=&max_rating=&from=&to=&transaction_id=&limit=
 // date はその日だけ(from と to を同じ日にする)。並びは date の新しい順。
 // count は絞り込みに合う全件の数、records は limit まで、summary は venue・screen・seat ごとの件数と平均評価(全件で集計)
 export interface SeatRecordsData {
@@ -384,6 +386,8 @@ export interface SeatRecordsData {
 // POST /api/seat-records の入力。戻りは seat_record と message
 export interface NewSeatRecord {
   date: string;
+  // 作品名・公演名(任意。空文字は未指定)
+  title?: string;
   venue: string;
   screen?: string;
   seat: string;
@@ -393,9 +397,11 @@ export interface NewSeatRecord {
   transaction_id?: string;
 }
 
-// PATCH /api/seat-records/:id の入力(指定した項目だけ変える。screen / rating / note / transaction_id は null で消去)
+// PATCH /api/seat-records/:id の入力(指定した項目だけ変える。title / screen / rating / note / transaction_id は null で消去)
 export interface SeatRecordPatch {
   date?: string;
+  // null か空文字で消去
+  title?: string | null;
   venue?: string;
   screen?: string | null;
   seat?: string;

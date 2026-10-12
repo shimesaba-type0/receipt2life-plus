@@ -4,6 +4,7 @@ import {
   RATINGS,
   SEAT_LIMITS,
   emptySeatForm,
+  headLabel,
   placeLabel,
   ratingLabel,
   ratingSpoken,
@@ -21,7 +22,14 @@ export function SeatRecordLine(props: { record: SeatRecordView }) {
   const { record } = props;
   return (
     <>
-      <span class="seat__place">{placeLabel(record)}</span>
+      {record.title ? (
+        <>
+          <strong class="seat__title">{record.title}</strong>
+          <span class="seat__place">{placeLabel(record)}</span>
+        </>
+      ) : (
+        <span class="seat__place seat__place--head">{headLabel(record)}</span>
+      )}
       <span class="seat__line">
         <strong class="seat__seat num">{record.seat}</strong>
         <span class="seat__rating num" aria-label={ratingSpoken(record.rating)}>
@@ -56,6 +64,16 @@ function SeatForm(props: {
         props.onSubmit(f);
       }}
     >
+      <label for={`${id}-title`}>作品名・公演名(任意)</label>
+      <input
+        id={`${id}-title`}
+        type="text"
+        maxLength={SEAT_LIMITS.title}
+        autoComplete="off"
+        placeholder="例: 映画のタイトル、ライブ名"
+        value={f.title}
+        onInput={(e) => setF({ ...f, title: (e.currentTarget as HTMLInputElement).value })}
+      />
       <label for={`${id}-venue`}>会場名</label>
       <input
         id={`${id}-venue`}

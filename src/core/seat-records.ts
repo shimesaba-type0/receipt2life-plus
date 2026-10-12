@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { checkRefs } from "./photos";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
-import type { CoreOptions } from "./transactions";
+import { escapeLike, type CoreOptions } from "./transactions";
 
 // 座席の記録(seat_records)。映画館のスクリーン・座席など、会場の席の評価を構造化して残し、次に席を選ぶ参考にする。
 // 映画以外(劇場、ライブ会場など)にも使える名前にしてある: venue=会場、screen=スクリーン/ホール、seat=座席。
-// 作品名は持たない(取引の明細に入っているため)。取引の列は増やさず、取引への紐づけ(transaction_id)は任意。
+// title=作品名・公演名(映画のタイトル、ライブ名など。任意。明細の品名とは別物)。取引の列は増やさず、取引への紐づけ(transaction_id)は任意。
 
 export const MAX_VENUE_LENGTH = 100;
+export const MAX_TITLE_LENGTH = 100;
 export const MAX_SCREEN_LENGTH = 100;
 export const MAX_SEAT_LENGTH = 50;
 export const MAX_NOTE_LENGTH = 200;
@@ -21,6 +22,8 @@ export const MAX_SUMMARY_ROWS = 200;
 export interface SeatRecordView {
   id: string;
   date: string;
+  // 作品名・公演名(映画のタイトル、ライブ名など)。なければ null
+  title: string | null;
   venue: string;
   screen: string | null;
   seat: string;
@@ -45,6 +48,8 @@ export interface SeatSummaryRow {
 const idField = z.string().min(1).max(100);
 const venueField = z.string().trim().min(1).max(MAX_VENUE_LENGTH);
 const screenField = z.string().trim().min(1).max(MAX_SCREEN_LENGTH);
+// 空文字(空白だけを含む)は未指定扱い: 追加では NULL、更新では消去。保存の前に normalizeTitle で整える
+const titleField = z.string().trim().max(MAX_TITLE_LENGTH);
 const seatField = z.string().trim().min(1).max(MAX_SEAT_LENGTH);
 const noteField = z.string().trim().min(1).max(MAX_NOTE_LENGTH);
 const ratingField = z
@@ -53,8 +58,11 @@ const ratingField = z
   .min(MIN_RATING, `rating は${MIN_RATING}〜${MAX_RATING}の整数にしてください(${MAX_RATING}が最良)`)
   .max(MAX_RATING, `rating は${MIN_RATING}〜${MAX_RATING}の整数にしてください(${MAX_RATING}が最良)`);
 
+const TITLE_DESCRIPTION = `作品名・公演名(映画のタイトル、ライブ名など。${MAX_TITLE_LENGTH}文字まで)。任意。会場・スクリーン・座席とは別に、そのときの催しの名前を入れる。明細の品名とは別物。空文字は未指定として扱う`;
+
 export const seatRecordFieldsSchema = z.strictObject({
   date: isoDate.describe("鑑賞・利用した日(YYYY-MM-DD)。必須"),
+  title: titleField.optional().describe(TITLE_DESCRIPTION),
   venue: venueField.describe(`会場名(映画館・劇場・ライブ会場など。${MAX_VENUE_LENGTH}文字まで)。必須。表記ゆれを避けるため、登録前に list_seat_records で既存の会場名を確かめて同じ表記にそろえる`),
   screen: screenField.optional().describe(`スクリーン名・ホール名(例: スクリーン5、シアター3。${MAX_SCREEN_LENGTH}文字まで)。任意。既存の表記にそろえる`),
   seat: seatField.describe(`座席(例: F-5、J列12番。${MAX_SEAT_LENGTH}文字まで)。必須`),
@@ -69,6 +77,7 @@ export type NewSeatRecord = z.infer<typeof newSeatRecordSchema>;
 export const updateSeatRecordFieldsSchema = z.strictObject({
   id: idField.describe("更新する座席の記録の id(list_seat_records で分かる)。必須"),
   date: isoDate.optional().describe("新しい日付(YYYY-MM-DD)。省略すると変えない"),
+  title: titleField.nullable().optional().describe("新しい作品名・公演名(映画のタイトル、ライブ名など)。null か空文字で消去。省略すると変えない"),
   venue: venueField.optional().describe("新しい会場名。省略すると変えない"),
   screen: screenField.nullable().optional().describe("新しいスクリーン名。null で消去。省略すると変えない"),
   seat: seatField.optional().describe("新しい座席。省略すると変えない"),
@@ -80,6 +89,7 @@ export const updateSeatRecordFieldsSchema = z.strictObject({
 export const deleteSeatRecordSchema = z.strictObject({ id: idField.describe("削除する座席の記録の id(list_seat_records で分かる)。必須") });
 
 export const listSeatRecordsFieldsSchema = z.strictObject({
+  title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).optional().describe("この作品名・公演名の記録だけ(部分一致。映画のタイトル、ライブ名など。例: 「ダミー作品」)"),
   venue: venueField.optional().describe("この会場の記録だけ(完全一致)。list_seat_records を絞らずに呼ぶと、既存の会場名が summary で分かる"),
   screen: screenField.optional().describe("このスクリーン名・ホール名の記録だけ(完全一致)"),
   seat: seatField.optional().describe("この座席の記録だけ(完全一致。例: F-5)"),
@@ -93,7 +103,7 @@ export const listSeatRecordsFieldsSchema = z.strictObject({
 
 // ---- 保存・取得 ----
 
-const COLUMNS = "id, date, venue, screen, seat, rating, note, transaction_id, created_at";
+const COLUMNS = "id, date, title, venue, screen, seat, rating, note, transaction_id, created_at";
 
 export type SeatRecordResult = { ok: true; seat_record: SeatRecordView; message: string } | { ok: false; errors: FieldError[] };
 export type DeleteSeatRecordResult = { ok: true; deleted: SeatRecordView; message: string } | { ok: false; errors: FieldError[] };
@@ -114,8 +124,8 @@ const notFound = (id: string): { ok: false; errors: FieldError[] } => ({
   errors: [{ field: "id", message: `id: 「${id.slice(0, 64)}」という座席の記録はありません。list_seat_records で id を確かめてください` }],
 });
 
-const label = (r: Pick<SeatRecordView, "date" | "venue" | "screen" | "seat" | "rating">) =>
-  `${r.date} ${r.venue}${r.screen ? ` ${r.screen}` : ""} ${r.seat}${r.rating ? `(★${r.rating})` : ""}`;
+const label = (r: Pick<SeatRecordView, "date" | "title" | "venue" | "screen" | "seat" | "rating">) =>
+  `${r.date}${r.title ? ` 「${r.title}」` : ""} ${r.venue}${r.screen ? ` ${r.screen}` : ""} ${r.seat}${r.rating ? `(★${r.rating})` : ""}`;
 
 export async function addSeatRecord(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<SeatRecordResult> {
   const parsed = newSeatRecordSchema.safeParse(input);
@@ -127,6 +137,7 @@ export async function addSeatRecord(db: D1Database, input: unknown, options: Cor
   const record: SeatRecordView = {
     id: crypto.randomUUID(),
     date: m.date,
+    title: m.title || null,
     venue: m.venue,
     screen: m.screen ?? null,
     seat: m.seat,
@@ -136,8 +147,8 @@ export async function addSeatRecord(db: D1Database, input: unknown, options: Cor
     created_at: (options.now ?? new Date()).toISOString(),
   };
   await db
-    .prepare(`INSERT INTO seat_records (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(record.id, record.date, record.venue, record.screen, record.seat, record.rating, record.note, record.transaction_id, record.created_at)
+    .prepare(`INSERT INTO seat_records (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(record.id, record.date, record.title, record.venue, record.screen, record.seat, record.rating, record.note, record.transaction_id, record.created_at)
     .run();
   return { ok: true, seat_record: record, message: `座席の記録を登録しました: ${label(record)}` };
 }
@@ -152,7 +163,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown): Promise<
   if (Object.values(changes).every((v) => v === undefined)) {
     return {
       ok: false,
-      errors: [{ field: "input", message: "input: 更新する項目(date / venue / screen / seat / rating / note / transaction_id)を1つ以上指定してください" }],
+      errors: [{ field: "input", message: "input: 更新する項目(date / title / venue / screen / seat / rating / note / transaction_id)を1つ以上指定してください" }],
     };
   }
   if (changes.transaction_id) {
@@ -164,6 +175,8 @@ export async function updateSeatRecord(db: D1Database, input: unknown): Promise<
   const next: SeatRecordView = {
     id,
     date: changes.date ?? current.date,
+    // null と空文字は消去
+    title: changes.title === undefined ? current.title : changes.title || null,
     venue: changes.venue ?? current.venue,
     screen: changes.screen === undefined ? current.screen : changes.screen,
     seat: changes.seat ?? current.seat,
@@ -173,8 +186,8 @@ export async function updateSeatRecord(db: D1Database, input: unknown): Promise<
     created_at: current.created_at,
   };
   await db
-    .prepare("UPDATE seat_records SET date = ?, venue = ?, screen = ?, seat = ?, rating = ?, note = ?, transaction_id = ? WHERE id = ?")
-    .bind(next.date, next.venue, next.screen, next.seat, next.rating, next.note, next.transaction_id, id)
+    .prepare("UPDATE seat_records SET date = ?, title = ?, venue = ?, screen = ?, seat = ?, rating = ?, note = ?, transaction_id = ? WHERE id = ?")
+    .bind(next.date, next.title, next.venue, next.screen, next.seat, next.rating, next.note, next.transaction_id, id)
     .run();
   return { ok: true, seat_record: next, message: `座席の記録を更新しました: ${label(next)}` };
 }
@@ -212,6 +225,10 @@ export async function listSeatRecords(db: D1Database, input: unknown): Promise<L
     where.push(sql);
     binds.push(value);
   };
+  if (m.title !== undefined) {
+    where.push("title LIKE ? ESCAPE '\\'");
+    binds.push(`%${escapeLike(m.title)}%`);
+  }
   add("venue = ?", m.venue);
   add("screen = ?", m.screen);
   add("seat = ?", m.seat);

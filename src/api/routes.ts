@@ -159,11 +159,11 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
 
   app.delete("/api/links/:id", async (c) => respond(c, await deleteLink(c.env.DB, { id: c.req.param("id") })));
 
-  // 座席の記録(映画館などの席の評価)。一覧は絞り込み: date(その日)/ venue / screen / seat / min_rating / max_rating / from / to / transaction_id / limit
+  // 座席の記録(映画館などの席の評価)。一覧は絞り込み: date(その日)/ title(部分一致)/ venue / screen / seat / min_rating / max_rating / from / to / transaction_id / limit
   app.get("/api/seat-records", async (c) => {
     const q = c.req.query();
     const filter: Record<string, unknown> = {};
-    for (const key of ["venue", "screen", "seat", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
+    for (const key of ["title", "venue", "screen", "seat", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
     // date は「その日だけ」(from と to を同じ日にする)
     if (q.date) {
       filter.from = q.date;

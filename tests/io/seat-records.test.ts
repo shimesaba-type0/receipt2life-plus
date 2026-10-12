@@ -24,12 +24,13 @@ const seat = (over: Record<string, unknown> = {}) => ({ type: "seat_record", id:
 describe("座席の記録のエクスポート", () => {
   it("type=seat_record の行が、link の後(最後)に出る。既存の type の順は変わらない", async () => {
     await doImport(jsonl(tx));
-    await addSeatRecord(db(), { date: "2026-10-10", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 4, note: "見やすい", transaction_id: "tx1" }, { now: NOW });
+    await addSeatRecord(db(), { date: "2026-10-10", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 4, note: "見やすい", title: "ダミー作品A", transaction_id: "tx1" }, { now: NOW });
     const rows = await exportRecords();
     expect(rows.map((r) => r.type)).toEqual(["transaction", "seat_record"]);
     expect(rows[1]).toMatchObject({
       type: "seat_record",
       date: "2026-10-10",
+      title: "ダミー作品A",
       venue: "A映画館",
       screen: "スクリーン5",
       seat: "F-5",
@@ -43,7 +44,7 @@ describe("座席の記録のエクスポート", () => {
   it("書き出して、空のDBに戻すと同じ内容になる(往復)", async () => {
     await doImport(jsonl(tx));
     await addSeatRecord(db(), { date: "2026-10-10", venue: "A映画館", seat: "F-5", transaction_id: "tx1" }, { now: NOW });
-    await addSeatRecord(db(), { date: "2026-10-11", venue: "B劇場", screen: "ホール", seat: "1列3番", rating: 5, note: "最高" }, { now: NOW });
+    await addSeatRecord(db(), { date: "2026-10-11", venue: "B劇場", screen: "ホール", seat: "1列3番", rating: 5, note: "最高", title: "ダミーライブ" }, { now: NOW });
     const before = await new Response(exportJsonl(db())).text();
     await db().exec("DELETE FROM seat_records");
     await db().exec("DELETE FROM transactions");
@@ -55,9 +56,10 @@ describe("座席の記録のエクスポート", () => {
 
 describe("座席の記録のインポート", () => {
   it("取り込む。順序がファイルの中で前後しても、取引の後に入る", async () => {
-    const res = await doImport(jsonl(seat({ transaction_id: "tx1", screen: "スクリーン5", rating: 3, note: "ふつう" }), tx));
+    const res = await doImport(jsonl(seat({ transaction_id: "tx1", screen: "スクリーン5", rating: 3, note: "ふつう", title: "  ダミー作品A " }), tx));
     expect(res.results[0]).toMatchObject({ line: 1, type: "seat_record", status: "ok", id: "st1" });
-    expect(await db().prepare("SELECT venue, screen, seat, rating, note, transaction_id, created_at FROM seat_records WHERE id = 'st1'").first()).toEqual({
+    expect(await db().prepare("SELECT title, venue, screen, seat, rating, note, transaction_id, created_at FROM seat_records WHERE id = 'st1'").first()).toEqual({
+      title: "ダミー作品A",
       venue: "A映画館",
       screen: "スクリーン5",
       seat: "F-5",
@@ -69,8 +71,19 @@ describe("座席の記録のインポート", () => {
   });
 
   it("null の項目は省略扱い。id がなければ採番する", async () => {
-    const res = await doImport(jsonl({ type: "seat_record", date: "2026-10-10", venue: "A映画館", seat: "F-5", screen: null, rating: null, note: null, transaction_id: null }));
+    const res = await doImport(jsonl({ type: "seat_record", date: "2026-10-10", venue: "A映画館", seat: "F-5", screen: null, rating: null, note: null, title: null, transaction_id: null }));
     expect(res.results[0]).toMatchObject({ status: "ok", id: expect.any(String) });
+  });
+
+  it("title の無い旧形式の行も取り込める(title は NULL)。空文字の title も NULL", async () => {
+    const res = await doImport(jsonl(seat({ id: "old" }), seat({ id: "blank", title: "  " })));
+    expect(res.results.map((r) => r.status)).toEqual(["ok", "ok"]);
+    expect(await db().prepare("SELECT id, title FROM seat_records ORDER BY id").all()).toMatchObject({ results: [{ id: "blank", title: null }, { id: "old", title: null }] });
+  });
+
+  it("title が長すぎる行はその行だけエラー", async () => {
+    const res = await doImport(jsonl(seat({ id: "long", title: "あ".repeat(101) }), seat({ id: "ok", title: "あ".repeat(100) })));
+    expect(res.results.map((r) => r.status)).toEqual(["error", "ok"]);
   });
 
   it("同じ id は何度戻しても増えない(skipped_exists)", async () => {
@@ -88,7 +101,7 @@ describe("座席の記録のインポート", () => {
         seat({ id: "c", venue: undefined }),
         seat({ id: "d", seat: undefined }),
         seat({ id: "e", date: "2026-02-30" }),
-        seat({ id: "f", title: "x" }),
+        seat({ id: "f", unknown_field: "x" }),
         seat({ id: "g", transaction_id: "none" }),
         seat({ id: "h", rating: 2.5 }),
         seat({ id: "ok", rating: 5 }),

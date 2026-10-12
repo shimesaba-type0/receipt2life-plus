@@ -17,7 +17,7 @@ async function add(over: Record<string, unknown> = {}) {
 describe("addSeatRecord", () => {
   it("登録して、全項目を返す", async () => {
     const r = await add();
-    expect(r).toEqual({ id: expect.any(String), ...base, transaction_id: null, created_at: expect.any(String) });
+    expect(r).toEqual({ id: expect.any(String), ...base, title: null, transaction_id: null, created_at: expect.any(String) });
     expect(await db().prepare("SELECT venue, screen, seat, rating, note FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({
       venue: "A映画館",
       screen: "スクリーン5",
@@ -30,6 +30,19 @@ describe("addSeatRecord", () => {
   it("必須は date・venue・seat だけ。任意項目は null で保存し、前後の空白は除く", async () => {
     const res = await addSeatRecord(db(), { date: "2026-10-10", venue: "  B劇場 ", seat: " 1列3番" }, { now: NOW });
     expect(res).toMatchObject({ ok: true, seat_record: { venue: "B劇場", seat: "1列3番", screen: null, rating: null, note: null, transaction_id: null } });
+  });
+
+  it("title(作品名・公演名)は任意。前後の空白を除き、空文字は未指定(NULL)扱い", async () => {
+    const r = await add({ title: "  ダミー作品名 " });
+    expect(r.title).toBe("ダミー作品名");
+    expect(await db().prepare("SELECT title FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ title: "ダミー作品名" });
+    expect((await add({ title: "" })).title).toBeNull();
+    expect((await add({ title: "   " })).title).toBeNull();
+    expect((await add()).title).toBeNull();
+    expect((await add({ title: "あ".repeat(100) })).title).toHaveLength(100);
+    const tooLong = await addSeatRecord(db(), { ...base, title: "あ".repeat(101) });
+    expect(tooLong).toMatchObject({ ok: false, errors: [{ field: "title" }] });
+    expect((await addSeatRecord(db(), { ...base, title: 1 })).ok).toBe(false);
   });
 
   it("取引に紐づけられる。存在しない取引はエラー", async () => {
@@ -117,6 +130,25 @@ describe("listSeatRecords", () => {
     expect(await listSeatRecords(db(), { venue: "A映画" })).toMatchObject({ count: 0, records: [], summary: [] });
   });
 
+  it("title で絞る(部分一致。LIKE のワイルドカードは文字として扱う)。summary の形は変わらない", async () => {
+    await add({ title: "ダミー作品A", seat: "F-5" });
+    await add({ title: "ライブ100%_テスト", seat: "G-1" });
+    await add({ title: "別の催し", seat: "H-2" });
+    await add({ seat: "J-3" });
+    expect(await listSeatRecords(db(), { title: "作品" })).toMatchObject({ count: 1, records: [{ title: "ダミー作品A" }] });
+    expect(await listSeatRecords(db(), { title: "ライブ" })).toMatchObject({ count: 1 });
+    expect(await listSeatRecords(db(), { title: "%" })).toMatchObject({ count: 1, records: [{ seat: "G-1" }] });
+    expect(await listSeatRecords(db(), { title: "_" })).toMatchObject({ count: 1, records: [{ seat: "G-1" }] });
+    expect(await listSeatRecords(db(), { title: "ダ%A" })).toMatchObject({ count: 0 });
+    expect(await listSeatRecords(db(), { title: "なし" })).toMatchObject({ count: 0, records: [], summary: [] });
+    const res = await listSeatRecords(db(), { title: "作品" });
+    if (!res.ok) throw new Error("list");
+    expect(Object.keys(res.summary[0]!).sort()).toEqual(["avg_rating", "count", "rated_count", "screen", "seat", "venue"]);
+    expect(res.records[0]).toHaveProperty("title", "ダミー作品A");
+    expect((await listSeatRecords(db(), { title: "あ".repeat(101) })).ok).toBe(false);
+    expect((await listSeatRecords(db(), { title: "" })).ok).toBe(false);
+  });
+
   it("min_rating / max_rating で絞る(評価なしは除く)", async () => {
     await seed();
     const high = await listSeatRecords(db(), { min_rating: 4 });
@@ -175,6 +207,18 @@ describe("updateSeatRecord", () => {
     const cleared = await updateSeatRecord(db(), { id: r.id, screen: null, rating: null, note: null });
     expect(cleared).toMatchObject({ ok: true, seat_record: { screen: null, rating: null, note: null, seat: "G-7" } });
     expect(await db().prepare("SELECT screen, rating, note, created_at FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ screen: null, rating: null, note: null, created_at: r.created_at });
+  });
+
+  it("title を直せる。null や空文字で消せ、省略すると変えない", async () => {
+    const r = await add({ title: "ダミー作品A" });
+    expect(await updateSeatRecord(db(), { id: r.id, title: "  ダミー作品B " })).toMatchObject({ ok: true, seat_record: { title: "ダミー作品B" } });
+    expect(await updateSeatRecord(db(), { id: r.id, seat: "G-7" })).toMatchObject({ ok: true, seat_record: { title: "ダミー作品B", seat: "G-7" } });
+    expect(await updateSeatRecord(db(), { id: r.id, title: null })).toMatchObject({ ok: true, seat_record: { title: null } });
+    expect(await db().prepare("SELECT title FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ title: null });
+    await updateSeatRecord(db(), { id: r.id, title: "ダミー作品C" });
+    expect(await updateSeatRecord(db(), { id: r.id, title: "" })).toMatchObject({ ok: true, seat_record: { title: null } });
+    expect(await updateSeatRecord(db(), { id: r.id, title: "  " })).toMatchObject({ ok: true, seat_record: { title: null } });
+    expect((await updateSeatRecord(db(), { id: r.id, title: "あ".repeat(101) })).ok).toBe(false);
   });
 
   it("取引の紐づけを付けたり外したりできる", async () => {
