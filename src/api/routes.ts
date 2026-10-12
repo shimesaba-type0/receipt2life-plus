@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { getCalendar, getDay } from "../core/calendar";
+import { addAccount, deleteAccount, listAccounts, updateAccount } from "../core/accounts";
 import { addCategory, deleteCategory, listCategories, renameGroup, updateCategory } from "../core/categories";
 import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { getHome } from "../core/home";
@@ -42,7 +43,7 @@ const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSON�
 export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -71,6 +72,29 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.delete("/api/categories/:name", async (c) => {
     const moveTo = c.req.query("move_to");
     return respond(c, await deleteCategory(c.env.DB, { name: c.req.param("name"), ...(moveTo ? { move_to: moveTo } : {}) }));
+  });
+
+  // 口座(支払方法)の管理。:name はURLエンコードした口座名。GET /api/categories の accounts は名前だけ(互換のため)
+  app.get("/api/accounts", async (c) => {
+    const { accounts } = await listAccounts(c.env.DB);
+    return c.json({ ok: true as const, accounts });
+  });
+
+  app.post("/api/accounts", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addAccount(c.env.DB, body.value));
+  });
+
+  app.patch("/api/accounts/:name", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateAccount(c.env.DB, { ...body.value, name: c.req.param("name") }));
+  });
+
+  app.delete("/api/accounts/:name", async (c) => {
+    const moveTo = c.req.query("move_to");
+    return respond(c, await deleteAccount(c.env.DB, { name: c.req.param("name"), ...(moveTo ? { move_to: moveTo } : {}) }));
   });
 
   app.post("/api/category-groups/rename", async (c) => {

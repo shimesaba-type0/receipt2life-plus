@@ -1,4 +1,8 @@
 import type {
+  AccountDeleted,
+  AccountPatch,
+  AccountsData,
+  AccountView,
   ApiResult,
   CalendarData,
   CategoriesData,
@@ -12,6 +16,7 @@ import type {
   HomeData,
   LinkPatch,
   LinkView,
+  NewAccount,
   NewCategory,
   NewEvent,
   NewLink,
@@ -69,6 +74,14 @@ export const deleteCategory = (name: string, moveTo?: string) =>
   request<CategoryDeleted>("DELETE", `/api/categories/${encodeURIComponent(name)}${moveTo ? `?move_to=${encodeURIComponent(moveTo)}` : ""}`);
 export const renameCategoryGroup = (rename: GroupRename) =>
   request<{ group: string; previous: string; updated: number; merged: boolean; message: string }>("POST", "/api/category-groups/rename", rename);
+
+// 口座(支払方法)の管理。categories と同じく name を URL エンコードして送る
+export const getAccounts = () => request<AccountsData>("GET", "/api/accounts");
+export const addAccount = (account: NewAccount) => request<{ account: AccountView; message: string }>("POST", "/api/accounts", account);
+export const updateAccount = (name: string, patch: AccountPatch) =>
+  request<{ account: AccountView; message: string }>("PATCH", `/api/accounts/${encodeURIComponent(name)}`, patch);
+export const deleteAccount = (name: string, moveTo?: string) =>
+  request<AccountDeleted>("DELETE", `/api/accounts/${encodeURIComponent(name)}${moveTo ? `?move_to=${encodeURIComponent(moveTo)}` : ""}`);
 
 export const addTransactions = (transactions: NewTransaction[]) =>
   request<{ registered: TransactionView[]; skipped_duplicates: unknown[]; message: string }>("POST", "/api/transactions", { transactions });
