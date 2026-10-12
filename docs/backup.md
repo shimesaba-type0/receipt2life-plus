@@ -13,10 +13,11 @@
 
 ファイルの中身:
 
-- 1行1レコードで、`type` が `event` → `transaction` → `item` → `attachment` → `link` → `screen` → `seat_record` の順に並ぶ(`item` はレシートの明細の行。`id`, `transaction_id`, `position`, `name`, `amount`, `category`, `tax_flag`, `memo`, `created_at`。`category` と `tax_flag` は行自身の値で、`null` は取引の値に従う。`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`。`screen` は会場のスクリーン。`id`, `venue`(会場名), `name`(スクリーン名), `note`(そのスクリーンの特徴), `created_at`(`note` を失わないための行。座席の記録より前に読み込まれる)。`seat_record` は映画館などの座席の記録。`id`, `date`, `title`, `venue`(会場名), `screen`(スクリーン・エリア名), `seat`, `seat_class`(席種), `rating`, `note`, `transaction_id`, `created_at`(会場・スクリーンは名前で持つので、会場とスクリーンが別のレコードになる前の古いバックアップもそのまま読める)。取引に紐づけたものは、読み込み時に先に取引が入る)
+- 1行1レコードで、`type` が `event` → `transaction` → `item` → `attachment` → `link` → `screen` → `seat_record` の順に並ぶ(`item` はレシートの明細の行。`id`, `transaction_id`, `position`, `name`, `amount`, `category`, `tax_flag`, `memo`, `tax_rate`(消費税の税率%。不明は `null`), `tax_label`(印字の記号), `created_at`。`category` と `tax_flag` は行自身の値で、`null` は取引の値に従う。`link` は出来事・取引・日付に付けたXの投稿・YouTubeの動画のURL。`id`, `url`, `kind`, `title`, `date`, `transaction_id`, `event_id`, `created_at`。`screen` は会場のスクリーン。`id`, `venue`(会場名), `name`(スクリーン名), `note`(そのスクリーンの特徴), `created_at`(`note` を失わないための行。座席の記録より前に読み込まれる)。`seat_record` は映画館などの座席の記録。`id`, `date`, `title`, `venue`(会場名), `screen`(スクリーン・エリア名), `seat`, `seat_class`(席種), `rating`, `note`, `transaction_id`, `created_at`(会場・スクリーンは名前で持つので、会場とスクリーンが別のレコードになる前の古いバックアップもそのまま読める)。取引に紐づけたものは、読み込み時に先に取引が入る)
 - カテゴリと口座は、名前で書き出される
 - `transaction` の行には、レシートの情報 `paid_time` / `merchant_phone` / `merchant_address` / `invoice_number` / `clerk_name` / `receipt_no`(なしは `null`)も入る
 - `transaction` の行には `tax_flag`(税金の控除用フラグ。`medical` / `self_medication` / `donation`、なしは `null`)が入る
+- `transaction` の行には `tax_lines`(レシート下部の税率別の内訳。`rate`, `taxable_amount`, `tax_amount`, `amount_basis`, `label` の配列。税率の高い順。なしは `[]`)が入れ子で入る。内訳の `id` は書き出さない(戻すと新しい id になる)。明細と違って別の行にしないのは、税率ごとの小さな表で、取引といっしょに読み書きするため
 - 写真の実体は含まれない(zip でまとめて書き出す機能は未実装。今後の候補)
 
 保存したファイルは、**実データ**です。リポジトリには置かないでください(`exports/` と `backup/` は `.gitignore` 済み)。
@@ -49,6 +50,8 @@
   - 取引の行がファイルに無い明細の行は、同じ `id` の明細が既にあれば `skipped_exists`、無ければエラー
   - 取引の行の中に `items` を入れ子で書いた行はエラー(明細は `item` の行で書く)
   - 明細の無い古いバックアップも、そのまま取り込める
+  - 明細の行の `tax_rate` / `tax_label` が無い古いバックアップも、そのまま取り込める(不明・なしになる)。範囲外の税率(0〜100の外、小数第4位以下)や21文字以上の記号は、その取引と明細の行がエラー
+- 取引の行の `tax_lines`(税の内訳)は、取引といっしょに書く。無い古いバックアップは内訳なしで取り込める。同じ税率が2つある・範囲外の税率・負や小数の金額は、その取引(と明細の行)がエラー。合計が取引の金額と合わなくてもエラーにはしない(レシートがマスター)
 - 未知の口座の名前は、その行だけエラーになる(自動では作らない)
 - 未知のカテゴリの名前も、その行だけエラーになる。ただし**エクスポートした行(`id` と `created_at` がある取引)**は復元とみなし、取り込み先に無いカテゴリを自動で作る。バックアップの行には大分類が入っていないので、大分類は「その他」になる(必要なら、あとで `/categories` の画面か MCP の `update_category` で移す)。名前が30文字を超える・前後に空白があるものは作らず、その行がエラーになる。実際に取り込む行が使うカテゴリだけを作る(スキップされる行のぶんは作らない)
 - `link` の行は、URLを登録時と同じ規則で検証・正規化する(許可リスト外のURL、`http:`、`user:pass@` 付き、`kind` がURLと合わないものは、その行だけエラー)。紐づけ先の取引・出来事が無い行もエラー

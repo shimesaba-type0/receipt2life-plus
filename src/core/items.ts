@@ -1,5 +1,6 @@
 import type { FieldError, ItemInput } from "./schema";
 import type { TaxFlag } from "./tax-flags";
+import { blankToNull, loadTaxLines, type TaxLineView } from "./tax-lines";
 
 // 明細(transaction_items)。1つの取引(レシート)の下の、品名・金額の行
 // 取引の amount が支払総額の正で、明細がある取引は「明細の合計 = 取引の amount」を保つ(検証は schema.ts の itemsTotalMismatch)
@@ -16,12 +17,15 @@ export interface ItemView {
   // 行自身のフラグ(実効ではない)。null なら取引のフラグに従う
   tax_flag: TaxFlag | null;
   memo: string | null;
+  // 消費税の税率(%。印字どおり。不明は null)と、印字どおりの記号(「※」など。なしは null)。tax_flag とは別物
+  tax_rate: number | null;
+  tax_label: string | null;
 }
 
 // D1: 1文あたりのバインド変数は100個まで。IN句は余裕をみて90個ずつ
 const IN_CHUNK = 90;
 
-const ITEM_COLUMNS = "i.id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo";
+const ITEM_COLUMNS = "i.id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label";
 
 // 取引の id ごとの明細(並び順)。明細が無い取引はマップに入らない
 export async function loadItems(db: D1Database, transactionIds: readonly string[]): Promise<Map<string, ItemView[]>> {
@@ -47,11 +51,12 @@ export async function loadItems(db: D1Database, transactionIds: readonly string[
   return out;
 }
 
-// 取引の行に明細(items)を付ける。明細なしは空配列
-export async function withItems<T extends { id: string }>(db: D1Database, rows: readonly T[]): Promise<(T & { items: ItemView[] })[]> {
+// 取引の行に明細(items)と税の内訳(tax_lines)を付ける。どちらも、無ければ空配列
+export async function withItems<T extends { id: string }>(db: D1Database, rows: readonly T[]): Promise<(T & { items: ItemView[]; tax_lines: TaxLineView[] })[]> {
   if (rows.length === 0) return [];
-  const items = await loadItems(db, rows.map((r) => r.id));
-  return rows.map((r) => ({ ...r, items: items.get(r.id) ?? [] }));
+  const ids = rows.map((r) => r.id);
+  const [items, taxLines] = await Promise.all([loadItems(db, ids), loadTaxLines(db, ids)]);
+  return rows.map((r) => ({ ...r, items: items.get(r.id) ?? [], tax_lines: taxLines.get(r.id) ?? [] }));
 }
 
 // ---- 支出の行(集計の土台) ----
@@ -128,6 +133,8 @@ export function toStoredItems(items: readonly ItemInput[], categories: Map<strin
       category: item.category ?? null,
       tax_flag: item.tax_flag ?? null,
       memo: item.memo ?? null,
+      tax_rate: item.tax_rate ?? null,
+      tax_label: blankToNull(item.tax_label),
     },
     categoryId: item.category ? categories.get(item.category)! : null,
   }));
@@ -137,9 +144,9 @@ export function insertItemStatements(db: D1Database, transactionId: string, item
   return items.map(({ view, categoryId }) =>
     db
       .prepare(
-        `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(view.id, transactionId, view.position, view.name, view.amount, categoryId, view.tax_flag, view.memo, createdAt),
+      .bind(view.id, transactionId, view.position, view.name, view.amount, categoryId, view.tax_flag, view.memo, createdAt, view.tax_rate, view.tax_label),
   );
 }

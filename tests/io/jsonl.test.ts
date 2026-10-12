@@ -83,6 +83,7 @@ describe("exportJsonl", () => {
       receipt_no: null,
       created_at: NOW.toISOString(),
       updated_at: NOW.toISOString(),
+      tax_lines: [],
     });
     expect(rows[2]).toEqual({
       type: "attachment",

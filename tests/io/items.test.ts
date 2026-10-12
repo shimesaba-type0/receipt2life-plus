@@ -61,6 +61,8 @@ describe("JSONL の明細", () => {
       category: "日用品",
       tax_flag: "medical",
       memo: "メモ",
+      tax_rate: null,
+      tax_label: null,
       created_at: NOW.toISOString(),
     });
     expect(items[0]).toMatchObject({ category: null, tax_flag: null });

@@ -29,6 +29,8 @@ import type {
   VenuesData,
   SeatRecordSaved,
   SeatRecordView,
+  TaxSummaryData,
+  TaxWarning,
   TransactionDeleted,
   TransactionDetailData,
   TransactionPatch,
@@ -89,6 +91,8 @@ export const getHome = () => request<HomeData>("GET", "/api/home");
 export const getCalendar = (month?: string) => request<CalendarData>("GET", `/api/calendar${month ? `?month=${encodeURIComponent(month)}` : ""}`);
 export const getDay = (date: string) => request<DayData>("GET", `/api/day/${encodeURIComponent(date)}`);
 export const getCategories = () => request<CategoriesData>("GET", "/api/categories");
+// 税率別の税額(query は taxSummaryQuery で作る: from / to / group_by)
+export const getTaxSummary = (query: string) => request<TaxSummaryData>("GET", `/api/tax-summary${query ? `?${query}` : ""}`);
 
 // カテゴリの管理。name は日本語なので URL エンコードして送る
 export const addCategory = (category: NewCategory) =>
@@ -109,9 +113,9 @@ export const deleteAccount = (name: string, moveTo?: string) =>
   request<AccountDeleted>("DELETE", `/api/accounts/${encodeURIComponent(name)}${moveTo ? `?move_to=${encodeURIComponent(moveTo)}` : ""}`);
 
 export const addTransactions = (transactions: NewTransaction[]) =>
-  request<{ registered: TransactionView[]; skipped_duplicates: unknown[]; message: string }>("POST", "/api/transactions", { transactions });
+  request<{ registered: TransactionView[]; skipped_duplicates: unknown[]; tax_warnings: TaxWarning[]; message: string }>("POST", "/api/transactions", { transactions });
 export const updateTransaction = (id: string, patch: TransactionPatch) =>
-  request<{ transaction: TransactionView; warnings: unknown[]; message: string }>("PATCH", `/api/transactions/${encodeURIComponent(id)}`, patch);
+  request<{ transaction: TransactionView; warnings: unknown[]; tax_warnings: TaxWarning[]; message: string }>("PATCH", `/api/transactions/${encodeURIComponent(id)}`, patch);
 export const getTransaction = (id: string) => request<TransactionDetailData>("GET", `/api/transactions/${encodeURIComponent(id)}`);
 // 写真つきの取引は、deletePhotos: true(?delete_photos=1)でないと 400 で断られる
 export const deleteTransaction = (id: string, opts: { deletePhotos?: boolean } = {}) =>

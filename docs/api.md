@@ -21,14 +21,15 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの)・座席の記録(`seat_records: SeatRecordView[]`。`date` がその日のもの、登録順) |
 | `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
 | `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`icon`=アイコンのキー(未設定は `null`)、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名(`accounts: string[]`。口座の件数つきの一覧は `GET /api/accounts`) |
+| `GET /api/tax-summary?from=&to=&group_by=` | `TaxSummaryData`: 税率別(`group_by=rate`。既定)または月別×税率別(`group_by=month`)の税額の合計。下の「税率と税の内訳」 |
 | `GET /api/accounts` | `AccountsData`: 口座(支払方法)の一覧(`accounts: {name, usage}[]`。`usage`=使っている取引の件数。追加順) |
 
 ## 取引
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `POST /api/transactions` | `{transactions: NewTransaction[]}`(`add_transactions` と同じ。`items` で明細つき) | `registered`(各取引に `items`。カテゴリを引き継いだときは `applied_default_category`), `skipped_duplicates`, `message` |
-| `PATCH /api/transactions/:id` | `TransactionPatch`(`update_transaction` と同じ。null で空にできる。`items` は全置換) | `transaction`(`items` つき), `warnings`, `message` |
+| `POST /api/transactions` | `{transactions: NewTransaction[]}`(`add_transactions` と同じ。`items` で明細つき) | `registered`(各取引に `items` と `tax_lines`。カテゴリを引き継いだときは `applied_default_category`), `skipped_duplicates`, `tax_warnings`, `message` |
+| `PATCH /api/transactions/:id` | `TransactionPatch`(`update_transaction` と同じ。null で空にできる。`items` は全置換) | `transaction`(`items`・`tax_lines` つき), `warnings`, `tax_warnings`, `message` |
 | `DELETE /api/transactions/:id[?delete_photos=1]` | なし | `TransactionDeleted`: `deleted: {transaction, items, photos, links}`(消した件数), `message`。写真が紐づく取引は、`delete_photos=1` が無ければ 400 で拒否 |
 
 ### 明細(`items`)
@@ -56,6 +57,22 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 - 不正な値は 400(`field: "tax_flag"`)。重複判定(`dedup_hash`)には含めない
 - 年ごとの合計は、MCP の `summarize`(`group_by: "tax_flag"` と `from` / `to`)で出す。Web UI の API には集計用の道は足していない
 - 明細の行にもフラグを付けられる(行の `tax_flag`、`null` なら取引のフラグに従う)。集計は行ごとの実効フラグで数える
+
+### 税率と税の内訳(`tax_rate` / `tax_lines`)
+
+レシートに印字された消費税の税率と税額を、**印字どおりに**記録する(こちらで税額を計算して補わない。税率の表も持たない)。税金の控除用フラグ(`tax_flag`)とは別物。
+
+- `ItemView.tax_rate`: 行の税率(%。0〜100、小数は第3位まで。不明は `null`)。`ItemView.tax_label`: 印字どおりの記号(「※」「軽」など。20文字まで。なしは `null`)
+- `TransactionView.tax_lines`: 税の内訳(`TaxLineView`: `id`, `rate`, `taxable_amount`=対象金額, `tax_amount`=消費税額, `amount_basis`=`included`(税込)/ `excluded`(税抜)/ `null`, `label`)。税率の高い順。なしは `[]`。`items` と同じところに常に含まれる
+- 入力: `NewItem.tax_rate?` / `tax_label?`、`NewTransaction.tax_lines?`(`NewTaxLine[]`。`rate` 必須、ほかは任意。同じ税率は1つだけ、10行まで)。金額は0以上の整数(円)。記号の空文字は値なし
+- `PATCH` の `tax_lines`: 全置換。省略または `null` で変えない、`[]` で全部消す。明細の `tax_rate` / `tax_label` は `items` といっしょに置き換わる
+- 合計の一致は強制しない。全行が税込で対象金額があるときは「対象金額の合計 = 金額」、全行が税抜で対象金額と税額があるときは「対象金額+税額の合計 = 金額」を確かめ、合わなければ `tax_warnings`(`{index?, field, message}[]`)で知らせる(400 にはしない)
+- 旧形式の入力(これらの項目なし)もそのまま通る
+- `GET /api/tax-summary`: `from` / `to`(YYYY-MM-DD。省略は全期間。空のクエリは省略扱い)、`group_by`(`rate` / `month`)。不正な値・`from` > `to` は 400。戻り(`TaxSummaryData`):
+  - `rows`: `rate`、`month`(月別のときだけ)、`tax_total`(税額の合計)、`taxable_total`(対象金額の合計)、`receipt_count`(その税率の行を持つ取引の件数)、`missing_tax_amount`(税額が無い行の数)、`taxable_basis: {included_total, excluded_total, unknown_total}`、`mixed_basis`(税込・税抜・不明が混ざっているか)
+  - `totals`: 全体の `tax_total` / `taxable_total` / `receipt_count`(内訳がある取引の件数)/ `taxable_basis` / `mixed_basis`
+  - `coverage`(カバレッジ): `transactions`(期間内の全取引の `{count, total}`)、`with_tax_lines`、`without_tax_lines`(内訳が無く、集計に含まれていない取引)、`lines_missing_tax_amount`、`lines_missing_taxable_amount`
+  - 集計は `tax_lines` の印字どおりの数字だけを足す。明細の `tax_rate` からは税額を計算しない
 
 ## レシートの情報(決済時刻・店の連絡先・登録番号など)
 

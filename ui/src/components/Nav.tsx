@@ -4,6 +4,8 @@ import { todayJst } from "../format";
 
 // カテゴリ(4つの区画)のアイコン。ホームの見出しのボタンでも使う
 export const CATEGORY_ICON = ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"];
+// 税額(レシートと「%」)のアイコン。ホームの見出しのボタンでも使う
+export const TAX_ICON = ["M6 3h12v18l-3-2-3 2-3-2-3 2z", "M9.5 9.5h.01", "M14.5 14.5h.01", "M14.5 9.5l-5 5"];
 
 function Icon(props: { d: string[] }) {
   return (
@@ -19,7 +21,7 @@ function Icon(props: { d: string[] }) {
 export function Nav(props: { route: Route }) {
   const { route } = props;
   const today = todayJst();
-  // 下のタブは「ホーム/カレンダー/今日」、左メニューは「ホーム/カレンダー/エクスポート」(今日はホームの緑ボタンで開く)
+  // 下のタブは「ホーム/カレンダー/今日」、左メニューは「ホーム/カレンダー/カテゴリ/税額/エクスポート」(今日はホームの緑ボタンで開く)
   const items = [
     { href: "/", label: "ホーム", active: route.name === "home", d: ["M4 11l8-7 8 7", "M6 10v10h12V10"] },
     { href: "/calendar", label: "カレンダー", active: route.name === "calendar", d: ["M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M4 10h16M9 3v4M15 3v4"] },
@@ -38,6 +40,10 @@ export function Nav(props: { route: Route }) {
       <Link href="/categories" class={`nav__item nav__pc${route.name === "categories" ? " is-active" : ""}`} aria-current={route.name === "categories" ? "page" : undefined}>
         <Icon d={CATEGORY_ICON} />
         <span>カテゴリ</span>
+      </Link>
+      <Link href="/tax" class={`nav__item nav__pc${route.name === "tax" ? " is-active" : ""}`} aria-current={route.name === "tax" ? "page" : undefined}>
+        <Icon d={TAX_ICON} />
+        <span>税額</span>
       </Link>
       <Link href="/backup" class={`nav__item nav__export${route.name === "backup" ? " is-active" : ""}`} aria-current={route.name === "backup" ? "page" : undefined}>
         <Icon d={["M12 4v11", "M7 11l5 5 5-5", "M5 20h14"]} />

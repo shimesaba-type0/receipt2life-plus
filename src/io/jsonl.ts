@@ -2,6 +2,7 @@ import { z } from "zod";
 import { todayJst } from "../core/dates";
 import { needsReview } from "../core/items";
 import { RECEIPT_DETAIL_KEYS } from "../core/receipt-details";
+import { insertTaxLineStatements, loadTaxLines, toStoredTaxLines } from "../core/tax-lines";
 import {
   eventInputSchema,
   isoDate,
@@ -35,6 +36,14 @@ const BATCH_SIZE = 50;
 
 interface TableSpec {
   sql: string;
+  // 読んだページの行に項目を足す(取引の行に税の内訳を入れ子で付けるなど)
+  decorate?: (db: D1Database, rows: { id: string }[]) => Promise<object[]>;
+}
+
+// 取引の行に、税の内訳(tax_lines)を入れ子の配列で付ける(id は出さない。税率の高い順。なしは [])
+async function withTaxLines(db: D1Database, rows: { id: string }[]): Promise<object[]> {
+  const lines = await loadTaxLines(db, rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, tax_lines: (lines.get(r.id) ?? []).map((l) => ({ rate: l.rate, taxable_amount: l.taxable_amount, tax_amount: l.tax_amount, amount_basis: l.amount_basis, label: l.label })) }));
 }
 
 // id の昇順で、前のページの最後の id より後ろを読む(OFFSET を使わず、行数が増えても遅くならない)
@@ -51,9 +60,10 @@ const EXPORT_TABLES: TableSpec[] = [
           LEFT JOIN categories c ON c.id = t.category_id
           LEFT JOIN accounts a ON a.id = t.account_id
           WHERE t.id > ? ORDER BY t.id LIMIT ?`,
+    decorate: withTaxLines,
   },
   {
-    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.created_at
+    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.created_at
           FROM transaction_items i
           LEFT JOIN categories c ON c.id = i.category_id
           WHERE i.id > ? ORDER BY i.id LIMIT ?`,
@@ -88,7 +98,8 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
     for (;;) {
       const { results } = await db.prepare(table.sql).bind(after, EXPORT_PAGE).all<{ id: string }>();
       if (results.length === 0) break;
-      yield results.map((r) => `${JSON.stringify(r)}\n`).join("");
+      const rows = table.decorate ? await table.decorate(db, results) : results;
+      yield rows.map((r) => `${JSON.stringify(r)}\n`).join("");
       if (results.length < EXPORT_PAGE) break;
       after = results[results.length - 1]!.id;
     }
@@ -96,7 +107,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link → screen → seat_record の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction(税の内訳 tax_lines を入れ子で持つ)→ item(明細)→ attachment → link → screen → seat_record の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -615,11 +626,13 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
         ...v.lines.map((l, position) =>
           db
             .prepare(
-              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
-            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt),
+            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt, l.data.tax_rate ?? null, l.data.tax_label || null),
         ),
+        // 税の内訳(取引の行の入れ子の tax_lines)。旧形式(項目なし)は内訳なし
+        ...insertTaxLineStatements(db, v.id, toStoredTaxLines(v.item.tax_lines ?? []), v.createdAt),
       ],
     });
   }

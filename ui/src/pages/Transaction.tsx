@@ -6,7 +6,8 @@ import { CategoryChip } from "../components/CategoryIcon";
 import { chipIcon } from "../categoryIcons";
 import { LinkCard } from "../components/LinkCard";
 import { PhotoLightbox } from "../components/PhotoLightbox";
-import { CategorySelect, TaxFlagSelect, TransactionFields } from "../components/TransactionFields";
+import { CategorySelect, TaxFlagSelect, TaxRateFields, TransactionFields } from "../components/TransactionFields";
+import { TaxLinesEditor } from "../components/TaxLinesEditor";
 import { formatDateJa, formatYen } from "../format";
 import { holidayName } from "../holidays";
 import { clockLabel, hasShopInfo, telHref } from "../receiptDetails";
@@ -35,6 +36,7 @@ import {
   type ItemRow,
   type TxFormValues,
 } from "./transactionLogic";
+import { basisLabel, formatRate, itemRateLabel, taxLineRowsFromView, type TaxLineRow } from "./taxLogic";
 import "./Transaction.css";
 
 type State =
@@ -171,9 +173,10 @@ export function Transaction(props: { id: string }) {
             tx={state.data.transaction}
             cats={cats}
             onCancel={() => setMode("view")}
-            onSaved={async () => {
+            onSaved={async (warnings) => {
               setMode("view");
-              setNotice("保存しました。");
+              // 税の内訳の合計が金額と合わないときは、保存したうえで注意を添える(レシートがマスターなのでエラーにはしない)
+              setNotice(["保存しました。", ...warnings].join(" "));
               window.scrollTo(0, 0);
               await load();
             }}
@@ -298,6 +301,7 @@ function TransactionBody(props: {
                   const cat = effectiveCategory(it, tx);
                   const catLabel = categoryChipLabel(cat, props.cats);
                   const flag = taxFlagChipLabel(effectiveTaxFlag(it, tx));
+                  const rate = itemRateLabel(it);
                   return (
                     <li key={it.id} class="tx__item">
                       <div class="tx__item-main">
@@ -306,6 +310,7 @@ function TransactionBody(props: {
                           {catLabel ? <CategoryChip label={catLabel} icon={chipIcon(props.cats, cat)} /> : <span class="chip chip--warn">カテゴリ未設定</span>}
                           {flag && <span class="chip day__taxflag">{flag}</span>}
                         </span>
+                        {rate && <span class="muted tx__rate" aria-label={`税率 ${rate}`}>{rate}</span>}
                         {it.memo && <span class="muted day__memo">{it.memo}</span>}
                       </div>
                       <span class={`num tx__item-amount${it.amount < 0 ? " is-minus" : ""}`}>{formatSignedYen(it.amount)}</span>
@@ -320,6 +325,42 @@ function TransactionBody(props: {
               </div>
             )}
           </>
+        )}
+      </section>
+
+      <section class="card" aria-label="税の内訳">
+        <div class="day__row-head">
+          <h2 class="day__h">税の内訳</h2>
+        </div>
+        {tx.tax_lines.length === 0 ? (
+          <p class="muted">税の内訳は記録されていません(「編集」で、レシートに印字された税率ごとの金額を入れられます)。</p>
+        ) : (
+          <div class="tx__taxwrap">
+            <table class="tx__tax">
+              <thead>
+                <tr>
+                  <th scope="col">税率</th>
+                  <th scope="col">対象金額</th>
+                  <th scope="col">消費税</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tx.tax_lines.map((l) => (
+                  <tr key={l.id}>
+                    <th scope="row">
+                      {formatRate(l.rate)}
+                      {l.label && <span class="muted tx__tax-label"> {l.label}</span>}
+                    </th>
+                    <td class="num">
+                      {l.taxable_amount === null ? <span class="muted">—</span> : formatYen(l.taxable_amount)}
+                      {l.amount_basis && <span class="muted tx__tax-basis">({basisLabel(l.amount_basis)})</span>}
+                    </td>
+                    <td class="num">{l.tax_amount === null ? <span class="muted">—</span> : formatYen(l.tax_amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -365,12 +406,13 @@ function TransactionBody(props: {
 
 // ---- 編集モード ----
 
-function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: () => void; onSaved: () => Promise<void> }) {
+function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: () => void; onSaved: (warnings: string[]) => Promise<void> }) {
   const { tx, cats } = props;
   const keyRef = useRef(0);
   const nextKey = () => `new-${(keyRef.current += 1)}`;
   const [form, setForm] = useState<TxFormValues>(() => txFormFromView(tx));
   const [rows, setRows] = useState<ItemRow[]>(() => itemRowsFromView(tx.items));
+  const [taxRows, setTaxRows] = useState<TaxLineRow[]>(() => taxLineRowsFromView(tx.tax_lines));
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkTax, setBulkTax] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -385,7 +427,7 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
 
   async function submit() {
     if (busyRef.current) return;
-    const built = buildPatch(form, rows, hadItems);
+    const built = buildPatch(form, rows, hadItems, { rows: taxRows, had: tx.tax_lines.length > 0 });
     if (!built.ok) {
       setError(built.error);
       return;
@@ -399,7 +441,7 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
         setError(res.message);
         return;
       }
-      await props.onSaved();
+      await props.onSaved((res.value.tax_warnings ?? []).map((w) => w.message));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -477,6 +519,9 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
               <CategorySelect id={`${id}-${r.key}-cat`} value={r.category} cats={cats} emptyLabel="(取引のカテゴリに従う)" onChange={(category) => setRow(r.key, { category })} />
               <label for={`${id}-${r.key}-tax`}>税金のフラグ</label>
               <TaxFlagSelect id={`${id}-${r.key}-tax`} value={r.tax_flag} emptyLabel="(取引に従う)" onChange={(tax_flag) => setRow(r.key, { tax_flag })} />
+              <TaxRateFields id={`${id}-${r.key}`} label="税率(消費税。印字どおり)" choice={r.rate_choice} other={r.rate_other} disabled={busy} onChange={(patch) => setRow(r.key, patch)} />
+              <label for={`${id}-${r.key}-taxlabel`}>印字の記号(任意)</label>
+              <input id={`${id}-${r.key}-taxlabel`} type="text" maxLength={20} placeholder="例: ※ / 軽" value={r.tax_label} onInput={(e) => setRow(r.key, { tax_label: (e.currentTarget as HTMLInputElement).value })} />
               <label for={`${id}-${r.key}-memo`}>メモ</label>
               <input id={`${id}-${r.key}-memo`} type="text" value={r.memo} onInput={(e) => setRow(r.key, { memo: (e.currentTarget as HTMLInputElement).value })} />
             </li>
@@ -499,6 +544,8 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
           )}
         </div>
       </fieldset>
+
+      <TaxLinesEditor idPrefix={`${id}-tl`} rows={taxRows} onChange={setTaxRows} nextKey={nextKey} busy={busy} />
 
       {error && (
         <p class="error" role="alert">

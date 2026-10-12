@@ -16,3 +16,18 @@ export const summarizeSchema = z.strictObject({
 
 export type SummarizeInput = z.infer<typeof summarizeSchema>;
 export type GroupBy = (typeof GROUP_BYS)[number];
+
+export const TAX_GROUP_BYS = ["rate", "month"] as const;
+export type TaxGroupBy = (typeof TAX_GROUP_BYS)[number];
+
+// 税率別の税額の集計(summarize_tax)。MCPの入力定義には summarizeTaxSchema.shape を使う
+export const summarizeTaxSchema = z.strictObject({
+  from: isoDate.optional().describe("この日以降(YYYY-MM-DD)。省略すると記録の最初から"),
+  to: isoDate.optional().describe("この日以前(YYYY-MM-DD)。省略すると記録の最後まで"),
+  group_by: z
+    .enum(TAX_GROUP_BYS, { error: `group_by は ${TAX_GROUP_BYS.join(" / ")} のいずれかで指定してください` })
+    .default("rate")
+    .describe("集計の軸。rate=税率別(既定)、month=月別×税率別"),
+});
+
+export type SummarizeTaxInput = z.infer<typeof summarizeTaxSchema>;

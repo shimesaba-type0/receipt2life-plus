@@ -3,7 +3,7 @@ import type { CategoriesData, HomeData } from "../../../src/api/contract";
 import { getCategories, getHome } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { chipIcon } from "../categoryIcons";
-import { CATEGORY_ICON } from "../components/Nav";
+import { CATEGORY_ICON, TAX_ICON } from "../components/Nav";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
 import { barSegments, formatPercent, groupColor, isEmptyHome, memoView, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
@@ -57,6 +57,13 @@ export function Home() {
           <Link href="/categories" class="home__export" aria-label="カテゴリ">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               {CATEGORY_ICON.map((d) => (
+                <path d={d} key={d} />
+              ))}
+            </svg>
+          </Link>
+          <Link href="/tax" class="home__export" aria-label="税額">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              {TAX_ICON.map((d) => (
                 <path d={d} key={d} />
               ))}
             </svg>

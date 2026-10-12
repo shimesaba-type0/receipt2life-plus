@@ -1,10 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listCategories } from "../../core/categories";
-import { summarizeSchema } from "../../core/report-schema";
+import { summarizeSchema, summarizeTaxSchema } from "../../core/report-schema";
 import { summarize } from "../../core/summarize";
+import { summarizeTax } from "../../core/tax-summary";
 import { toResult } from "../result";
 
-// 集計・参照系のツール: summarize / list_categories
+// 集計・参照系のツール: summarize / summarize_tax / list_categories
 export function registerReportTools(server: McpServer, db: D1Database): void {
   server.registerTool(
     "summarize",
@@ -24,6 +25,24 @@ export function registerReportTools(server: McpServer, db: D1Database): void {
       inputSchema: summarizeSchema.shape,
     },
     async (args) => toResult(await summarize(db, args)),
+  );
+
+  server.registerTool(
+    "summarize_tax",
+    {
+      title: "税率別の税額を集計する",
+      description: [
+        "期間内の支出について、レシートに印字された消費税額を税率別(または月別×税率別)に合計する。",
+        "集計するのは、取引の税の内訳(tax_lines)に入っている印字どおりの数字だけ。明細の税率(tax_rate)から税額を計算することはしない。税率の表も持たない(8、10、0 のほか、1 や 0.5 のような税率もそのまま1つの行になる)。",
+        "rows の各行: rate(税率%)、month(group_by: \"month\" のときだけ。YYYY-MM)、tax_total(税額の合計)、taxable_total(対象金額の合計)、receipt_count(その税率の行を持つ取引の件数)、missing_tax_amount(税額の印字が無かった行の数)、taxable_basis(対象金額の税込 included_total・税抜 excluded_total・不明 unknown_total の内訳)、mixed_basis(税込と税抜などが混ざっているか)。",
+        "totals は全体の合計(receipt_count は税の内訳がある取引の件数)。coverage はカバレッジ: transactions(期間内の全取引の件数と金額)、with_tax_lines、without_tax_lines(税の内訳が無く、この集計に含まれていない取引の件数 count と金額 total)、lines_missing_tax_amount(税額が無い行の数)、lines_missing_taxable_amount。",
+        "結果を伝えるときは、必ずカバレッジも伝える(「税の内訳が記録されていない支出が N 件(¥…)あり、この集計には含まれていません」)。mixed_basis が true なら、対象金額の合計は税込と税抜が混ざった数字なので、そのまま足し算の結果として断定しない。",
+        "期間は from / to(YYYY-MM-DD、両端を含む)。どちらも省略すると全期間。group_by は rate(税率別。既定)か month(月別×税率別。月の古い順)。",
+        "税金の控除用フラグ(tax_flag。医療費控除など)の集計は summarize の group_by: \"tax_flag\" で、これとは別物。",
+      ].join("\n"),
+      inputSchema: summarizeTaxSchema.shape,
+    },
+    async (args) => toResult(await summarizeTax(db, args)),
   );
 
   server.registerTool(

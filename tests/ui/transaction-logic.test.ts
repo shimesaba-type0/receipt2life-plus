@@ -27,7 +27,7 @@ import {
   type TxFormValues,
 } from "../../ui/src/pages/transactionLogic";
 
-const item = (p: Partial<ItemView> & { amount: number }): ItemView => ({ id: "i", position: 0, name: "品", category: null, tax_flag: null, memo: null, ...p });
+const item = (p: Partial<ItemView> & { amount: number }): ItemView => ({ id: "i", position: 0, name: "品", category: null, tax_flag: null, memo: null, tax_rate: null, tax_label: null, ...p });
 const tx = (p: Partial<TransactionView> = {}): TransactionView => ({
   id: "t1",
   date: "2026-10-11",
@@ -46,6 +46,7 @@ const tx = (p: Partial<TransactionView> = {}): TransactionView => ({
   clerk_name: null,
   receipt_no: null,
   items: [],
+  tax_lines: [],
   ...p,
 });
 const row = (p: Partial<ItemRow>): ItemRow => ({ ...emptyItemRow("k"), ...p });
@@ -170,8 +171,8 @@ describe("buildItems / buildPatch", () => {
     expect(r).toEqual({
       ok: true,
       value: [
-        { name: "牛乳", amount: 200, category: "食費", tax_flag: null, memo: null },
-        { name: "値引き", amount: -50, category: null, tax_flag: "medical", memo: "割" },
+        { name: "牛乳", amount: 200, category: "食費", tax_flag: null, memo: null, tax_rate: null, tax_label: null },
+        { name: "値引き", amount: -50, category: null, tax_flag: "medical", memo: "割", tax_rate: null, tax_label: null },
       ],
     });
   });

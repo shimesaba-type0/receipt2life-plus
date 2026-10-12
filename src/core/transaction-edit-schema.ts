@@ -2,6 +2,7 @@ import { z } from "zod";
 import { receiptDetailPatchShape, RECEIPT_DETAIL_KEYS } from "./receipt-details";
 import { isoDate, itemsSchema, MAX_AMOUNT, MAX_ITEMS, SOURCES } from "./schema";
 import { TAX_FLAG_DESCRIPTION, taxFlagSchema } from "./tax-flags";
+import { MAX_TAX_LINES, taxLinesSchema } from "./tax-lines";
 
 const id = z.string().min(1, "id は必須です").describe("対象の取引ID。list_transactions で確認する");
 
@@ -27,15 +28,21 @@ export const updateTransactionFieldsSchema = z.strictObject({
     .nullable()
     .optional()
     .describe(
-      `明細(レシートの行)を丸ごと置き換える。省略または null で明細は変えない。[] で明細を全部消す(明細なしの取引に戻す)。各行は name(品名)・amount(円・整数。値引きはマイナス)・category / tax_flag(省略で取引の値に従う)・memo。${MAX_ITEMS}行まで。明細がある取引は、明細の合計 = 取引の amount でなければエラー(amount だけを変えるときも、今の明細の合計と合わせる)`,
+      `明細(レシートの行)を丸ごと置き換える。省略または null で明細は変えない。[] で明細を全部消す(明細なしの取引に戻す)。各行は name(品名)・amount(円・整数。値引きはマイナス)・category / tax_flag(省略で取引の値に従う)・memo・tax_rate(税率%。印字どおり)・tax_label(印字の記号)。${MAX_ITEMS}行まで。明細がある取引は、明細の合計 = 取引の amount でなければエラー(amount だけを変えるときも、今の明細の合計と合わせる)`,
+    ),
+  tax_lines: taxLinesSchema
+    .nullable()
+    .optional()
+    .describe(
+      `税の内訳(レシート下部の税率別の内訳)を丸ごと置き換える。省略または null で変えない。[] で内訳を全部消す。各行は rate(税率%・必須。印字どおり)・taxable_amount(対象金額)・tax_amount(消費税額)・amount_basis(included=税込 / excluded=税抜。分かるときだけ)・label(印字の記号)。同じ税率の行は1つだけ。${MAX_TAX_LINES}行まで。税額を計算して補わない`,
     ),
 });
 
-const EDITABLE = ["date", "amount", "merchant", "category", "account", "memo", "source", ...RECEIPT_DETAIL_KEYS, "tax_flag", "items"] as const;
+const EDITABLE = ["date", "amount", "merchant", "category", "account", "memo", "source", ...RECEIPT_DETAIL_KEYS, "tax_flag", "items", "tax_lines"] as const;
 
-// items は null も「変えない」なので、変更に数えない
+// items / tax_lines は null も「変えない」なので、変更に数えない
 export const updateTransactionSchema = updateTransactionFieldsSchema.refine(
-  (v) => EDITABLE.some((k) => (k === "items" ? v.items != null : v[k] !== undefined)),
+  (v) => EDITABLE.some((k) => (k === "items" || k === "tax_lines" ? v[k] != null : v[k] !== undefined)),
   { message: `変更する項目を1つ以上指定してください(${EDITABLE.join("、")})`, path: ["input"] },
 );
 
