@@ -31,3 +31,7 @@
 
 .dp__open { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 24px; }
 .dp__holiday { margin: 0; }
+
+.dp__seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dp__seat { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.dp__seat:last-child { border-bottom: 0; }

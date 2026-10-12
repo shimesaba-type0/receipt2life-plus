@@ -120,6 +120,7 @@ receipt2life/
 **accounts**: id, name(UNIQUE)。現金、カード、Suica程度のラベル。残高は持たない
 **events**: id, start_date, end_date(単日はNULL), title, note, color(red / orange / green / blue / purple のいずれか。色コードはUI側)
 **attachments**: id, r2_key, date, transaction_id, event_id, caption, created_at。date、transaction_id、event_id のうち1つ以上を持つ
+**seat_records**(座席の記録。migration 0008): id, date(必須), venue(必須), screen, seat(必須), rating(1〜5), note, transaction_id(取引が消えたらNULL), created_at。第13節「フェーズ5(座席の記録)」
 
 収入は持たない(後から取引に種別の列を足す)。
 
@@ -127,7 +128,7 @@ receipt2life/
 
 Streamable HTTPで、ステートレスに実装する。ツールの説明文とスキーマがAIへの仕様書になるので、項目の意味、必須と任意、選べる値を必ず書く。
 
-現在は22個(取引4、集計・参照2、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3)。`src/mcp/tools/*` が正。
+現在は26個(取引4、集計・参照2、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3、座席の記録4)。`src/mcp/tools/*` が正。
 
 | ツール | 役割 |
 | --- | --- |
@@ -141,7 +142,8 @@ Streamable HTTPで、ステートレスに実装する。ツールの説明文�
 | add_event / update_event / list_events | 日付や期間のメモ(色つき) |
 | create_photo_upload_link / list_photos / get_photos | 写真の登録は Web UI の /photos/add へのリンクを返す。一覧と画像の取得 |
 | add_link / list_links / delete_link | Xの投稿・YouTubeの動画のリンク |
-| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール22個には含まれない。入れるかは第13節の未決事項 |
+| add_seat_record / list_seat_records / update_seat_record / delete_seat_record | 映画館などの座席の記録(会場・スクリーン・座席・評価1〜5・一言)。一覧は venue・screen・seat ごとの平均評価(summary)つき。次の席選びの参考にする |
+| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール26個には含まれない。入れるかは第13節の未決事項 |
 
 - **重複**: dedup_hash が既存と一致したら、登録せずに既存のIDを返して警告する。同日同額の正当な購入があり得るので、`allow_duplicate: true` で強制登録できるようにする
 - **検証**: 金額は整数、日付はISO形式、未来日付と極端な金額は拒否。エラーは何が悪いかを文章で返し、AIが直して再送できるようにする
@@ -206,7 +208,7 @@ AIで読み取る場所ではなく、カレンダーで振り返りながら、
 
 優先順位は JSONL > Markdown > HTML。
 
-- **JSONL(+写真)**: 完全バックアップ。1行1レコードで、`type`(transaction / item / event / attachment / link)で区別する。写真は photos フォルダに入れ、JSONLと一緒にzipにする
+- **JSONL(+写真)**: 完全バックアップ。1行1レコードで、`type`(transaction / item / event / attachment / link / seat_record)で区別する。写真は photos フォルダに入れ、JSONLと一緒にzipにする
 - **Markdown**: 月、年、期間メモの期間から範囲を選ぶ。サマリ、カテゴリ内訳(表とMermaidの円グラフ)、カレンダー、期間メモ、日別明細。メモの色は🟥🟧🟩🟦🟪で再現し、写真は相対リンクにする
 - **HTML**: MarkdownをHTMLに変換してCSSを当てた1ファイルだけ。見た目の再現にはこだわらない
 - **インポート**: JSONL(とJSON配列)を受け付け、行ごとに結果(成功、重複スキップ、エラー理由)を返す。add_transactions は全件成功か全件失敗、インポートは行単位の部分成功を許す
@@ -348,3 +350,13 @@ backup/
   - 未知の口座名は今までどおりエラー(選べる値を示す)。自動追加はしない。AI向けの説明には「利用者に確認してから追加する」「表記ゆれ(現金とげんきん)で増やさない」「先に `list_categories` で既存を確かめる」と書いた
   - 画面: `/categories` の下に「支払方法」のカードを足した。行の見た目・編集・2段階の削除確認・移し先の選択はカテゴリと同じ(44px以上のタップ領域)。純粋な部分は `ui/src/pages/accountsLogic.ts`。使っているのに他に口座が無いときは、先に別の口座を追加するよう案内して削除をふさぐ
   - テスト基盤: 各テストの前に口座も初期データ(現金・カード・Suica)に戻す(`tests/setup.ts`)
+- フェーズ5(座席の記録): 映画館などの「スクリーン・座席の記録」を、メモではなく構造化して登録でき、次に席を選ぶ参考にAIから引けるようにする(ユーザー指示)。取引の列は増やさず、別の小さな記録 `seat_records` にする。映画以外(劇場、ライブ会場など)にも使える汎用の名前(venue=会場、screen=スクリーン/ホール、seat=座席)。以下、項目ごと
+  - 項目: `id`, `date`(YYYY-MM-DD・必須), `venue`(必須), `screen`(任意), `seat`(必須。例「F-5」), `rating`(任意。整数1〜5、5が最良。範囲外・小数は Zod エラー), `note`(任意の一言), `transaction_id`(任意。取引への紐づけ), `created_at`。作品名は持たない(取引の明細に入っているため)。migration は `0008_seat_records.sql`(index は venue+date、date、transaction_id)
+  - 上限・トリム: 前後の空白を除き、空は不可(任意項目は省略か、更新時の `null` で消す)。`venue` 100文字・`screen` 100文字・`seat` 50文字(ID・名前の流儀)、`note` 200文字(リンクの title と同じ。events のメモ1000字ほど長くしない「一言」)
+  - 取引との関係: `transaction_id` は `REFERENCES transactions(id) ON DELETE SET NULL`。取引を削除しても座席の記録は残り、紐づけだけ外れる(リンク・写真のように連れて消さない。席の評価は取引と独立した財産のため)。座席の記録の削除で取引は消えない。存在しない取引の指定は 400
+  - ツール(MCP。ツールは22個から26個に): `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`。説明文に「登録前に `list_seat_records` で既存の会場名・スクリーン名を確認して、同じ表記にそろえる」「ユーザーが言った席が評価されていたか(rating・note)を、次の席選びの参考として要約して伝える」と書いた
+  - 一覧: 絞り込み(すべて AND)は `venue` / `screen` / `seat`(完全一致。あいまい検索はしない。表記は登録時にそろえる運用)、`min_rating` / `max_rating`(評価なしは除かれる)、`from` / `to`、`transaction_id`。並びは `date` の新しい順(同じ日は登録の新しい順)。`limit` は既定100・最大500。結果は `count`(絞り込みに合う全件の数)、`records`、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。平均は小数1桁、評価がなければ null。`limit` に関わらず全件で集計。最大200行)、`truncated`
+  - API: `GET /api/seat-records`(クエリは `date`=その日だけ、`venue`、`screen`、`seat`、`min_rating`、`max_rating`、`from`、`to`、`transaction_id`、`limit`)、`POST /api/seat-records`、`PATCH /api/seat-records/:id`、`DELETE /api/seat-records/:id`。既存ガード(同一オリジン、JSON必須、長すぎる id は404)に乗せた。`GET /api/day/:date` に `seat_records`(その日の分、登録順)を足した(契約 `src/api/contract.ts` と型を更新)
+  - 画面: 日の詳細(`/day/:date`)に「座席の記録」のカード(一覧、追加・編集・削除のフォーム)。会場名とスクリーン名は `<datalist>` で既存の名前の候補から選べて、入力もできる(候補は `GET /api/seat-records?limit=1` の `summary` から)。評価は「★1〜★5」の文字入りのボタン(`aria-pressed`、もう一度押すと外れる。色だけに頼らない)、タップ領域は44px以上。一覧の評価は「★4」(未評価は「評価なし」)。PC幅の詳細ペイン(DayPane)にも読み取り専用で出す。純粋な部分は `ui/src/pages/seatRecordLogic.ts`
+  - バックアップ: JSONL に `type: "seat_record"` を足した(エクスポートは link の後。インポートは取引の後に取り込む)。既存の type と形式は変えない。取り込みは行ごとに検証し、同じ `id` は `skipped_exists`、存在しない `transaction_id` はその行だけエラー(リンクと同じ流儀)。`docs/backup.md` に追記
+  - テスト基盤: 各テストの前に `seat_records` も空にする(`tests/setup.ts`)

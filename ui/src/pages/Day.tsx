@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView } from "../../../src/api/contract";
+import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, SeatRecordView, SeatSummaryRow } from "../../../src/api/contract";
 import {
   UnauthorizedError,
   addEvent,
   addLink,
+  addSeatRecord,
   addTransactions,
   deleteEvent,
   deleteLink,
   deletePhoto,
+  deleteSeatRecord,
   getCategories,
   getDay,
+  getSeatRecords,
   photoUrl,
   updateEvent,
   updateLink,
+  updateSeatRecord,
 } from "../api";
 import { formatYen, monthOf, todayJst, weekdayIndex } from "../format";
 import { holidayName } from "../holidays";
@@ -20,11 +24,13 @@ import { DELETE_CONCURRENCY, runWithLimit, summarizeResults } from "../photo-que
 import { CategoryChip } from "../components/CategoryIcon";
 import { chipIcon } from "../categoryIcons";
 import { LinkCard } from "../components/LinkCard";
+import { SeatRecordsCard } from "../components/SeatRecordsCard";
 import { PhotoUploader } from "../components/PhotoUploader";
 import { TransactionFields } from "../components/TransactionFields";
 import { Link } from "../router";
 import { categoryChipLabel, parseTaxFlagField, taxFlagChipLabel } from "./dayLogic";
 import { clockLabel } from "../receiptDetails";
+import { toNewSeatRecord, toSeatRecordPatch, type SeatFormValues } from "./seatRecordLogic";
 import { dayItemsSub, emptyTxForm, parseAmount, type TxFormValues } from "./transactionLogic";
 import "./Day.css";
 
@@ -65,6 +71,8 @@ export function Day(props: { date: string }) {
   const { date } = props;
   const [data, setData] = useState<DayData | null>(null);
   const [cats, setCats] = useState<CategoriesData>({ categories: [], accounts: [] });
+  // 会場名・スクリーン名の候補のもと(全期間の座席の記録の集計)
+  const [seatSummary, setSeatSummary] = useState<SeatSummaryRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +116,16 @@ export function Day(props: { date: string }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [viewPhoto]);
+
+  // 候補の取得に失敗しても、記録そのものには影響しないので黙って空のままにする
+  async function loadSeatSummary() {
+    const res = await run(() => getSeatRecords({ limit: 1 }));
+    if (res.ok) setSeatSummary(res.value.summary);
+  }
+
+  useEffect(() => {
+    void loadSeatSummary();
+  }, []);
 
   // 保存中の二重送信を防ぐ。成功したら true
   async function guarded(action: () => Promise<string | null>, successNotice?: string): Promise<boolean> {
@@ -210,6 +228,41 @@ export function Day(props: { date: string }) {
 
   async function removeLink(id: string): Promise<boolean> {
     return guarded(async () => failOf(await run(() => deleteLink(id))), "リンクを削除しました。");
+  }
+
+  // 座席の記録。エラーはフォームの近くに出すので、ページ全体のエラーには出さず文言を返す(成功は null)
+  async function seatAction(action: () => Promise<{ ok: true; value: unknown } | { ok: false; message: string }>, successNotice: string): Promise<string | null> {
+    if (busyRef.current) return "処理中です。少し待ってからやり直してください。";
+    busyRef.current = true;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await action();
+      if (!res.ok) return res.message;
+      setNotice(successNotice);
+      await Promise.all([load(), loadSeatSummary()]);
+      return null;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function addSeat(form: SeatFormValues): Promise<string | null> {
+    const input = toNewSeatRecord(date, form);
+    if (!input.ok) return input.message;
+    return seatAction(() => run(() => addSeatRecord(input.value)), "座席の記録を追加しました。");
+  }
+
+  async function saveSeat(id: string, form: SeatFormValues): Promise<string | null> {
+    const patch = toSeatRecordPatch(form);
+    if (!patch.ok) return patch.message;
+    return seatAction(() => run(() => updateSeatRecord(id, patch.value)), "座席の記録を保存しました。");
+  }
+
+  async function removeSeat(record: SeatRecordView): Promise<string | null> {
+    return seatAction(() => run(() => deleteSeatRecord(record.id)), "座席の記録を削除しました。");
   }
 
   async function removePhoto(photo: PhotoView) {
@@ -361,6 +414,8 @@ export function Day(props: { date: string }) {
           </div>
 
           <PhotosCard date={date} photos={data.photos} disabled={busy} onView={setViewPhoto} onChanged={load} />
+
+          <SeatRecordsCard records={data.seat_records} summary={seatSummary} busy={busy} onAdd={addSeat} onUpdate={saveSeat} onDelete={removeSeat} />
 
           <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onDelete={removeLink} />
         </>

@@ -17,7 +17,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | --- | --- |
 | `GET /api/home` | `HomeData`: 今日と今月の合計、大分類別(`summarize` の group)、メモ付き支出の割合、要確認の件数、最近の取引10件 |
 | `GET /api/calendar?month=YYYY-MM` | `CalendarData`: その月の日別の合計・件数・写真枚数(取引のある日だけ)、その月と重なる出来事。`month` 省略は今月 |
-| `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの) |
+| `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの)・座席の記録(`seat_records: SeatRecordView[]`。`date` がその日のもの、登録順) |
 | `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
 | `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`icon`=アイコンのキー(未設定は `null`)、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名(`accounts: string[]`。口座の件数つきの一覧は `GET /api/accounts`) |
 | `GET /api/accounts` | `AccountsData`: 口座(支払方法)の一覧(`accounts: {name, usage}[]`。`usage`=使っている取引の件数。追加順) |
@@ -138,6 +138,24 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - 重複: 同じ紐づけ先(date・transaction_id・event_id が全部同じ)に同じ正規化URLがあれば、登録せず既存のリンクを `duplicate: true` で返す(200)
 - 紐づけ先の取引・出来事が存在しなければ 400。存在しないリンクの id は 404
 - 取引・出来事を削除すると、紐づくリンクもいっしょに消える(リンクがあっても削除は拒否しない)。MCP には `add_link` / `list_links` / `delete_link`
+
+## 座席の記録(映画館などの席の評価)
+
+映画館のスクリーン・座席など、会場の席の評価を構造化して残す。映画以外(劇場、ライブ会場など)にも使える名前(`venue`=会場、`screen`=スクリーン/ホール、`seat`=座席)。作品名は持たない(取引の明細に入っているため)。取引の列は増やさず、別の小さな記録(`seat_records`、migration 0008)。ロジックは `src/core/seat-records.ts`(MCP も同じ関数)。
+
+| メソッド・パス | 入力 | 戻り |
+| --- | --- | --- |
+| `GET /api/seat-records` | クエリ(すべて任意・AND): `date`(その日だけ)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500) | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
+| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`screen?` / `rating?` / `note?` / `transaction_id?`) | `seat_record: SeatRecordView`, `message` |
+| `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`screen` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `message` |
+| `DELETE /api/seat-records/:id` | なし | `deleted`, `message` |
+
+- `SeatRecordView`: `id`, `date`, `venue`, `screen`, `seat`, `rating`, `note`, `transaction_id`, `created_at`(無い項目は null)
+- 制限: `venue` 100文字・`screen` 100文字・`seat` 50文字・`note` 200文字(いずれも前後の空白を除き、空は不可)。`rating` は整数の1〜5(5が最良)で、範囲外・小数は 400
+- `transaction_id` が存在しなければ 400。存在しない座席の記録の id は 404
+- 取引を削除しても座席の記録は残り、`transaction_id` だけ NULL になる(`ON DELETE SET NULL`)。座席の記録の削除で取引は消えない
+- `GET /api/day/:date` の `seat_records` に、その日の記録が入る。MCP には `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`
+- `GET /api/seat-records?limit=1` の `summary` は、画面の会場名・スクリーン名の候補に使う(全期間の集計は `limit` に関わらず返る。最大200行)
 
 ## 写真
 

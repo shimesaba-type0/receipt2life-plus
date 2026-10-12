@@ -5,6 +5,7 @@ import { formatPeriodShort, txSubline } from "../calendar-layout";
 import { formatDateJa, formatYen } from "../format";
 import { holidayName } from "../holidays";
 import { Link } from "../router";
+import { SeatRecordLine } from "./SeatRecordsCard";
 import "./DayPane.css";
 
 type State = { status: "loading" } | { status: "error"; errors: FieldError[] } | { status: "ready"; data: DayData };
@@ -89,6 +90,19 @@ export function DayPane(props: { date: string }) {
               <li key={e.id} class={`dp__event dp__event--${e.color}`}>
                 <span class="dp__event-title">{e.title}</span>
                 <span class="dp__event-period muted num">{formatPeriodShort(e.start_date, e.end_date)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {data && data.seat_records.length > 0 && (
+        <section class="dp__card">
+          <h3 class="dp__sub">座席の記録</h3>
+          <ul class="dp__seats">
+            {data.seat_records.map((r) => (
+              <li key={r.id} class="dp__seat">
+                <SeatRecordLine record={r} />
               </li>
             ))}
           </ul>
