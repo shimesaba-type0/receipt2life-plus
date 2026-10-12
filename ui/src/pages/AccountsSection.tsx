@@ -73,7 +73,7 @@ export function AccountsSection() {
     <section class="cat__card cat__accounts" aria-labelledby="cat-accounts-heading">
       <header class="cat__card-head">
         <h2 id="cat-accounts-heading" class="cat__group">
-          支払方法
+          登録されている支払方法
         </h2>
       </header>
       <p class="muted cat__hint">現金・カードなど、支出の支払方法です。AI(Claude など)が登録するときは、ここにある名前から選びます。</p>

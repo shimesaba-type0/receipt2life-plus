@@ -25,6 +25,11 @@ describe("parseRoute", () => {
     expect(parseRoute("/tx/%E0%A4%A")).toEqual({ name: "notfound" });
     expect(parseRoute(`/tx/${"a".repeat(65)}`)).toEqual({ name: "notfound" });
   });
+  it("支払方法は /accounts(/api/accounts はAPI)", () => {
+    expect(parseRoute("/accounts")).toEqual({ name: "accounts" });
+    expect(parseRoute("/accounts/")).toEqual({ name: "accounts" });
+  });
+
   it("AIとつなぐ手順は /connect(/mcp はWorkerのAPI)", () => {
     expect(parseRoute("/connect")).toEqual({ name: "connect" });
     expect(parseRoute("/connect/")).toEqual({ name: "connect" });

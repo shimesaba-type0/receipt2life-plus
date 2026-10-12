@@ -11,6 +11,7 @@ import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } fr
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
+import { summarizeDeductions } from "../core/deductions";
 import { summarizeTax } from "../core/tax-summary";
 import type { AppEnv } from "../env";
 import { noStoreJson, requireJson, sameOriginOnly, shortIdOnly } from "./guards";
@@ -62,6 +63,14 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
     const input: Record<string, unknown> = {};
     for (const key of ["from", "to", "group_by"]) if (q[key]) input[key] = q[key];
     return respond(c, await summarizeTax(c.env.DB, input));
+  });
+
+  // 確定申告の参考: セルフメディケーション税制・医療費控除のフラグが付いた支出の合計(医療費は交通費を含む・含まない)。from / to。空のクエリは省略扱い
+  app.get("/api/deductions", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["from", "to"]) if (q[key]) input[key] = q[key];
+    return respond(c, await summarizeDeductions(c.env.DB, input));
   });
 
   // 割引の集計(レシートに印字された割引行だけ)。from / to / group_by(none / merchant / category / month。既定 none)。空のクエリは省略扱い

@@ -430,6 +430,23 @@ export interface DiscountsData {
   message: string;
 }
 
+// GET /api/deductions?from=&to=(確定申告の参考。税金の控除用フラグが付いた支出の合計だけ。控除の判定はしない)
+export interface DeductionAmount {
+  total: number;
+  // 支出の行の数(明細のない取引は1行)
+  count: number;
+}
+
+export interface DeductionsData {
+  from: string | null;
+  to: string | null;
+  // セルフメディケーション税制(self_medication)の合計
+  self_medication: DeductionAmount;
+  // 医療費控除(medical)の合計。交通費(大分類が transport_group)を含む・含まない・その差
+  medical: { including_transport: DeductionAmount; excluding_transport: DeductionAmount; transport: DeductionAmount };
+  transport_group: string;
+}
+
 // GET /api/tax-summary?from=&to=&group_by=(rate / month。既定 rate)
 // 集計は税の内訳(tax_lines)の印字どおりの数字だけ。明細の税率から税額は計算しない
 export interface TaxableBasis {

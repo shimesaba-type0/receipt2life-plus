@@ -22,6 +22,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `GET /api/day/:date` | `DayData`: その日の合計・取引一覧(各取引に `items`)・重なる出来事・写真・リンク(`links: LinkView[]`。日付そのもの、その日の取引、その日と重なる出来事に紐づくもの)・座席の記録(`seat_records: SeatRecordView[]`。`date` がその日のもの、登録順) |
 | `GET /api/transactions/:id` | `TransactionDetailData`: 取引(`items` つき)、その取引に紐づく写真(`photos`)とリンク(`links`)、件数 `counts: {items, photos, links}`。無い id は 404 |
 | `GET /api/categories` | `CategoriesData`: カテゴリ(`name`=サブカテゴリ、`group_name`=大分類、`icon`=アイコンのキー(未設定は `null`)、`usage`=使っている取引と明細の行の件数。大分類ごと・追加順)と口座名(`accounts: string[]`。口座の件数つきの一覧は `GET /api/accounts`) |
+| `GET /api/deductions?from=&to=` | `DeductionsData`: 確定申告の参考。税金の控除用フラグ(`self_medication` / `medical`)が付いた支出の合計と件数(`self_medication`、`medical.including_transport` / `excluding_transport` / `transport`)。交通費は大分類が `transport_group`(「交通」)のカテゴリの支出。控除の判定はしない |
 | `GET /api/tax-summary?from=&to=&group_by=` | `TaxSummaryData`: 税率別(`group_by=rate`。既定)または月別×税率別(`group_by=month`)の税額の合計。下の「税率と税の内訳」 |
 | `GET /api/accounts` | `AccountsData`: 口座(支払方法)の一覧(`accounts: {name, usage}[]`。`usage`=使っている取引の件数。追加順) |
 

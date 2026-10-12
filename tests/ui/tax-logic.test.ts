@@ -8,6 +8,8 @@ import {
   RATE_OTHER,
   buildTaxLines,
   coverageNote,
+  deductionRows,
+  transportNote,
   emptyTaxLineRow,
   formatRate,
   groupRowsByMonth,
@@ -118,6 +120,7 @@ describe("税額のページ", () => {
     expect(periodRange("this_month", "2026-10-11")).toEqual({ ok: true, from: "2026-10-01", to: "2026-10-31" });
     expect(periodRange("last_month", "2026-01-15")).toEqual({ ok: true, from: "2025-12-01", to: "2025-12-31" });
     expect(periodRange("this_year", "2026-10-11")).toEqual({ ok: true, from: "2026-01-01", to: "2026-12-31" });
+    expect(periodRange("last_year", "2026-10-11")).toEqual({ ok: true, from: "2025-01-01", to: "2025-12-31" });
     expect(periodRange("custom", "2026-10-11", { from: "2026-04-01", to: "2026-09-30" })).toEqual({ ok: true, from: "2026-04-01", to: "2026-09-30" });
     expect(periodRange("custom", "2026-10-11", { from: "2026-10-02", to: "2026-10-01" })).toMatchObject({ ok: false });
     expect(periodRange("custom", "2026-10-11", { from: "", to: "2026-10-01" })).toMatchObject({ ok: false });
@@ -157,5 +160,27 @@ describe("税額のページ", () => {
       ["2026-09", 2, 140],
       ["2026-10", 1, 50],
     ]);
+  });
+});
+
+describe("確定申告の参考", () => {
+  const d = {
+    from: "2026-01-01",
+    to: "2026-12-31",
+    self_medication: { total: 2200, count: 2 },
+    medical: { including_transport: { total: 3800, count: 2 }, excluding_transport: { total: 3000, count: 1 }, transport: { total: 800, count: 1 } },
+    transport_group: "交通",
+  };
+  it("3行: セルフメディケーション、医療費(交通費を含む)、医療費(交通費を含まず)", () => {
+    expect(deductionRows(d).map((r) => [r.label, r.total, r.count])).toEqual([
+      ["セルフメディケーション税制", 2200, 2],
+      ["医療費(交通費を含む)", 3800, 2],
+      ["医療費(交通費を含まず)", 3000, 1],
+    ]);
+  });
+  it("交通費の注記", () => {
+    expect(transportNote(d)).toContain("¥800");
+    expect(transportNote(d)).toContain("「交通」");
+    expect(transportNote({ ...d, medical: { ...d.medical, transport: { total: 0, count: 0 } } })).toContain("この期間はありません");
   });
 });

@@ -7,6 +7,7 @@ export type Route =
   | { name: "photosAdd"; target: PhotosAddTarget | null }
   | { name: "backup" }
   | { name: "categories" }
+  | { name: "accounts" }
   | { name: "tax" }
   | { name: "connect" }
   | { name: "notfound" };
@@ -40,6 +41,8 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/backup") return { name: "backup" };
   // カテゴリの管理。/api/categories はAPIなので衝突しない
   if (path === "/categories") return { name: "categories" };
+  // 支払方法の管理。API の /api/accounts とは衝突しない
+  if (path === "/accounts") return { name: "accounts" };
   // 税率別の税額。API の /api/tax-summary とは衝突しない
   if (path === "/tax") return { name: "tax" };
   // AI(MCP)とつなぐ手順。Worker の /mcp とは別のパス
