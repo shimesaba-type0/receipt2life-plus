@@ -1,3 +1,5 @@
+import manifestRaw from "../../ui/public/manifest.webmanifest?raw";
+import indexHtml from "../../ui/index.html?raw";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
 import { testEnv } from "../helpers";
@@ -27,5 +29,27 @@ describe("静的ファイルの配信", () => {
   it("ASSETS が無い環境でも、落ちずに404", async () => {
     const res = await createApp().request("http://localhost/", {}, { DB: testEnv().DB, AUTH_BYPASS: "1" });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("PWA の名前と色", () => {
+  const manifest = JSON.parse(manifestRaw) as Record<string, unknown> & { icons: { src: string; sizes: string; purpose: string }[] };
+
+  it("manifest の名前は正式名、色は緑と目に優しい白", () => {
+    expect(manifest.name).toBe("Receipt to Life +");
+    expect(manifest.short_name).toBe("Receipt to Life +");
+    expect(manifest.theme_color).toBe("#1F5C4B");
+    expect(manifest.background_color).toBe("#F1F4F2");
+  });
+
+  it("アイコンは 192 / 512 / maskable 512", () => {
+    expect(manifest.icons.map((i) => `${i.sizes}:${i.purpose}`)).toEqual(["192x192:any", "512x512:any", "512x512:maskable"]);
+  });
+
+  it("index.html の title・アプリ名・favicon(SVG と PNG)", () => {
+    expect(indexHtml).toContain("<title>Receipt to Life +</title>");
+    expect(indexHtml).toContain('name="apple-mobile-web-app-title" content="Receipt to Life +"');
+    expect(indexHtml).toContain('rel="icon" type="image/svg+xml" href="/brand/icon.svg"');
+    expect(indexHtml).toContain('rel="icon" type="image/png"');
   });
 });

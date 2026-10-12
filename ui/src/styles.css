@@ -40,16 +40,18 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
 .nav__brand { display: none; }
 .nav__item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 44px; color: var(--muted); font-size: 12px; }
 .nav__item.is-active { color: var(--accent); font-weight: 700; }
-.nav__export, .nav__pc { display: none; }
+.nav__pc { display: none; }
+button.nav__item { background: transparent; border: 0; padding: 0; font: inherit; font-size: 12px; cursor: pointer; }
+.nav__logo { display: block; width: 168px; height: auto; }
 
 @media (min-width: 900px) {
   .shell { flex-direction: row; }
   .shell__main { padding-bottom: 32px; }
   .nav { position: sticky; top: 0; align-self: flex-start; flex-direction: column; width: 240px; height: 100dvh; padding: 28px 16px; border-top: 0; border-right: 1px solid var(--line); gap: 4px; }
-  .nav__brand { display: block; font-size: 17px; font-weight: 700; padding: 0 12px 20px; }
+  .nav__brand { display: block; padding: 0 12px 20px; }
   .nav__item { flex: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
   .nav__item.is-active { background: var(--accent-soft); }
-  .nav__export, .nav__pc { display: flex; }
+  .nav__pc { display: flex; }
   .nav__item--mobile { display: none; }
 }
 
@@ -70,3 +72,9 @@ button, input, textarea, select { font-family: inherit; font-size: 15px; color: 
 .btn:disabled { opacity: 0.5; cursor: default; }
 .error { color: var(--danger); font-size: 14px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* アイコンの飾り(BrandMark) */
+.brandmark { display: inline-block; flex: none; vertical-align: middle; border-radius: 22%; }
+.brandmark--faint { opacity: 0.35; }
+.brandmark-line { display: inline-flex; align-items: center; gap: 8px; }
+.brandmark-empty { display: block; margin: 0 auto 8px; }

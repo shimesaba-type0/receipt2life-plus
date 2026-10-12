@@ -1,0 +1,11 @@
+/* スマホ幅の下のタブ「メニュー」から出るシート */
+.ms__backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center; background: rgba(24, 33, 29, 0.45); }
+.ms { width: 100%; max-width: 560px; max-height: 80dvh; overflow-y: auto; background: var(--surface); border-radius: var(--radius) var(--radius) 0 0; padding: 8px 20px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+.ms__top { display: flex; align-items: center; justify-content: space-between; min-height: 52px; }
+.ms__logo { display: block; width: 150px; height: auto; }
+.ms__close { width: 44px; height: 44px; margin-right: -12px; border: 0; background: transparent; font-size: 24px; line-height: 1; color: var(--muted); cursor: pointer; }
+.ms__heading { margin: 4px 0; font-size: 14px; font-weight: 500; color: var(--muted); }
+.ms__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ms__link { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 4px; border-top: 1px solid var(--line-soft); font-size: 16px; }
+.ms__link.is-active { color: var(--accent); font-weight: 700; }
+.ms__foot { margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--muted); }

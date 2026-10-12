@@ -148,7 +148,7 @@ vite.config.ts.timestamp-*
 # Turbo Repo
 .turbo
 
-# --- receipt2life+ 固有: 公開リポジトリに上げないもの ---
+# --- Receipt to Life + 固有: 公開リポジトリに上げないもの ---
 
 # 秘密・ローカル設定(例だけコミットする)
 .dev.vars*

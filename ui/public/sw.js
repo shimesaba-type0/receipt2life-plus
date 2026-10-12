@@ -5,7 +5,7 @@
 // import を使わない単一ファイル(テストは tests/ui/sw.test.ts が、このファイルを読んで判定関数を検証する)。
 
 // 更新のたびに、この版を上げる。古い版のキャッシュは activate で消す
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `r2l-static-${CACHE_VERSION}`;
 const CACHE_PREFIX = "r2l-static-";
 

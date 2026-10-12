@@ -1,11 +1,10 @@
+import { useEffect, useState } from "preact/hooks";
+import { MENU_ICON, TODAY_ICON } from "../icons";
+import { isMenuRoute, sidebarItems } from "../menu";
 import type { Route } from "../route";
 import { Link } from "../router";
 import { todayJst } from "../format";
-
-// カテゴリ(4つの区画)のアイコン。ホームの見出しのボタンでも使う
-export const CATEGORY_ICON = ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"];
-// 税額(レシートと「%」)のアイコン。ホームの見出しのボタンでも使う
-export const TAX_ICON = ["M6 3h12v18l-3-2-3 2-3-2-3 2z", "M9.5 9.5h.01", "M14.5 14.5h.01", "M14.5 9.5l-5 5"];
+import { MenuSheet } from "./MenuSheet";
 
 function Icon(props: { d: string[] }) {
   return (
@@ -17,38 +16,48 @@ function Icon(props: { d: string[] }) {
   );
 }
 
-// スマホは下のタブ、PCは左のメニュー(CSSで切り替える)
+// スマホは下のタブ(ホーム/カレンダー/今日/メニュー)、PCは左のメニュー(CSSで切り替える)。
+// 下のタブの「メニュー」は、毎日は使わない機能(カテゴリ・税額・エクスポート)のシートを開く。PCの左メニューは、それをそのまま並べる
 export function Nav(props: { route: Route }) {
   const { route } = props;
   const today = todayJst();
-  // 下のタブは「ホーム/カレンダー/今日」、左メニューは「ホーム/カレンダー/カテゴリ/税額/エクスポート」(今日はホームの緑ボタンで開く)
-  const items = [
-    { href: "/", label: "ホーム", active: route.name === "home", d: ["M4 11l8-7 8 7", "M6 10v10h12V10"] },
-    { href: "/calendar", label: "カレンダー", active: route.name === "calendar", d: ["M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M4 10h16M9 3v4M15 3v4"] },
-    { href: `/day/${today}`, label: "今日", active: route.name === "day" && route.date === today, mobileOnly: true, d: ["M5 5h14v14H5z", "M9 10h6M9 14h4"] },
-  ];
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // PC幅に切り替わったら、シートは閉じる(PCの左メニューに同じ項目がある)
+  useEffect(() => {
+    if (!menuOpen) return;
+    const mq = window.matchMedia("(min-width: 900px)");
+    const onChange = () => mq.matches && setMenuOpen(false);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [menuOpen]);
+
+  const items = sidebarItems(route);
+  const menuActive = isMenuRoute(route);
   return (
-    <nav class="nav" aria-label="メイン">
-      <span class="nav__brand">receipt2life+</span>
-      {items.map((item) => (
-        <Link href={item.href} class={`nav__item${item.active ? " is-active" : ""}${"mobileOnly" in item ? " nav__item--mobile" : ""}`} aria-current={item.active ? "page" : undefined}>
-          <Icon d={item.d} />
-          <span>{item.label}</span>
+    <>
+      <nav class="nav" aria-label="メイン">
+        <div class="nav__brand">
+          <img class="nav__logo" src="/brand/wordmark.svg" alt="Receipt to Life +" />
+        </div>
+        {items.map((item) => (
+          // 下のタブは「ホーム/カレンダー/今日/メニュー」。カテゴリ・税額・エクスポートは PC の左メニューだけに並べる
+          <Link href={item.href} class={`nav__item${item.active ? " is-active" : ""}${item.route === "home" || item.route === "calendar" ? "" : " nav__pc"}`} aria-current={item.active ? "page" : undefined}>
+            <Icon d={item.d} />
+            <span>{item.label}</span>
+          </Link>
+        ))}
+        <Link href={`/day/${today}`} class={`nav__item nav__item--mobile${route.name === "day" && route.date === today ? " is-active" : ""}`} aria-current={route.name === "day" && route.date === today ? "page" : undefined}>
+          <Icon d={TODAY_ICON} />
+          <span>今日</span>
         </Link>
-      ))}
-      {/* カテゴリは下のタブを増やさず、PCの左メニューだけ(スマホはホームの見出しのボタンから開く) */}
-      <Link href="/categories" class={`nav__item nav__pc${route.name === "categories" ? " is-active" : ""}`} aria-current={route.name === "categories" ? "page" : undefined}>
-        <Icon d={CATEGORY_ICON} />
-        <span>カテゴリ</span>
-      </Link>
-      <Link href="/tax" class={`nav__item nav__pc${route.name === "tax" ? " is-active" : ""}`} aria-current={route.name === "tax" ? "page" : undefined}>
-        <Icon d={TAX_ICON} />
-        <span>税額</span>
-      </Link>
-      <Link href="/backup" class={`nav__item nav__export${route.name === "backup" ? " is-active" : ""}`} aria-current={route.name === "backup" ? "page" : undefined}>
-        <Icon d={["M12 4v11", "M7 11l5 5 5-5", "M5 20h14"]} />
-        <span>エクスポート</span>
-      </Link>
-    </nav>
+        <button type="button" class={`nav__item nav__item--mobile nav__menu${menuActive ? " is-active" : ""}`} aria-haspopup="dialog" aria-expanded={menuOpen} aria-current={menuActive ? "true" : undefined} onClick={() => setMenuOpen(true)}>
+          <Icon d={MENU_ICON} />
+          <span>メニュー</span>
+        </button>
+      </nav>
+      {menuOpen && <MenuSheet route={route} onClose={() => setMenuOpen(false)} />}
+    </>
   );
 }

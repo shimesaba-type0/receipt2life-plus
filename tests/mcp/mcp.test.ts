@@ -38,6 +38,7 @@ describe("MCP /mcp", () => {
     });
     expect(r.status).toBe(200);
     expect(r.body.result.serverInfo.name).toBe("receipt2life");
+    expect(r.body.result.serverInfo.title).toBe("Receipt to Life +");
     expect(r.body.result.capabilities.tools).toBeDefined();
   });
 
