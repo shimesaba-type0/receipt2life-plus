@@ -22,6 +22,7 @@
 .tx__item + .tx__item { border-top: 1px solid var(--line-soft); }
 .tx__item-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .tx__item-name { font-size: 15px; overflow-wrap: anywhere; }
+.tx__item-name .discount-icon { vertical-align: -3px; margin-right: 6px; color: var(--danger); }
 .tx__item-amount { flex: none; font-size: 15px; font-weight: 500; white-space: nowrap; }
 .tx__item-amount.is-minus { color: var(--danger); }
 .tx__subtotal { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-top: 4px; padding-top: 12px; border-top: 2px solid var(--line); }

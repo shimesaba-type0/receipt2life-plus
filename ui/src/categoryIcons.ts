@@ -33,6 +33,12 @@ export const UI_CATEGORY_ICONS: readonly { key: CategoryIconKey; label: string }
   { key: "hobby", label: "趣味" },
   { key: "subscription", label: "サブスク" },
   { key: "bank", label: "金融" },
+  { key: "manga", label: "漫画" },
+  { key: "bicycle", label: "自転車" },
+  { key: "express", label: "特急" },
+  { key: "shinkansen", label: "新幹線" },
+  { key: "airplane", label: "飛行機" },
+  { key: "hotel", label: "宿泊" },
   { key: "other", label: "その他" },
 ];
 

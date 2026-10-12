@@ -4,7 +4,7 @@ import { DONUT, donutSlices } from "../pages/homeLogic";
 import { formatYen } from "../format";
 
 // 大分類別の内訳のドーナツグラフ。上位の区分には % を、リングの中に入れる。中央に今月の合計
-export function DonutChart(props: { groups: SummaryRow[]; total: number }) {
+export function DonutChart(props: { groups: SummaryRow[]; total: number; caption?: string }) {
   const { groups, total } = props;
   const slices = donutSlices(groups);
   const { size, r, stroke } = DONUT;
@@ -25,7 +25,7 @@ export function DonutChart(props: { groups: SummaryRow[]; total: number }) {
         ) : null,
       )}
       <text x={c} y={c - 9} text-anchor="middle" class="home__donut-cap">
-        今月
+        {props.caption ?? "今月"}
       </text>
       <text x={c} y={c + 11} text-anchor="middle" class="home__donut-total">
         {formatYen(total)}

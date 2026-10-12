@@ -4,7 +4,7 @@ import { parseRoute } from "../../ui/src/route";
 
 describe("menuItems(スマホのメニュー)", () => {
   it("カテゴリ・口座、税額、エクスポート・バックアップ、AIとつなぐの順", () => {
-    expect(menuItems().map((i) => i.label)).toEqual(["カテゴリ・口座", "税額", "エクスポート・バックアップ", "AIとつなぐ(MCP)"]);
+    expect(menuItems().map((i) => i.label)).toEqual(["カテゴリ・支払方法", "税額", "エクスポート・バックアップ", "AIとつなぐ(MCP)"]);
     expect(menuItems().map((i) => i.href)).toEqual(["/categories", "/tax", "/backup", "/connect"]);
   });
 

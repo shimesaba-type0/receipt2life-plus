@@ -88,7 +88,8 @@
   .cal__side { flex: 2 1 0; }
   .cal__grid { padding: 12px 8px 8px; }
   .cal__day { align-items: flex-start; padding: 6px 8px 8px; border-left: 1px solid var(--bg); }
-  .cal__hol { top: 14px; left: 44px; right: 4px; max-width: none; }
+  /* 祝日名は、日付の下に置く(右ペインがあるとマスが狭く、日付の横では「ス.」のように切れるため)。2行まで折り返す */
+  .cal__hol { top: calc(var(--date-size) + 6px); left: 8px; right: 4px; max-width: none; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: clip; overflow-wrap: anywhere; }
   .cal__hol-short { display: none; }
   .cal__hol-name { display: inline; }
   .cal__amount { align-self: flex-end; font-size: 13px; line-height: 16px; min-height: 16px; }

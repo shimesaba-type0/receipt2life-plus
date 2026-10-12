@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { COLORS, eventInputSchema, isoDate, toFieldErrors, type FieldError } from "./schema";
+import { COLORS, MAX_EVENT_TITLE, eventInputSchema, isoDate, toFieldErrors, type FieldError } from "./schema";
 import type { CoreOptions } from "./transactions";
 
 export interface EventView {
@@ -23,7 +23,7 @@ export type ListEventsResult =
 // end_date: null で期間を解除、note: null で消去
 export const updateEventFieldsSchema = z.strictObject({
   id: z.string().min(1, "id は必須です").describe("更新する出来事のID(list_events で取れる)。必須"),
-  title: z.string().trim().min(1, "title は空にできません").max(100).optional().describe("新しいタイトル。省略すると変えない"),
+  title: z.string().trim().min(1, "title は空にできません").max(MAX_EVENT_TITLE).optional().describe("新しいタイトル。省略すると変えない"),
   start_date: isoDate.optional().describe("新しい開始日(YYYY-MM-DD)。省略すると変えない"),
   end_date: isoDate.nullable().optional().describe("新しい終了日(YYYY-MM-DD)。null で期間を解除して単日にする。省略すると変えない"),
   note: z.string().max(1000).nullable().optional().describe("新しいメモ。null で消去。省略すると変えない"),

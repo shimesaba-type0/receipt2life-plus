@@ -12,7 +12,7 @@ export interface MenuItem {
 
 // 毎日は使わない機能の置き場。順番は、このまま表示する(ラベルはスマホ・PCで同じ)
 export const MENU_ITEMS: MenuItem[] = [
-  { route: "categories", href: "/categories", label: "カテゴリ・口座", d: CATEGORY_ICON },
+  { route: "categories", href: "/categories", label: "カテゴリ・支払方法", d: CATEGORY_ICON },
   { route: "tax", href: "/tax", label: "税額", d: TAX_ICON },
   { route: "backup", href: "/backup", label: "エクスポート・バックアップ", d: EXPORT_ICON },
   { route: "connect", href: "/connect", label: "AIとつなぐ(MCP)", d: CONNECT_ICON },

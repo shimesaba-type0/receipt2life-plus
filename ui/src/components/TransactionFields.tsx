@@ -136,7 +136,7 @@ export function TransactionFields(props: {
       <Link href="/categories" class="day__catlink">
         カテゴリを編集
       </Link>
-      <label for={`${id}-account`}>口座</label>
+      <label for={`${id}-account`}>支払方法</label>
       <select id={`${id}-account`} value={f.account} onChange={input("account")}>
         <option value="">未設定</option>
         {f.account && !accountKnown && <option value={f.account}>{f.account}</option>}

@@ -11,7 +11,7 @@ export function registerEventTools(server: McpServer, db: D1Database): void {
       title: "出来事を登録する",
       description: [
         "出来事(日付や期間のメモ)を1件登録する。出張、旅行、誕生日、引っ越しなど、支出の背景になる予定や出来事を残すために使う。配列ではなく1件ずつ呼ぶ。",
-        "必須は title(タイトル、100文字まで)と start_date(開始日、YYYY-MM-DD)。",
+        "必須は title(タイトル、1000文字まで)と start_date(開始日、YYYY-MM-DD)。",
         "単日の出来事は start_date だけを指定する(end_date は省略)。複数日にわたる出来事(期間)は end_date(終了日、YYYY-MM-DD、start_date 以降)も指定する。",
         "note はメモ(任意、1000文字まで)。",
         "color は red / orange / green / blue / purple の5色から選ぶ。省略すると blue。",

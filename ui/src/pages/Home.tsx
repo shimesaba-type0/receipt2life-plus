@@ -3,11 +3,12 @@ import { BrandMark } from "../components/BrandMark";
 import type { CategoriesData, HomeData } from "../../../src/api/contract";
 import { getCategories, getHome } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
-import { DonutChart } from "../components/DonutChart";
+import { DiscountIcon } from "../components/DiscountIcon";
+import { BreakdownCard } from "../components/BreakdownCard";
 import { chipIcon } from "../categoryIcons";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
-import { discountsView, formatPercent, groupColor, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
+import { discountsView, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
 import "./Home.css";
 
 type State = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: HomeData };
@@ -82,7 +83,6 @@ export function Home() {
 
 function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
   const { data, cats } = props;
-  const hasBreakdown = data.groups.some((g) => g.total > 0);
   const discounts = discountsView(data.discounts);
   const range = monthRangeLabel(data.month.from, data.today.date);
 
@@ -137,32 +137,10 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
           </div>
         </section>
 
-        <section class="card home__breakdown" aria-label="大分類別の内訳">
-          <div class="home__section-head">
-            <h2 class="home__h2">今月の内訳</h2>
-            <span class="home__note">記録した範囲の傾向</span>
-          </div>
-          {!hasBreakdown ? (
-            <p class="muted">今月の支出はまだありません。</p>
-          ) : (
-            <div class="home__donut-wrap">
-              <DonutChart groups={data.groups} total={data.month.total} />
-              <ul class="home__list">
-                {data.groups.map((g, i) => (
-                  <li key={g.key} class="home__row">
-                    <span class="home__swatch" style={{ background: groupColor(i) }} aria-hidden="true" />
-                    <span class="home__row-name">{g.label}</span>
-                    <span class="home__row-amount num">{formatYen(g.total)}</span>
-                    <span class="home__row-pct num">{formatPercent(g.percent)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
+        <BreakdownCard title="今月の内訳" note="記録した範囲の傾向" groups={data.groups} total={data.month.total} emptyText="今月の支出はまだありません。" />
 
         <section class="card home__discounts" aria-label="今月の割引">
-          <span class="home__label">今月の割引</span>
+          <span class="home__label home__discounts-label"><DiscountIcon />今月の割引</span>
           {discounts.empty ? (
             <span class="home__discounts-empty">{discounts.countText}</span>
           ) : (
