@@ -14,6 +14,64 @@ async function add(over: Record<string, unknown> = {}) {
   return res.seat_record;
 }
 
+describe("seat_class(席種)", () => {
+  it("任意。前後の空白を除き、空文字は未指定(NULL)扱い。上限は50文字", async () => {
+    const r = await add({ seat_class: "  プレミアムシート " });
+    expect(r.seat_class).toBe("プレミアムシート");
+    expect(await db().prepare("SELECT seat_class FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ seat_class: "プレミアムシート" });
+    expect((await add({ seat_class: "" })).seat_class).toBeNull();
+    expect((await add({ seat_class: "   " })).seat_class).toBeNull();
+    expect((await add()).seat_class).toBeNull();
+    expect((await add({ seat_class: "あ".repeat(50) })).seat_class).toHaveLength(50);
+    expect(await addSeatRecord(db(), { ...base, seat_class: "あ".repeat(51) })).toMatchObject({ ok: false, errors: [{ field: "seat_class" }] });
+    expect((await addSeatRecord(db(), { ...base, seat_class: 1 })).ok).toBe(false);
+  });
+
+  it("メッセージは席種があれば座席の隣に添える。無ければ従来どおり", async () => {
+    const withClass = await addSeatRecord(db(), { ...base, seat_class: "内野指定席" }, { now: NOW });
+    expect(withClass).toMatchObject({ ok: true, message: expect.stringContaining("F-5(内野指定席)(★4)") });
+    const without = await addSeatRecord(db(), base, { now: NOW });
+    expect(without).toMatchObject({ ok: true, message: expect.stringContaining("F-5(★4)") });
+    expect(without.ok && without.message).not.toContain("内野");
+  });
+
+  it("seat_class で絞る(部分一致。LIKE のワイルドカードは文字として扱う)。summary の形は変わらない", async () => {
+    await add({ seat_class: "プレミアムシート", seat: "F-5" });
+    await add({ seat_class: "内野指定席100%_A", seat: "G-1" });
+    await add({ seat: "H-2" });
+    expect(await listSeatRecords(db(), { seat_class: "プレミアム" })).toMatchObject({ count: 1, records: [{ seat_class: "プレミアムシート" }] });
+    expect(await listSeatRecords(db(), { seat_class: "シート" })).toMatchObject({ count: 1 });
+    expect(await listSeatRecords(db(), { seat_class: "%" })).toMatchObject({ count: 1, records: [{ seat: "G-1" }] });
+    expect(await listSeatRecords(db(), { seat_class: "_" })).toMatchObject({ count: 1, records: [{ seat: "G-1" }] });
+    expect(await listSeatRecords(db(), { seat_class: "内%A" })).toMatchObject({ count: 0 });
+    expect(await listSeatRecords(db(), { seat_class: "なし" })).toMatchObject({ count: 0, records: [], summary: [] });
+    const res = await listSeatRecords(db(), { seat_class: "プレミアム" });
+    if (!res.ok) throw new Error("list failed");
+    expect(Object.keys(res.summary[0]!).sort()).toEqual(["avg_rating", "count", "rated_count", "screen", "seat", "venue"]);
+    expect((await listSeatRecords(db(), { seat_class: "あ".repeat(51) })).ok).toBe(false);
+    expect((await listSeatRecords(db(), { seat_class: "" })).ok).toBe(false);
+  });
+
+  it("更新できる。null や空文字で消え、省略すると変えない", async () => {
+    const r = await add({ seat_class: "ボックスシート" });
+    expect(await updateSeatRecord(db(), { id: r.id, seat_class: "  外野自由席 " })).toMatchObject({ ok: true, seat_record: { seat_class: "外野自由席" } });
+    expect(await updateSeatRecord(db(), { id: r.id, seat: "G-7" })).toMatchObject({ ok: true, seat_record: { seat_class: "外野自由席", seat: "G-7" } });
+    expect(await updateSeatRecord(db(), { id: r.id, seat_class: null })).toMatchObject({ ok: true, seat_record: { seat_class: null } });
+    expect(await db().prepare("SELECT seat_class FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ seat_class: null });
+    await updateSeatRecord(db(), { id: r.id, seat_class: "ボックスシート" });
+    expect(await updateSeatRecord(db(), { id: r.id, seat_class: "" })).toMatchObject({ ok: true, seat_record: { seat_class: null } });
+    expect(await updateSeatRecord(db(), { id: r.id, seat_class: "  " })).toMatchObject({ ok: true, seat_record: { seat_class: null } });
+    expect((await updateSeatRecord(db(), { id: r.id, seat_class: "あ".repeat(51) })).ok).toBe(false);
+    // seat_class だけの指定でも「更新する項目あり」と扱う
+    expect((await updateSeatRecord(db(), { id: r.id, seat_class: "内野指定席" })).ok).toBe(true);
+  });
+
+  it("日の詳細用の一覧にも含まれる", async () => {
+    await add({ seat_class: "プレミアムシート" });
+    expect(await listSeatRecordsOnDay(db(), "2026-10-10")).toMatchObject([{ seat_class: "プレミアムシート" }]);
+  });
+});
+
 describe("addSeatRecord", () => {
   it("登録して、全項目を返す", async () => {
     const r = await add();
@@ -24,6 +82,7 @@ describe("addSeatRecord", () => {
       screen_id: expect.any(String),
       screen_note: null,
       title: null,
+      seat_class: null,
       transaction_id: null,
       created_at: expect.any(String),
     });

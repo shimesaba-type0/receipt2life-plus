@@ -34,9 +34,18 @@ describe("MCP 座席の記録のツール", () => {
     expect(byName("list_seat_records").description).toContain("次の席選び");
     expect(byName("list_seat_records").description).toContain("要約");
     expect(Object.keys(byName("list_seat_records").inputSchema.properties).sort()).toEqual(
-      ["from", "limit", "max_rating", "min_rating", "screen", "seat", "title", "to", "transaction_id", "venue"],
+      ["from", "limit", "max_rating", "min_rating", "screen", "seat", "seat_class", "title", "to", "transaction_id", "venue"],
     );
     expect(Object.keys(byName("add_seat_record").inputSchema.properties)).toContain("title");
+    for (const n of ["add_seat_record", "update_seat_record"]) expect(Object.keys(byName(n).inputSchema.properties)).toContain("seat_class");
+    for (const n of ["add_seat_record", "update_seat_record", "list_seat_records"]) {
+      expect(byName(n).description).toContain("seat_class");
+      expect(byName(n).description).toContain("席種");
+    }
+    expect(byName("add_seat_record").description).toContain("プレミアムシート、内野指定席、ボックスシート");
+    expect(byName("add_seat_record").description).toContain("ホール・ブロック・エリア");
+    expect(byName("add_seat_record").description).toContain("list_seat_records で seat_class を絞り込める");
+    expect(byName("list_seat_records").description).toContain("seat_class(席種。部分一致");
     expect(Object.keys(byName("update_seat_record").inputSchema.properties)).toContain("title");
     for (const n of ["add_seat_record", "update_seat_record", "list_seat_records"]) {
       expect(byName(n).description).toContain("作品名");
@@ -68,6 +77,15 @@ describe("MCP 座席の記録のツール", () => {
     expect(text(await callTool("list_seat_records", {}))).toMatchObject({ count: 1 });
     const gone = await callTool("delete_seat_record", { id: added.seat_record.id });
     expect(gone.body.result.isError).toBe(true);
+  });
+
+  it("seat_class(席種)を登録・絞り込み・更新・消去できる", async () => {
+    const added = text(await callTool("add_seat_record", { date: "2026-10-10", venue: "Aスタジアム", screen: "内野エリア", seat: "12列5番", seat_class: "内野指定席" }));
+    expect(added.seat_record).toMatchObject({ seat_class: "内野指定席", screen: "内野エリア" });
+    await callTool("add_seat_record", { date: "2026-10-11", venue: "Aスタジアム", seat: "自由", seat_class: "外野自由席" });
+    expect(text(await callTool("list_seat_records", { seat_class: "内野" }))).toMatchObject({ count: 1, records: [{ seat_class: "内野指定席" }] });
+    expect(text(await callTool("update_seat_record", { id: added.seat_record.id, seat_class: "ボックスシート" }))).toMatchObject({ seat_record: { seat_class: "ボックスシート" } });
+    expect(text(await callTool("update_seat_record", { id: added.seat_record.id, seat_class: null }))).toMatchObject({ seat_record: { seat_class: null } });
   });
 
   it("title(作品名・公演名)を登録・絞り込み・更新・消去できる", async () => {

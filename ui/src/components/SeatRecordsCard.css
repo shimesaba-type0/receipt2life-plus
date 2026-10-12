@@ -7,7 +7,9 @@
 .seat__venue--head { font-size: 16px; font-weight: 700; }
 .seat__screen { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .seat__screen-note { font-size: 12px; }
-.seat__line { display: flex; align-items: baseline; gap: 12px; }
+.seat__line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.seat__place { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; min-width: 0; }
+.seat__class { font-size: 15px; overflow-wrap: anywhere; }
 .seat__seat { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
 .seat__rating { font-size: 15px; font-weight: 700; white-space: nowrap; }
 .seat__note { font-size: 13px; overflow-wrap: anywhere; }

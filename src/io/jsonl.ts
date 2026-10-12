@@ -17,7 +17,7 @@ import {
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
-import { MAX_NOTE_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
+import { MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
 import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
 import { dedupHash } from "../core/transactions";
 
@@ -74,7 +74,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   // 座席の記録。venue / screen は名前で出す(会場・スクリーンが別のレコードになる前の形式のまま)
   {
-    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.rating, r.note, r.transaction_id, r.created_at
+    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.seat_class, r.rating, r.note, r.transaction_id, r.created_at
           FROM seat_records r
           JOIN venues v ON v.id = r.venue_id
           LEFT JOIN screens s ON s.id = r.screen_id
@@ -212,6 +212,8 @@ const seatRecordSchema = z.strictObject({
   venue: z.string().trim().min(1).max(MAX_VENUE_LENGTH),
   screen: z.string().trim().min(1).max(MAX_SCREEN_LENGTH).optional(),
   seat: z.string().trim().min(1).max(MAX_SEAT_LENGTH),
+  // 旧形式(seat_class なし)の行も取り込める。空文字は未指定(NULL)
+  seat_class: z.string().trim().max(MAX_SEAT_CLASS_LENGTH).optional(),
   rating: z.number().int().min(1, "1〜5の整数にしてください").max(5, "1〜5の整数にしてください").optional(),
   note: z.string().trim().min(1).max(MAX_NOTE_LENGTH).optional(),
   transaction_id: z.string().min(1).optional(),
@@ -795,10 +797,10 @@ function seatRecordStatements(db: D1Database, id: string, d: z.infer<typeof seat
   statements.push(
     db
       .prepare(
-        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, rating, note, transaction_id, created_at)
-         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?)`,
+        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, transaction_id, created_at)
+         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.rating ?? null, d.note ?? null, d.transaction_id ?? null, createdAt),
+      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.seat_class || null, d.rating ?? null, d.note ?? null, d.transaction_id ?? null, createdAt),
   );
   return statements;
 }
