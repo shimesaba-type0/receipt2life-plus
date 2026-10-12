@@ -12,6 +12,7 @@ import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import { summarizeDeductions } from "../core/deductions";
+import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
 import { summarizeTax } from "../core/tax-summary";
 import type { AppEnv } from "../env";
 import { noStoreJson, requireJson, sameOriginOnly, shortIdOnly } from "./guards";
@@ -196,6 +197,30 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   });
 
   app.delete("/api/links/:id", async (c) => respond(c, await deleteLink(c.env.DB, { id: c.req.param("id") })));
+
+  // サブスク・保険などの固定費(別枠)。一覧は active(true / false)と kind で絞れる。空のクエリは省略扱い
+  app.get("/api/subscriptions", async (c) => {
+    const q = c.req.query();
+    const filter: Record<string, unknown> = {};
+    if (q.kind) filter.kind = q.kind;
+    if (q.active === "true" || q.active === "false") filter.active = q.active === "true";
+    else if (q.active) filter.active = q.active;
+    return respond(c, await listSubscriptions(c.env.DB, filter));
+  });
+
+  app.post("/api/subscriptions", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addSubscription(c.env.DB, body.value));
+  });
+
+  app.patch("/api/subscriptions/:id", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateSubscription(c.env.DB, { ...body.value, id: c.req.param("id") }));
+  });
+
+  app.delete("/api/subscriptions/:id", async (c) => respond(c, await deleteSubscription(c.env.DB, { id: c.req.param("id") })));
 
   // 座席の記録(映画館などの席の評価)。一覧は絞り込み: date(その日)/ title(部分一致)/ venue / screen / seat / seat_class(部分一致)/ min_rating / max_rating / from / to / transaction_id / limit
   app.get("/api/seat-records", async (c) => {
