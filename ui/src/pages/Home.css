@@ -3,7 +3,6 @@
 .home__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 4px; }
 .home__heading { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .home__brand { display: block; width: 190px; height: auto; margin-bottom: 4px; }
-.home__kicker { display: none; font-size: 13px; color: var(--muted); }
 .home__date { margin: 0; font-size: 20px; font-weight: 700; }
 .home__open-today { display: none; align-items: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: 22px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 700; }
 .home__open-today:hover { color: #fff; opacity: 0.9; }
@@ -17,21 +16,15 @@
 
 .home__body { display: flex; flex-direction: column; gap: 16px; }
 .home__body p { margin: 0; }
-.home__pc-only { display: none; }
 
 /* 要確認の帯(枠なし) */
 .home__review { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 20px; border-radius: 16px; background: var(--warn-soft); font-size: 15px; }
 .home__review:hover { color: var(--ink); }
 
-/* 今日/今月(スマホは1枚のカード) */
-.home__summary { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-.home__today, .home__month-main { display: flex; flex-direction: column; gap: 4px; }
+/* 今日(小さな1行。0円の日が普通にある) */
+.home__today { display: flex; align-items: baseline; gap: 10px; padding: 0 4px; }
+.home__today-amount { font-size: 22px; font-weight: 700; }
 .home__label { font-size: 14px; color: var(--muted); }
-.home__big { font-size: 52px; line-height: 1.1; font-weight: 700; color: var(--ink); }
-.home__mid { font-size: 30px; line-height: 1.1; font-weight: 700; }
-.home__divider { height: 1px; background: var(--line); }
-.home__month { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.home__range { font-size: 13px; color: var(--muted); text-align: right; line-height: 1.5; }
 
 /* 内訳(ドーナツ。スマホは中央に置いて、一覧は下。PCは左にドーナツ、右に一覧) */
 .home__breakdown { border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
@@ -52,9 +45,9 @@
 .home__row-pct { width: 52px; text-align: right; font-size: 13px; color: var(--muted); }
 
 /* 今月の割引(印字された割引行だけの合計。スマホはメモ付きの下) */
-.home__discounts { border-radius: 20px; padding: 16px 24px; display: flex; flex-direction: column; gap: 4px; }
-.home__discounts-label { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); }
-.home__discounts-amount { font-size: 28px; line-height: 1.15; font-weight: 700; color: var(--accent); }
+.home__discounts { border-radius: 24px; padding: 24px 28px; display: flex; flex-direction: column; gap: 6px; }
+.home__discounts-label { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 15px; }
+.home__discounts-amount { font-size: 44px; line-height: 1.1; font-weight: 700; color: var(--accent); }
 .home__discounts-empty { font-size: 15px; }
 .home__discounts-note { font-size: 12px; color: var(--muted); }
 
@@ -75,35 +68,25 @@
 .home__recent-amount { flex: none; font-size: 16px; font-weight: 500; }
 
 @media (max-width: 380px) {
-  .home__big { font-size: 44px; }
+  .home__discounts-amount { font-size: 38px; }
 }
 
 /* PC幅(既存のブレークポイント 900px): 3枚のカード横並び → 要確認 → 内訳と最近の記録の2カラム */
 @media (min-width: 900px) {
   .home { max-width: 1120px; padding: 28px 32px 32px; gap: 20px; }
   .home__brand { display: none; }
-  .home__kicker { display: block; }
   .home__date { font-size: 26px; }
   /* 今日の記録を開くボタンは、PC幅では上の横長のヘッダーにある */
   .home__open-today { display: none; }
   .home__header { align-items: flex-end; }
-  .home__pc-only { display: inline; }
-  .home__range { display: none; }
 
   .home__body { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 16px; align-items: start; }
-  .home__summary { display: contents; }
-  .home__today, .home__month { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px 28px; gap: 6px; align-self: stretch; }
-  .home__today { grid-column: 1 / span 4; grid-row: 1; }
-  .home__month { grid-column: 5 / span 4; grid-row: 1; display: block; }
-  .home__month-main { gap: 6px; }
-  .home__divider { display: none; }
-  .home__big { font-size: 56px; }
-  .home__mid { font-size: 40px; line-height: 1.15; }
-  /* 今月の割引は、今日・今月の右(以前のメモ付きの場所) */
-  .home__discounts { grid-column: 9 / span 2; grid-row: 1; align-self: stretch; justify-content: center; gap: 8px; border-radius: 24px; padding: 24px 28px; }
-  .home__discounts-amount { font-size: 30px; }
+  /* 1行目: 今日(小さな1行)。2行目: 要確認。3行目: 左に今月の割引(大きく)、右に今月の内訳。4行目: 最近の記録 */
+  .home__today { grid-column: 1 / -1; grid-row: 1; }
+  .home__discounts { grid-column: 1 / span 3; grid-row: 3; align-self: stretch; justify-content: center; gap: 8px; }
+  .home__discounts-amount { font-size: 48px; }
   .home__review { grid-column: 1 / -1; grid-row: 2; min-height: 52px; }
-  .home__breakdown { grid-column: 1 / -1; grid-row: 3; padding: 24px 28px; gap: 18px; }
+  .home__breakdown { grid-column: 4 / span 7; grid-row: 3; padding: 24px 28px; gap: 18px; }
   .home__donut-wrap { flex-direction: row; justify-content: center; align-items: center; gap: 48px; }
   .home__donut { width: 260px; flex: none; }
   .home__donut-wrap .home__list { align-self: center; flex: 1 1 0; max-width: 420px; }
