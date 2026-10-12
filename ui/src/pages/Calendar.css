@@ -80,12 +80,16 @@
 .cal__item-period { flex: none; font-size: 13px; font-variant-numeric: tabular-nums; }
 .cal__add { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border: 1px solid var(--accent); border-radius: 24px; color: var(--accent); font-size: 15px; font-weight: 500; }
 
-/* PC幅: 左にカレンダー(3)、右に選択日の詳細(2) */
+/* PC幅: 左にカレンダーと月の内訳(広く)、右に選択日の詳細(幅は固定)。月の移動はカレンダーの上の中央。月の合計は内訳の中に出るので、見出しには出さない */
 @media (min-width: 900px) {
-  .cal { --lane-h: 20px; --cell-h: 96px; --band-top: 40px; --date-size: 28px; max-width: 1200px; }
-  .cal__layout { flex-direction: row; align-items: flex-start; gap: 20px; }
-  .cal__main { flex: 3 1 0; }
-  .cal__side { flex: 2 1 0; }
+  .cal { --lane-h: 20px; --cell-h: 96px; --band-top: 40px; --date-size: 28px; --side-w: 360px; --cal-gap: 20px; }
+  .page.cal { max-width: 1560px; }
+  .cal__head { justify-content: center; padding: 0; width: calc(100% - var(--side-w) - var(--cal-gap)); }
+  .cal__sum { display: none; }
+  .cal__layout { flex-direction: row; align-items: flex-start; gap: var(--cal-gap); }
+  .cal__main { flex: 1 1 0; }
+  .cal__side { flex: 0 0 var(--side-w); }
+  .cal .home__list { min-width: 240px; }
   .cal__grid { padding: 12px 8px 8px; }
   .cal__day { align-items: flex-start; padding: 6px 8px 8px; border-left: 1px solid var(--bg); }
   /* 祝日名は、日付の下に置く(右ペインがあるとマスが狭く、日付の横では「ス.」のように切れるため)。2行まで折り返す */
