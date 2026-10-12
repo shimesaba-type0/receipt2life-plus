@@ -9,7 +9,12 @@
 .dp__sub { margin: 0; font-size: 16px; font-weight: 700; }
 
 .dp__list, .dp__events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.dp__tx { display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line-soft); }
+.dp__tx { display: flex; align-items: stretch; min-height: 52px; border-bottom: 1px solid var(--line-soft); }
+.dp__tx-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 52px; }
+.dp__tx-link:hover { color: inherit; background: var(--accent-soft); border-radius: 10px; }
+.dp__tx-chev { flex: none; color: #8a9792; }
+.dp__date-link { color: inherit; }
+.dp__date-link:hover { color: var(--accent); text-decoration: underline; }
 .dp__tx:last-child { border-bottom: 0; }
 .dp__tx-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dp__tx-name { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
