@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "preact/hooks";
 import { BrandMark } from "./BrandMark";
+import { GITHUB_URL } from "../links";
 import { menuItems } from "../menu";
 import type { Route } from "../route";
 import { navigate } from "../router";
@@ -82,7 +83,9 @@ export function MenuSheet(props: { route: Route; onClose: () => void }) {
             </li>
           ))}
         </ul>
-        <p class="ms__foot">Receipt to Life +</p>
+        <p class="ms__foot">
+          Receipt to Life + ・ <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </p>
       </div>
     </div>
   );

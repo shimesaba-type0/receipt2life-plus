@@ -94,3 +94,34 @@ export function importHttpError(status: number, serverMessage?: string): string 
   if (status === 403) return "この画面と同じサイトからのみ読み込めます。ページを開き直してからやり直してください。";
   return `読み込みに失敗しました(${status})。時間をおいてやり直してください。`;
 }
+
+// ---- 読み物のエクスポート(Markdown / HTML) ----
+// サーバー(src/core/period-report.ts)と同じ規則。期間は月・年・日付の範囲のどれか1つ
+export type ReportMode = "month" | "year" | "range";
+export type ReportFormat = "markdown" | "html";
+export interface ReportInput {
+  month: string;
+  year: string;
+  from: string;
+  to: string;
+}
+// 期間の上限(日数。サーバーと同じ)
+export const REPORT_MAX_DAYS = 366;
+
+const inclusiveDays = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+
+// 入力が正しければクエリ文字列(例: month=2026-10)、足りない・正しくなければ理由
+export function reportQuery(mode: ReportMode, v: ReportInput): { ok: true; query: string } | { ok: false; error: string } {
+  if (mode === "month") {
+    return /^\d{4}-(0[1-9]|1[0-2])$/.test(v.month) ? { ok: true, query: `month=${v.month}` } : { ok: false, error: "月を選んでください。" };
+  }
+  if (mode === "year") {
+    return /^\d{4}$/.test(v.year) ? { ok: true, query: `year=${v.year}` } : { ok: false, error: "年を4桁で入れてください(例: 2026)。" };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v.from) || !/^\d{4}-\d{2}-\d{2}$/.test(v.to)) return { ok: false, error: "はじまりの日と終わりの日を選んでください。" };
+  if (v.from > v.to) return { ok: false, error: "終わりの日は、はじまりの日以降にしてください。" };
+  if (inclusiveDays(v.from, v.to) > REPORT_MAX_DAYS) return { ok: false, error: `期間は${REPORT_MAX_DAYS}日までです。分けて書き出してください。` };
+  return { ok: true, query: `from=${v.from}&to=${v.to}` };
+}
+
+export const reportHref = (format: ReportFormat, query: string) => `/export/${format}?${query}`;

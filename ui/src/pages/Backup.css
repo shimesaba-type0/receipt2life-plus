@@ -45,3 +45,14 @@
   .backup__pair { flex-direction: row; align-items: flex-start; }
   .backup__pair > .backup__card { flex: 1 1 0; }
 }
+
+/* 読み物のエクスポート(期間の選択) */
+.backup__modes { display: flex; gap: 8px; }
+.backup__mode { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 18px; border-radius: 20px; border: 1px solid var(--line); font-size: 14px; font-weight: 700; cursor: pointer; }
+.backup__mode input { position: absolute; opacity: 0; pointer-events: none; }
+.backup__mode.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.backup__mode:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.backup__period { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.backup__input { min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; background: var(--surface); color: inherit; }
+.backup__hint { margin: 0; font-size: 13px; color: var(--muted); }
+.backup__actions { display: flex; gap: 12px; flex-wrap: wrap; }

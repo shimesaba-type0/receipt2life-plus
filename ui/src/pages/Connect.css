@@ -1,0 +1,19 @@
+/* AIとつなぐ画面専用。色は styles.css のトークン */
+.connect { gap: 20px; padding-top: 28px; }
+.connect__header { display: flex; flex-direction: column; gap: 4px; }
+.connect__title { margin: 0; font-size: 20px; font-weight: 700; }
+.connect__lead { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.7; }
+.connect__card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 24px 28px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.connect__h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.connect__note { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.connect__url { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.connect__code { flex: 1 1 260px; min-width: 0; padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); font-size: 14px; overflow-wrap: anywhere; user-select: all; }
+.connect__copy { min-height: 44px; padding: 0 22px; border-radius: 22px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+.connect__steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.8; }
+.connect__list { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8; }
+.connect__fields { margin: 8px 0 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.connect__field { display: flex; gap: 12px; padding: 8px 12px; font-size: 13px; }
+.connect__field:nth-child(even) { background: var(--zebra); }
+.connect__field dt { flex: 0 0 8.5em; color: var(--muted); }
+.connect__field dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.connect__links { display: flex; gap: 20px; flex-wrap: wrap; margin: 0; font-size: 14px; }

@@ -1,6 +1,7 @@
 import { Nav } from "./components/Nav";
 import { Topbar } from "./components/Topbar";
 import { Backup } from "./pages/Backup";
+import { Connect } from "./pages/Connect";
 import { Calendar } from "./pages/Calendar";
 import { Categories } from "./pages/Categories";
 import { Day } from "./pages/Day";
@@ -23,6 +24,7 @@ export function App() {
         {route.name === "transaction" && <Transaction id={route.id} />}
         {route.name === "photosAdd" && <PhotosAdd target={route.target} />}
         {route.name === "backup" && <Backup />}
+        {route.name === "connect" && <Connect />}
         {route.name === "categories" && <Categories />}
         {route.name === "tax" && <Tax />}
         {route.name === "notfound" && (
