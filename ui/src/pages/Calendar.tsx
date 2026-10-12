@@ -5,6 +5,7 @@ import { buildMonthGrid, defaultSelectedDate, eventEnd, formatCellAmount, format
 import { addMonths, formatDateJa, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
 import { formatHolidayDate, holidayName, holidaysInMonth } from "../holidays";
 import { DayPane } from "../components/DayPane";
+import { DaySheet } from "../components/DaySheet";
 import { MonthPicker } from "../components/MonthPicker";
 import { Link, navigate } from "../router";
 import "./Calendar.css";
@@ -51,8 +52,14 @@ export function Calendar(props: { month: string | null }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const wide = useWide();
   const [picked, setPicked] = useState<string | null>(null);
+  // スマホ幅でタップした日のプレビュー(下からのシート)
+  const [sheetDate, setSheetDate] = useState<string | null>(null);
   // 月を移動したら、選択日は既定(今日か月初)に戻す
   useEffect(() => setPicked(null), [month]);
+  // 幅が広がってPCの右ペインに切り替わったら、シートは閉じる
+  useEffect(() => {
+    if (wide) setSheetDate(null);
+  }, [wide]);
   const selected = picked ?? defaultSelectedDate(month, today);
 
   useEffect(() => {
@@ -143,9 +150,9 @@ export function Calendar(props: { month: string | null }) {
                 const onClick = (e: MouseEvent) => {
                   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                   e.preventDefault();
-                  // PC幅は右ペインの選択を切り替え、モバイルは日のページへ移動する
+                  // PC幅は右ペインの選択を切り替え、モバイルは下からのプレビューを出す(詳細はそこから開く)
                   if (wide) setPicked(date);
-                  else navigate(`/day/${date}`);
+                  else setSheetDate(date);
                 };
                 // PC幅のダブルクリックで、その日の詳細ページへ移る(1回目のクリックで右ペインの選択は済んでいる)
                 const onDblClick = (e: MouseEvent) => {
@@ -238,6 +245,7 @@ export function Calendar(props: { month: string | null }) {
         </div>
       )}
       </div>
+      {!wide && sheetDate && <DaySheet date={sheetDate} onClose={() => setSheetDate(null)} />}
     </section>
   );
 }

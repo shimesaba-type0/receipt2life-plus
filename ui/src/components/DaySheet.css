@@ -1,0 +1,6 @@
+/* スマホ幅のカレンダーで、日をタップしたときの下からのプレビュー */
+.ds__backdrop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center; background: rgba(24, 33, 29, 0.45); }
+.ds { width: 100%; max-width: 560px; max-height: 80dvh; overflow-y: auto; background: var(--bg); border-radius: var(--radius) var(--radius) 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+.ds__top { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: 44px; background: var(--bg); }
+.ds__grip { width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
+.ds__close { position: absolute; right: -8px; top: 0; width: 44px; height: 44px; border: 0; background: transparent; font-size: 24px; line-height: 1; color: var(--muted); cursor: pointer; }
