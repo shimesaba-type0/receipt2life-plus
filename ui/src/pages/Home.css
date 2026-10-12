@@ -104,10 +104,10 @@
   .home__memo-label { color: #3f4b46; }
   .home__memo-value b { font-size: 32px; }
   .home__review { grid-column: 1 / -1; grid-row: 2; min-height: 52px; }
-  .home__breakdown { grid-column: 1 / span 6; grid-row: 3; padding: 24px 28px; gap: 18px; }
+  .home__breakdown { grid-column: 1 / -1; grid-row: 3; padding: 24px 28px; gap: 18px; }
   .home__h2 { font-size: 17px; }
   .home__stack { height: 14px; border-radius: 7px; }
   .home__row-pct { width: 56px; }
-  .home__recent-section { grid-column: 7 / span 4; grid-row: 3; gap: 6px; }
+  .home__recent-section { grid-column: 1 / -1; grid-row: 4; gap: 6px; }
   .home__section-head--outer { padding-bottom: 4px; }
 }
