@@ -1,0 +1,31 @@
+/* 税額(/tax)専用 */
+.taxp__head { display: flex; flex-direction: column; gap: 6px; }
+.taxp__lead { margin: 0; font-size: 13px; }
+.taxp__controls { display: flex; flex-direction: column; gap: 12px; }
+.taxp__periods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.taxp__period { min-height: 44px; padding: 0 8px; border-radius: 22px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 500; cursor: pointer; }
+.taxp__period.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.taxp__custom { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.taxp__custom label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.taxp__custom input { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+.taxp__range { margin: 0; font-size: 13px; }
+.taxp__switch { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.taxp__switch input { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+
+.taxp__tablewrap { overflow-x: auto; }
+.taxp__table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.taxp__table th, .taxp__table td { padding: 12px 8px; text-align: right; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.taxp__table th:first-child { text-align: left; }
+.taxp__table thead th { font-size: 12px; font-weight: 500; color: var(--muted); }
+.taxp__table tbody th { font-weight: 700; }
+.taxp__table tfoot th, .taxp__table tfoot td { font-weight: 700; border-top: 2px solid var(--line); border-bottom: 0; }
+.taxp__mixed { display: block; font-size: 11px; font-weight: 400; }
+.taxp__month { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.taxp__month-total { font-size: 14px; }
+.taxp__grand { margin: 0; text-align: right; }
+
+.taxp__notes { display: flex; flex-direction: column; gap: 6px; }
+.taxp__notes p { margin: 0; font-size: 14px; }
+.taxp__coverage.is-warn { padding: 10px 12px; border-radius: 12px; background: var(--warn-soft); }
+.taxp__empty-title { margin: 0 0 6px; font-weight: 700; }
+.taxp__empty p:last-child { margin: 0; }

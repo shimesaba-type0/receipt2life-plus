@@ -31,6 +31,12 @@ describe("parseRoute", () => {
     expect(parseRoute("/export")).toEqual({ name: "notfound" });
     expect(parseRoute("/import")).toEqual({ name: "notfound" });
   });
+  it("税額の画面は /tax(API の /api/tax-summary とは別)", () => {
+    expect(parseRoute("/tax")).toEqual({ name: "tax" });
+    expect(parseRoute("/tax/")).toEqual({ name: "tax" });
+    expect(parseRoute("/tax/2026")).toEqual({ name: "notfound" });
+  });
+
   it("カテゴリ画面は /categories(API の /api/categories とは別)", () => {
     expect(parseRoute("/categories")).toEqual({ name: "categories" });
     expect(parseRoute("/categories/")).toEqual({ name: "categories" });

@@ -4,6 +4,7 @@ import { groupCategories } from "../pages/categoriesLogic";
 import { TAX_FLAG_OPTIONS } from "../pages/dayLogic";
 import { invoiceHint, normalizeInvoiceNumber, MAX_ADDRESS, MAX_CLERK, MAX_PHONE, MAX_RECEIPT_NO } from "../receiptDetails";
 import type { TxFormValues } from "../pages/transactionLogic";
+import { RATE_OPTIONS, RATE_OTHER } from "../pages/taxLogic";
 import "../pages/Day.css";
 
 // カテゴリの select。大分類ごとの optgroup(サーバーの並びのまま)。value が "" のものが先頭の「未設定」(emptyLabel で文言を変えられる)
@@ -38,6 +39,45 @@ export function TaxFlagSelect(props: { id: string; value: string; onChange: (val
         </option>
       ))}
     </select>
+  );
+}
+
+// 消費税の税率の select と「その他」の数字の入力欄。値は印字どおり(計算しない)。選択肢に無い既存の値は「その他」に入って表示される
+export function TaxRateFields(props: {
+  id: string;
+  label: string;
+  choice: string;
+  other: string;
+  onChange: (patch: { rate_choice?: string; rate_other?: string }) => void;
+  disabled?: boolean;
+}) {
+  const { id } = props;
+  return (
+    <>
+      <label for={`${id}-rate`}>{props.label}</label>
+      <select id={`${id}-rate`} value={props.choice} disabled={props.disabled} onChange={(e) => props.onChange({ rate_choice: (e.currentTarget as HTMLSelectElement).value })}>
+        {RATE_OPTIONS.map((o) => (
+          <option value={o.value} key={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {props.choice === RATE_OTHER && (
+        <>
+          <label for={`${id}-rate-other`}>税率(%。印字の数字)</label>
+          <input
+            id={`${id}-rate-other`}
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="例: 1 / 0.5"
+            value={props.other}
+            disabled={props.disabled}
+            onInput={(e) => props.onChange({ rate_other: (e.currentTarget as HTMLInputElement).value })}
+          />
+        </>
+      )}
+    </>
   );
 }
 

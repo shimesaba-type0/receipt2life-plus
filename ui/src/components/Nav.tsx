@@ -4,6 +4,8 @@ import { todayJst } from "../format";
 
 // カテゴリ(4つの区画)のアイコン。ホームの見出しのボタンでも使う
 export const CATEGORY_ICON = ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"];
+// 税額(レシートと「%」)のアイコン。ホームの見出しのボタンでも使う
+export const TAX_ICON = ["M6 3h12v18l-3-2-3 2-3-2-3 2z", "M9.5 9.5h.01", "M14.5 14.5h.01", "M14.5 9.5l-5 5"];
 
 function Icon(props: { d: string[] }) {
   return (
@@ -38,6 +40,10 @@ export function Nav(props: { route: Route }) {
       <Link href="/categories" class={`nav__item nav__pc${route.name === "categories" ? " is-active" : ""}`} aria-current={route.name === "categories" ? "page" : undefined}>
         <Icon d={CATEGORY_ICON} />
         <span>カテゴリ</span>
+      </Link>
+      <Link href="/tax" class={`nav__item nav__pc${route.name === "tax" ? " is-active" : ""}`} aria-current={route.name === "tax" ? "page" : undefined}>
+        <Icon d={TAX_ICON} />
+        <span>税額</span>
       </Link>
       <Link href="/backup" class={`nav__item nav__export${route.name === "backup" ? " is-active" : ""}`} aria-current={route.name === "backup" ? "page" : undefined}>
         <Icon d={["M12 4v11", "M7 11l5 5 5-5", "M5 20h14"]} />

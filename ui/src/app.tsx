@@ -5,6 +5,7 @@ import { Categories } from "./pages/Categories";
 import { Day } from "./pages/Day";
 import { Home } from "./pages/Home";
 import { PhotosAdd } from "./pages/PhotosAdd";
+import { Tax } from "./pages/Tax";
 import { Transaction } from "./pages/Transaction";
 import { useRoute } from "./router";
 
@@ -21,6 +22,7 @@ export function App() {
         {route.name === "photosAdd" && <PhotosAdd target={route.target} />}
         {route.name === "backup" && <Backup />}
         {route.name === "categories" && <Categories />}
+        {route.name === "tax" && <Tax />}
         {route.name === "notfound" && (
           <section class="page">
             <h1 class="page__title">ページが見つかりません</h1>

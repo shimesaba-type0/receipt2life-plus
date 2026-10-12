@@ -69,3 +69,13 @@
 .copyval__text { min-width: 0; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
 .copyval__btn { min-height: 44px; }
 .copyval__msg { flex-basis: 100%; font-size: 12px; }
+
+/* 税率・税の内訳 */
+.tx__rate { font-size: 12px; }
+.tx__taxwrap { overflow-x: auto; }
+.tx__tax { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tx__tax th, .tx__tax td { padding: 10px 8px; text-align: right; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+.tx__tax th:first-child { text-align: left; }
+.tx__tax thead th { font-size: 12px; font-weight: 500; color: var(--muted); }
+.tx__tax tbody th { font-weight: 700; }
+.tx__tax-label, .tx__tax-basis { font-size: 12px; font-weight: 400; }

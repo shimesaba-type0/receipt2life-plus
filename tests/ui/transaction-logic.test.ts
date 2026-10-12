@@ -171,8 +171,8 @@ describe("buildItems / buildPatch", () => {
     expect(r).toEqual({
       ok: true,
       value: [
-        { name: "牛乳", amount: 200, category: "食費", tax_flag: null, memo: null },
-        { name: "値引き", amount: -50, category: null, tax_flag: "medical", memo: "割" },
+        { name: "牛乳", amount: 200, category: "食費", tax_flag: null, memo: null, tax_rate: null, tax_label: null },
+        { name: "値引き", amount: -50, category: null, tax_flag: "medical", memo: "割", tax_rate: null, tax_label: null },
       ],
     });
   });

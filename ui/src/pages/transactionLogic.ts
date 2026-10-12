@@ -12,6 +12,7 @@ import {
   type FieldResult,
 } from "../receiptDetails";
 import { parseTaxFlagField } from "./dayLogic";
+import { buildTaxLines, parseTaxLabel, rateFields, rateFromFields, type TaxLineRow } from "./taxLogic";
 
 export const MAX_ITEMS = 50;
 export const MAX_ITEM_NAME = 100;
@@ -97,6 +98,10 @@ export interface ItemRow {
   category: string;
   tax_flag: string;
   memo: string;
+  // 消費税の税率。select の値("" は不明、"10" など、"other" は rate_other に数字)と印字の記号
+  rate_choice: string;
+  rate_other: string;
+  tax_label: string;
 }
 
 export function emptyTxForm(date: string): TxFormValues {
@@ -138,16 +143,25 @@ export function txFormFromView(tx: TransactionView): TxFormValues {
 export function itemRowsFromView(items: ItemView[]): ItemRow[] {
   return [...items]
     .sort((a, b) => a.position - b.position)
-    .map((it) => ({ key: it.id, name: it.name, amount: String(it.amount), category: it.category ?? "", tax_flag: it.tax_flag ?? "", memo: it.memo ?? "" }));
+    .map((it) => ({
+      key: it.id,
+      name: it.name,
+      amount: String(it.amount),
+      category: it.category ?? "",
+      tax_flag: it.tax_flag ?? "",
+      memo: it.memo ?? "",
+      ...rateFields(it.tax_rate ?? null),
+      tax_label: it.tax_label ?? "",
+    }));
 }
 
 export function emptyItemRow(key: string): ItemRow {
-  return { key, name: "", amount: "", category: "", tax_flag: "", memo: "" };
+  return { key, name: "", amount: "", category: "", tax_flag: "", memo: "", rate_choice: "", rate_other: "", tax_label: "" };
 }
 
 // 追加しただけで何も入れていない行(送らない)
 export function isBlankRow(r: ItemRow): boolean {
-  return r.name.trim() === "" && r.amount.trim() === "" && r.memo.trim() === "";
+  return r.name.trim() === "" && r.amount.trim() === "" && r.memo.trim() === "" && r.rate_choice === "" && r.rate_other.trim() === "" && r.tax_label.trim() === "";
 }
 
 export interface TotalsCheck {
@@ -228,7 +242,11 @@ export function buildItems(rows: ItemRow[]): BuildResult<NewItem[]> {
     if (amount === null) return { ok: false, error: `${line}行目: 金額は整数(円)で入力してください。` };
     if (amount === 0) return { ok: false, error: `${line}行目: 金額は0にできません(値引きはマイナスで入力します)。` };
     if (Math.abs(amount) > MAX_ITEM_AMOUNT) return { ok: false, error: `${line}行目: 金額は${MAX_ITEM_AMOUNT.toLocaleString("ja-JP")}円以下にしてください。` };
-    out.push({ name, amount, category: nullable(r.category), tax_flag: parseTaxFlagField(r.tax_flag), memo: nullable(r.memo) });
+    const rate = rateFromFields(r);
+    if (!rate.ok) return { ok: false, error: `${line}行目: ${rate.error}` };
+    const label = parseTaxLabel(r.tax_label, line);
+    if (!label.ok) return label;
+    out.push({ name, amount, category: nullable(r.category), tax_flag: parseTaxFlagField(r.tax_flag), memo: nullable(r.memo), tax_rate: rate.value, tax_label: label.value });
   }
   if (out.length > MAX_ITEMS) return { ok: false, error: `明細は${MAX_ITEMS}行までです。` };
   return { ok: true, value: out };
@@ -255,7 +273,8 @@ export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
 }
 
 // 編集フォーム → PATCH の入力。明細が0行のとき、元々明細があれば [](全消し)、なければ items を省略する
-export function buildPatch(form: TxFormValues, rows: ItemRow[], hadItems: boolean): BuildResult<TransactionPatch> {
+// 税の内訳(tax)も同じ: 行があれば tax_lines、0行で元々あれば []、なければ省略。tax を渡さなければ tax_lines は送らない
+export function buildPatch(form: TxFormValues, rows: ItemRow[], hadItems: boolean, tax?: { rows: TaxLineRow[]; had: boolean }): BuildResult<TransactionPatch> {
   const amount = parseAmount(form.amount);
   if (amount === null) return { ok: false, error: "金額は整数(円)で入力してください。" };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) return { ok: false, error: "日付を入力してください。" };
@@ -279,6 +298,12 @@ export function buildPatch(form: TxFormValues, rows: ItemRow[], hadItems: boolea
     patch.items = items.value;
   } else if (hadItems) {
     patch.items = [];
+  }
+  if (tax) {
+    const lines = buildTaxLines(tax.rows);
+    if (!lines.ok) return lines;
+    if (lines.value.length > 0) patch.tax_lines = lines.value;
+    else if (tax.had) patch.tax_lines = [];
   }
   return { ok: true, value: patch };
 }
