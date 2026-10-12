@@ -113,7 +113,7 @@ describe("getHome", () => {
     expect(res.groups.reduce((s, g) => s + g.total, 0)).toBe(2100);
     expect(res.memo).toEqual({ with_memo: 1, total: 4, percent: 25 });
     expect(res.needs_review).toBe(1);
-    expect(res.recent).toHaveLength(5);
+    expect(res.recent).toHaveLength(6);
     expect(res.recent[0]?.date).toBe("2026-10-11");
   });
 
