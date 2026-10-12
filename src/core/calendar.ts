@@ -41,17 +41,19 @@ export async function getCalendar(db: D1Database, month: string | undefined, opt
   }
   const { from, to } = monthRange(target);
 
-  const { results } = await db
-    .prepare(
-      `SELECT d.date, d.total, d.count,
+  // 日ごとの集計と出来事は、続けて待たずに同時に問い合わせる
+  const [{ results }, events] = await Promise.all([
+    db
+      .prepare(
+        `SELECT d.date, d.total, d.count,
          (SELECT COUNT(*) FROM attachments a WHERE ${photoOnDay("d.date")}) AS photos
        FROM (SELECT date, SUM(amount) AS total, COUNT(*) AS count FROM transactions WHERE date >= ? AND date <= ? GROUP BY date) d
        ORDER BY d.date`,
-    )
-    .bind(from, to)
-    .all<CalendarDay>();
-
-  const events = await listEvents(db, { from, to, limit: 500 });
+      )
+      .bind(from, to)
+      .all<CalendarDay>(),
+    listEvents(db, { from, to, limit: 500 }),
+  ]);
   if (!events.ok) return events;
   return { ok: true, month: target, total: results.reduce((s, d) => s + d.total, 0), days: results, events: events.events };
 }

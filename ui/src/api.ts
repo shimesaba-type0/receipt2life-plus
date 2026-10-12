@@ -35,6 +35,7 @@ import type {
   TransactionView,
 } from "../../src/api/contract";
 import type { ImportResponse } from "./pages/backupLogic";
+import { ShortCache } from "./api-cache";
 
 // 認証が切れている(Cloudflare Access のログインが必要)ことを表す
 export class UnauthorizedError extends Error {
@@ -43,7 +44,25 @@ export class UnauthorizedError extends Error {
   }
 }
 
+// 成功した GET だけを短時間おぼえる。書き込みをしたら捨てる(api-cache.ts)
+const getCache = new ShortCache<ApiResult<unknown>>();
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
+  if (method === "GET") {
+    // 呼び出し側が結果を書き換えても、おぼえた値に影響しないよう、取り出すたびに複製する
+    const value = await getCache.get(path, () => send<unknown>(method, path, body), (r) => r.ok);
+    return structuredClone(value) as ApiResult<T>;
+  }
+  getCache.clear();
+  try {
+    return await send<T>(method, path, body);
+  } finally {
+    // 失敗(通信エラーなど)でも、サーバー側が書き換わっているかもしれないので、もう一度捨てる
+    getCache.clear();
+  }
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<ApiResult<T>> {
   let res: Response;
   try {
     res = await fetch(path, {
@@ -107,11 +126,14 @@ export async function uploadPhoto(file: Blob, meta: PhotoMeta = {}): Promise<Api
   const form = new FormData();
   form.set("file", file);
   for (const [k, v] of Object.entries(meta)) if (v) form.set(k, v);
+  getCache.clear();
   let res: Response;
   try {
     res = await fetch("/api/photos", { method: "POST", credentials: "same-origin", body: form });
   } catch {
     throw new UnauthorizedError();
+  } finally {
+    getCache.clear();
   }
   if (res.status === 401) throw new UnauthorizedError();
   try {
@@ -143,11 +165,14 @@ export const deleteSeatRecord = (id: string) => request<{ deleted: SeatRecordVie
 // バックアップ(JSONL)の読み込み。本文はファイルの中身そのまま(JSONLかJSON配列)。上限の検査は呼び出し側で済ませる
 // 全体のエラー(413 など)は ok: false で返る。行ごとの結果は ok: true の results に入る
 export async function importBackup(file: Blob): Promise<ImportResponse & { status: number }> {
+  getCache.clear();
   let res: Response;
   try {
     res = await fetch("/import", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/x-ndjson" }, body: file });
   } catch {
     throw new UnauthorizedError();
+  } finally {
+    getCache.clear();
   }
   if (res.status === 401) throw new UnauthorizedError();
   let body: unknown;

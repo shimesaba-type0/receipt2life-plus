@@ -10,6 +10,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 - 日付は `YYYY-MM-DD`、月は `YYYY-MM`、基準は Asia/Tokyo。金額は円の整数
 - ロジックは `src/core` の関数を呼ぶ。API にロジックを書かない(MCP と同じ関数を使う)
 - 未定義の `/api/*` は、画面(SPA)ではなく 404 の JSON
+- 応答は `Cache-Control: private, no-store`(ブラウザや共有の保存先には残さない)。画面側は、メモリだけの短時間キャッシュ(30秒)で同じ月・日の見直しを速くし、書き込みのたびに捨てる。`/api/*` の応答には `Server-Timing: app;dur=ミリ秒` が付き、300ms 以上かかったものはログ(Observability)に「slow api: メソッド ルートの形 ステータス ミリ秒」と残る
 
 ## 読み取り
 
