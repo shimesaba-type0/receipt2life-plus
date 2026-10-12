@@ -51,7 +51,6 @@ export function Home() {
       <header class="home__header">
         <div class="home__heading">
           <img class="home__brand" src="/brand/wordmark.svg" alt="Receipt to Life +" />
-          <span class="home__kicker">今日</span>
           <h1 class="home__date">{formatDateJa(today)}</h1>
         </div>
         <Link href={`/day/${today}`} class="home__open-today">
@@ -108,39 +107,15 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
           </Link>
         )}
 
-        <section class="home__summary" aria-label="今日と今月の合計">
-          <div class="home__today">
-            <span class="home__label">
-              今日<span class="home__pc-only">の支出</span>
-            </span>
-            <span class="home__big num" aria-label={`今日の合計 ${data.today.total}円`}>
-              {formatYen(data.today.total)}
-            </span>
-            <span class="home__label num">{data.today.count}件の記録</span>
-          </div>
-          <div class="home__divider" />
-          <div class="home__month">
-            <div class="home__month-main">
-              <span class="home__label">
-                今月<span class="home__pc-only">の支出({range})</span>
-              </span>
-              <span class="home__mid num" aria-label={`今月の合計 ${data.month.total}円`}>
-                {formatYen(data.month.total)}
-              </span>
-              <span class="home__label num home__pc-only">{data.month.count}件を記録</span>
-            </div>
-            <span class="home__range num">
-              {range}
-              <br />
-              {data.month.count}件を記録
-            </span>
-          </div>
-        </section>
-
-        <BreakdownCard title="今月の内訳" note="記録した範囲の傾向" groups={data.groups} total={data.month.total} emptyText="今月の支出はまだありません。" />
+        {/* 今日は、レシートをその日に取り込むとは限らず、0円の日が普通にあるので、小さな1行にする。今月の合計は内訳のドーナツの中央にあるので、枠は出さない */}
+        <p class="home__today" aria-label={`今日の合計 ${data.today.total}円、${data.today.count}件の記録`}>
+          <span class="home__label">今日</span>
+          <span class="home__today-amount num">{formatYen(data.today.total)}</span>
+          <span class="home__label num">{data.today.count}件の記録</span>
+        </p>
 
         <section class="card home__discounts" aria-label="今月の割引">
-          <span class="home__label home__discounts-label"><DiscountIcon />今月の割引</span>
+          <span class="home__label home__discounts-label"><DiscountIcon size={22} />今月の割引</span>
           {discounts.empty ? (
             <span class="home__discounts-empty">{discounts.countText}</span>
           ) : (
@@ -153,6 +128,8 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
           )}
           <span class="home__discounts-note">{discounts.note}</span>
         </section>
+
+        <BreakdownCard title="今月の内訳" note={`${range}・${data.month.count}件を記録`} groups={data.groups} total={data.month.total} emptyText="今月の支出はまだありません。" />
 
         <section class="home__recent-section" aria-label="最近の記録">
           <div class="home__section-head home__section-head--outer">
