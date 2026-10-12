@@ -5,7 +5,7 @@ import type { NewSeatRecord, SeatRecordPatch, SeatRecordView, SeatSummaryRow } f
 export const RATINGS = [1, 2, 3, 4, 5] as const;
 
 // 上限は src/core/seat-records.ts と同じ
-export const SEAT_LIMITS = { venue: 100, screen: 100, seat: 50, note: 200 } as const;
+export const SEAT_LIMITS = { title: 100, venue: 100, screen: 100, seat: 50, note: 200 } as const;
 
 // 色だけに頼らず、文字で評価を出す。未評価は「評価なし」
 export function ratingLabel(rating: number | null | undefined): string {
@@ -27,9 +27,14 @@ export function placeLabel(r: Pick<SeatRecordView, "venue" | "screen">): string 
   return r.screen ? `${r.venue} ${r.screen}` : r.venue;
 }
 
-// 一覧の行の読み上げ用の説明
-export function seatRecordSummary(r: Pick<SeatRecordView, "venue" | "screen" | "seat" | "rating">): string {
-  return `${placeLabel(r)} ${r.seat} ${ratingLabel(r.rating)}`;
+// 一覧の行の1行目: 作品名・公演名があればそれ、なければ従来どおり会場(とスクリーン)
+export function headLabel(r: Pick<SeatRecordView, "title" | "venue" | "screen">): string {
+  return r.title ? r.title : placeLabel(r);
+}
+
+// 一覧の行の読み上げ用の説明(作品名があれば先頭に付ける)
+export function seatRecordSummary(r: Pick<SeatRecordView, "title" | "venue" | "screen" | "seat" | "rating">): string {
+  return `${r.title ? `${r.title} ` : ""}${placeLabel(r)} ${r.seat} ${ratingLabel(r.rating)}`;
 }
 
 // 会場名の候補(既存の記録の会場名。重複なし、五十音・文字コード順)
@@ -46,6 +51,7 @@ export function screenSuggestions(summary: Pick<SeatSummaryRow, "venue" | "scree
 }
 
 export interface SeatFormValues {
+  title: string;
   venue: string;
   screen: string;
   seat: string;
@@ -54,11 +60,11 @@ export interface SeatFormValues {
 }
 
 export function emptySeatForm(venue = ""): SeatFormValues {
-  return { venue, screen: "", seat: "", rating: null, note: "" };
+  return { title: "", venue, screen: "", seat: "", rating: null, note: "" };
 }
 
 export function seatFormFromRecord(r: SeatRecordView): SeatFormValues {
-  return { venue: r.venue, screen: r.screen ?? "", seat: r.seat, rating: r.rating, note: r.note ?? "" };
+  return { title: r.title ?? "", venue: r.venue, screen: r.screen ?? "", seat: r.seat, rating: r.rating, note: r.note ?? "" };
 }
 
 // 選んだ評価をもう一度押したら外す(評価は任意)
@@ -69,12 +75,14 @@ export function toggleRating(current: number | null, picked: number): number | n
 export type FormResult<T> = { ok: true; value: T } | { ok: false; message: string };
 
 function checkRequired(f: SeatFormValues): string | null {
+  const title = f.title.trim();
   const venue = f.venue.trim();
   const screen = f.screen.trim();
   const seat = f.seat.trim();
   const note = f.note.trim();
   if (venue === "") return "会場名を入力してください。";
   if (seat === "") return "座席を入力してください。";
+  if (title.length > SEAT_LIMITS.title) return `作品名・公演名は${SEAT_LIMITS.title}文字以内にしてください。`;
   if (venue.length > SEAT_LIMITS.venue) return `会場名は${SEAT_LIMITS.venue}文字以内にしてください。`;
   if (screen.length > SEAT_LIMITS.screen) return `スクリーン名は${SEAT_LIMITS.screen}文字以内にしてください。`;
   if (seat.length > SEAT_LIMITS.seat) return `座席は${SEAT_LIMITS.seat}文字以内にしてください。`;
@@ -87,6 +95,7 @@ export function toNewSeatRecord(date: string, f: SeatFormValues): FormResult<New
   const error = checkRequired(f);
   if (error) return { ok: false, message: error };
   const value: NewSeatRecord = { date, venue: f.venue.trim(), seat: f.seat.trim() };
+  if (f.title.trim() !== "") value.title = f.title.trim();
   if (f.screen.trim() !== "") value.screen = f.screen.trim();
   if (f.rating !== null) value.rating = f.rating;
   if (f.note.trim() !== "") value.note = f.note.trim();
@@ -100,6 +109,7 @@ export function toSeatRecordPatch(f: SeatFormValues): FormResult<SeatRecordPatch
   return {
     ok: true,
     value: {
+      title: f.title.trim() === "" ? null : f.title.trim(),
       venue: f.venue.trim(),
       seat: f.seat.trim(),
       screen: f.screen.trim() === "" ? null : f.screen.trim(),

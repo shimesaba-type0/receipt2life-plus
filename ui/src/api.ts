@@ -126,7 +126,7 @@ export const updateLink = (id: string, patch: LinkPatch) => request<{ link: Link
 export const deleteLink = (id: string) => request<{ deleted: LinkView; message: string }>("DELETE", `/api/links/${encodeURIComponent(id)}`);
 
 // 座席の記録(映画館などの席の評価)。getSeatRecords は絞り込み(date / venue / limit など)つきの一覧と、会場・スクリーン・座席ごとの集計
-export function getSeatRecords(filter: { date?: string; venue?: string; screen?: string; seat?: string; limit?: number } = {}) {
+export function getSeatRecords(filter: { date?: string; title?: string; venue?: string; screen?: string; seat?: string; limit?: number } = {}) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") params.set(k, String(v));
   const qs = params.toString();

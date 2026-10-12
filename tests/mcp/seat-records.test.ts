@@ -32,8 +32,15 @@ describe("MCP 座席の記録のツール", () => {
     expect(byName("list_seat_records").description).toContain("次の席選び");
     expect(byName("list_seat_records").description).toContain("要約");
     expect(Object.keys(byName("list_seat_records").inputSchema.properties).sort()).toEqual(
-      ["from", "limit", "max_rating", "min_rating", "screen", "seat", "to", "transaction_id", "venue"],
+      ["from", "limit", "max_rating", "min_rating", "screen", "seat", "title", "to", "transaction_id", "venue"],
     );
+    expect(Object.keys(byName("add_seat_record").inputSchema.properties)).toContain("title");
+    expect(Object.keys(byName("update_seat_record").inputSchema.properties)).toContain("title");
+    for (const n of ["add_seat_record", "update_seat_record", "list_seat_records"]) {
+      expect(byName(n).description).toContain("作品名");
+      expect(byName(n).description).toContain("公演名");
+    }
+    expect(byName("add_seat_record").description).toContain("明細の品名とは別物");
     expect(byName("update_seat_record").inputSchema.required).toEqual(["id"]);
     expect(byName("delete_seat_record").inputSchema.required).toEqual(["id"]);
     for (const n of ["add_seat_record", "list_seat_records", "update_seat_record", "delete_seat_record"]) expect(byName(n).description.length).toBeGreaterThan(80);
@@ -59,6 +66,15 @@ describe("MCP 座席の記録のツール", () => {
     expect(text(await callTool("list_seat_records", {}))).toMatchObject({ count: 1 });
     const gone = await callTool("delete_seat_record", { id: added.seat_record.id });
     expect(gone.body.result.isError).toBe(true);
+  });
+
+  it("title(作品名・公演名)を登録・絞り込み・更新・消去できる", async () => {
+    const added = text(await callTool("add_seat_record", { date: "2026-10-10", venue: "A映画館", seat: "F-5", title: "ダミー作品A" }));
+    expect(added.seat_record.title).toBe("ダミー作品A");
+    await callTool("add_seat_record", { date: "2026-10-11", venue: "B劇場", seat: "1列3番", title: "ダミーライブ" });
+    expect(text(await callTool("list_seat_records", { title: "作品" }))).toMatchObject({ count: 1, records: [{ title: "ダミー作品A" }] });
+    expect(text(await callTool("update_seat_record", { id: added.seat_record.id, title: "ダミー作品B" }))).toMatchObject({ seat_record: { title: "ダミー作品B" } });
+    expect(text(await callTool("update_seat_record", { id: added.seat_record.id, title: null }))).toMatchObject({ seat_record: { title: null } });
   });
 
   it("範囲外の rating・存在しない取引・存在しない id は、直し方が分かるエラー", async () => {

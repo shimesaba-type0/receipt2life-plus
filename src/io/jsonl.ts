@@ -17,7 +17,7 @@ import {
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
-import { MAX_NOTE_LENGTH, MAX_SCREEN_LENGTH, MAX_SEAT_LENGTH, MAX_VENUE_LENGTH } from "../core/seat-records";
+import { MAX_NOTE_LENGTH, MAX_SCREEN_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH, MAX_VENUE_LENGTH } from "../core/seat-records";
 import { dedupHash } from "../core/transactions";
 
 // ---- 上限 ----
@@ -66,7 +66,7 @@ const EXPORT_TABLES: TableSpec[] = [
           FROM links WHERE id > ? ORDER BY id LIMIT ?`,
   },
   {
-    sql: `SELECT 'seat_record' AS type, id, date, venue, screen, seat, rating, note, transaction_id, created_at
+    sql: `SELECT 'seat_record' AS type, id, date, title, venue, screen, seat, rating, note, transaction_id, created_at
           FROM seat_records WHERE id > ? ORDER BY id LIMIT ?`,
   },
 ];
@@ -196,6 +196,8 @@ const linkSchema = z
 const seatRecordSchema = z.strictObject({
   id: idField.optional(),
   date: isoDate,
+  // 旧形式(title なし)の行も取り込める。空文字は未指定(NULL)
+  title: z.string().trim().max(MAX_TITLE_LENGTH).optional(),
   venue: z.string().trim().min(1).max(MAX_VENUE_LENGTH),
   screen: z.string().trim().min(1).max(MAX_SCREEN_LENGTH).optional(),
   seat: z.string().trim().min(1).max(MAX_SEAT_LENGTH),
@@ -796,8 +798,8 @@ async function importSeatRecords(db: D1Database, entries: Entry[], report: Repor
       id: v.id,
       statements: [
         db
-          .prepare("INSERT INTO seat_records (id, date, venue, screen, seat, rating, note, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(v.id, v.data.date, v.data.venue, v.data.screen ?? null, v.data.seat, v.data.rating ?? null, v.data.note ?? null, v.data.transaction_id ?? null, v.data.created_at ?? nowIso),
+          .prepare("INSERT INTO seat_records (id, date, title, venue, screen, seat, rating, note, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.data.date, v.data.title || null, v.data.venue, v.data.screen ?? null, v.data.seat, v.data.rating ?? null, v.data.note ?? null, v.data.transaction_id ?? null, v.data.created_at ?? nowIso),
       ],
     });
   }

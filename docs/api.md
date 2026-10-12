@@ -141,17 +141,17 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 ## 座席の記録(映画館などの席の評価)
 
-映画館のスクリーン・座席など、会場の席の評価を構造化して残す。映画以外(劇場、ライブ会場など)にも使える名前(`venue`=会場、`screen`=スクリーン/ホール、`seat`=座席)。作品名は持たない(取引の明細に入っているため)。取引の列は増やさず、別の小さな記録(`seat_records`、migration 0008)。ロジックは `src/core/seat-records.ts`(MCP も同じ関数)。
+映画館のスクリーン・座席など、会場の席の評価を構造化して残す。映画以外(劇場、ライブ会場など)にも使える名前(`venue`=会場、`screen`=スクリーン/ホール、`seat`=座席)。作品名・公演名は `title`(任意。映画のタイトル、ライブ名など。明細の品名とは別物)。取引の列は増やさず、別の小さな記録(`seat_records`、migration 0008。`title` は 0009 で追加)。ロジックは `src/core/seat-records.ts`(MCP も同じ関数)。
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `GET /api/seat-records` | クエリ(すべて任意・AND): `date`(その日だけ)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500) | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
-| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`screen?` / `rating?` / `note?` / `transaction_id?`) | `seat_record: SeatRecordView`, `message` |
-| `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`screen` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `message` |
+| `GET /api/seat-records` | クエリ(すべて任意・AND): `date`(その日だけ)、`title`(部分一致)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500) | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
+| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `rating?` / `note?` / `transaction_id?`) | `seat_record: SeatRecordView`, `message` |
+| `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`title` / `screen` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `message` |
 | `DELETE /api/seat-records/:id` | なし | `deleted`, `message` |
 
-- `SeatRecordView`: `id`, `date`, `venue`, `screen`, `seat`, `rating`, `note`, `transaction_id`, `created_at`(無い項目は null)
-- 制限: `venue` 100文字・`screen` 100文字・`seat` 50文字・`note` 200文字(いずれも前後の空白を除き、空は不可)。`rating` は整数の1〜5(5が最良)で、範囲外・小数は 400
+- `SeatRecordView`: `id`, `date`, `title`, `venue`, `screen`, `seat`, `rating`, `note`, `transaction_id`, `created_at`(無い項目は null)
+- 制限: `title` 100文字(空文字は未指定として NULL。更新では空文字・null で消去)・`venue` 100文字・`screen` 100文字・`seat` 50文字・`note` 200文字(いずれも前後の空白を除く。`title` 以外は空は不可)。`rating` は整数の1〜5(5が最良)で、範囲外・小数は 400
 - `transaction_id` が存在しなければ 400。存在しない座席の記録の id は 404
 - 取引を削除しても座席の記録は残り、`transaction_id` だけ NULL になる(`ON DELETE SET NULL`)。座席の記録の削除で取引は消えない
 - `GET /api/day/:date` の `seat_records` に、その日の記録が入る。MCP には `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`

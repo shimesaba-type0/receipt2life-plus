@@ -120,7 +120,7 @@ receipt2life/
 **accounts**: id, name(UNIQUE)。現金、カード、Suica程度のラベル。残高は持たない
 **events**: id, start_date, end_date(単日はNULL), title, note, color(red / orange / green / blue / purple のいずれか。色コードはUI側)
 **attachments**: id, r2_key, date, transaction_id, event_id, caption, created_at。date、transaction_id、event_id のうち1つ以上を持つ
-**seat_records**(座席の記録。migration 0008): id, date(必須), venue(必須), screen, seat(必須), rating(1〜5), note, transaction_id(取引が消えたらNULL), created_at。第13節「フェーズ5(座席の記録)」
+**seat_records**(座席の記録。migration 0008、`title` は 0009): id, date(必須), title(作品名・公演名。任意), venue(必須), screen, seat(必須), rating(1〜5), note, transaction_id(取引が消えたらNULL), created_at。第13節「フェーズ5(座席の記録)」
 
 収入は持たない(後から取引に種別の列を足す)。
 
@@ -351,7 +351,7 @@ backup/
   - 画面: `/categories` の下に「支払方法」のカードを足した。行の見た目・編集・2段階の削除確認・移し先の選択はカテゴリと同じ(44px以上のタップ領域)。純粋な部分は `ui/src/pages/accountsLogic.ts`。使っているのに他に口座が無いときは、先に別の口座を追加するよう案内して削除をふさぐ
   - テスト基盤: 各テストの前に口座も初期データ(現金・カード・Suica)に戻す(`tests/setup.ts`)
 - フェーズ5(座席の記録): 映画館などの「スクリーン・座席の記録」を、メモではなく構造化して登録でき、次に席を選ぶ参考にAIから引けるようにする(ユーザー指示)。取引の列は増やさず、別の小さな記録 `seat_records` にする。映画以外(劇場、ライブ会場など)にも使える汎用の名前(venue=会場、screen=スクリーン/ホール、seat=座席)。以下、項目ごと
-  - 項目: `id`, `date`(YYYY-MM-DD・必須), `venue`(必須), `screen`(任意), `seat`(必須。例「F-5」), `rating`(任意。整数1〜5、5が最良。範囲外・小数は Zod エラー), `note`(任意の一言), `transaction_id`(任意。取引への紐づけ), `created_at`。作品名は持たない(取引の明細に入っているため)。migration は `0008_seat_records.sql`(index は venue+date、date、transaction_id)
+  - 項目: `id`, `date`(YYYY-MM-DD・必須), `title`(任意。作品名・公演名。下の追記を参照), `venue`(必須), `screen`(任意), `seat`(必須。例「F-5」), `rating`(任意。整数1〜5、5が最良。範囲外・小数は Zod エラー), `note`(任意の一言), `transaction_id`(任意。取引への紐づけ), `created_at`。当初は作品名を持たなかったが、末尾の追記で `title` を足した。migration は `0008_seat_records.sql`(index は venue+date、date、transaction_id)
   - 上限・トリム: 前後の空白を除き、空は不可(任意項目は省略か、更新時の `null` で消す)。`venue` 100文字・`screen` 100文字・`seat` 50文字(ID・名前の流儀)、`note` 200文字(リンクの title と同じ。events のメモ1000字ほど長くしない「一言」)
   - 取引との関係: `transaction_id` は `REFERENCES transactions(id) ON DELETE SET NULL`。取引を削除しても座席の記録は残り、紐づけだけ外れる(リンク・写真のように連れて消さない。席の評価は取引と独立した財産のため)。座席の記録の削除で取引は消えない。存在しない取引の指定は 400
   - ツール(MCP。ツールは22個から26個に): `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`。説明文に「登録前に `list_seat_records` で既存の会場名・スクリーン名を確認して、同じ表記にそろえる」「ユーザーが言った席が評価されていたか(rating・note)を、次の席選びの参考として要約して伝える」と書いた
@@ -360,3 +360,10 @@ backup/
   - 画面: 日の詳細(`/day/:date`)に「座席の記録」のカード(一覧、追加・編集・削除のフォーム)。会場名とスクリーン名は `<datalist>` で既存の名前の候補から選べて、入力もできる(候補は `GET /api/seat-records?limit=1` の `summary` から)。評価は「★1〜★5」の文字入りのボタン(`aria-pressed`、もう一度押すと外れる。色だけに頼らない)、タップ領域は44px以上。一覧の評価は「★4」(未評価は「評価なし」)。PC幅の詳細ペイン(DayPane)にも読み取り専用で出す。純粋な部分は `ui/src/pages/seatRecordLogic.ts`
   - バックアップ: JSONL に `type: "seat_record"` を足した(エクスポートは link の後。インポートは取引の後に取り込む)。既存の type と形式は変えない。取り込みは行ごとに検証し、同じ `id` は `skipped_exists`、存在しない `transaction_id` はその行だけエラー(リンクと同じ流儀)。`docs/backup.md` に追記
   - テスト基盤: 各テストの前に `seat_records` も空にする(`tests/setup.ts`)
+  - 作品名を追加した。直前の「作品名は持たない」を改める(ユーザー指示: 「明細は明細。映画・映画館の情報は映画館情報。作品名を明細として終わらせたくない」。映画だけでなくライブなど他の催しの名前も入れられるようにする)。以下、項目ごと
+  - 項目: `title`(任意。作品名・公演名。映画のタイトル、ライブ名など)。会場・スクリーン・座席とは別に、そのときの催しの名前を入れる。取引の明細の品名とは別物で、紐づけも連動もしない。migration は `0009_seat_record_title.sql`(`ALTER TABLE seat_records ADD COLUMN title TEXT`。追加のみ。既存の行は NULL のまま、バックフィルしない)
+  - 上限・トリム: 100文字(`venue` と同じ)。前後の空白を除き、空文字(空白だけを含む)は未指定として扱う(追加と取り込みは NULL。更新は消去)。更新は `note` などと同じく、省略すると変えず、`null` でも消せる(空文字でも消える。他の任意項目は空文字がエラーだが、画面のフォームの都合で `title` は許す)
+  - 一覧: 絞り込みに `title`(部分一致。大文字小文字は SQLite の LIKE の既定。`%` `_` `\` は文字として扱い、キーワード検索の `escapeLike` を使う)を足した。他の絞り込みは完全一致のまま。`records` の各行に `title` が入る。`summary`(venue・screen・seat ごとの集計)の形は変えない。MCP のツール数は26のまま、ツール名も変えない(add / update / list の入力と説明文だけ更新)
+  - API: `POST` / `PATCH` / `GET`(`title` クエリ)/ `GET /api/day/:date` の `seat_records` に反映。契約 `src/api/contract.ts` と UI の型を更新
+  - 画面: 日の詳細のフォームに「作品名・公演名(任意)」を会場名の前に足した(100文字)。一覧の行は、作品名があれば太めの1行目に出し、会場・スクリーン、座席・★評価、一言を続ける。作品名がなければ従来どおり会場から。PC幅の DayPane の一覧も同じ表示(`SeatRecordLine` を共通で使う)。読み上げの説明は作品名を先頭に付ける
+  - バックアップ: `seat_record` の行に `title` を含める(列は `date` の次)。`title` の無い旧形式の行もインポートできる(後方互換。`title` は NULL)。空文字の `title` は未設定、101文字以上はその行だけエラー

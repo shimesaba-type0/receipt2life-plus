@@ -3,6 +3,7 @@ import type { SeatRecordView } from "../../src/api/contract";
 import {
   averageLabel,
   emptySeatForm,
+  headLabel,
   placeLabel,
   ratingLabel,
   ratingSpoken,
@@ -23,6 +24,7 @@ const record: SeatRecordView = {
   seat: "F-5",
   rating: 4,
   note: "見やすい",
+  title: null,
   transaction_id: null,
   created_at: "2026-10-10T03:00:00.000Z",
 };
@@ -41,6 +43,11 @@ describe("評価の表示", () => {
     expect(placeLabel(record)).toBe("A映画館 スクリーン5");
     expect(placeLabel({ venue: "B劇場", screen: null })).toBe("B劇場");
     expect(seatRecordSummary(record)).toBe("A映画館 スクリーン5 F-5 ★4");
+  });
+  it("作品名があれば1行目に出し、なければ会場から", () => {
+    expect(headLabel(record)).toBe("A映画館 スクリーン5");
+    expect(headLabel({ ...record, title: "ダミー作品A" })).toBe("ダミー作品A");
+    expect(seatRecordSummary({ ...record, title: "ダミー作品A" })).toBe("ダミー作品A A映画館 スクリーン5 F-5 ★4");
   });
   it("評価をもう一度押すと外れる", () => {
     expect(toggleRating(null, 3)).toBe(3);
@@ -75,11 +82,15 @@ describe("フォーム → API の入力", () => {
     expect(toNewSeatRecord("2026-10-10", form)).toEqual({ ok: true, value: { date: "2026-10-10", venue: "A映画館", seat: "F-5" } });
   });
   it("追加: 任意項目も送る", () => {
-    const form = { venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 2, note: " 前すぎた " };
+    const form = { title: " ダミー作品A ", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 2, note: " 前すぎた " };
     expect(toNewSeatRecord("2026-10-10", form)).toEqual({
       ok: true,
-      value: { date: "2026-10-10", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 2, note: "前すぎた" },
+      value: { date: "2026-10-10", title: "ダミー作品A", venue: "A映画館", screen: "スクリーン5", seat: "F-5", rating: 2, note: "前すぎた" },
     });
+  });
+  it("作品名・公演名は100文字まで", () => {
+    expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm("A映画館"), seat: "F-5", title: "あ".repeat(100) }).ok).toBe(true);
+    expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm("A映画館"), seat: "F-5", title: "あ".repeat(101) })).toEqual({ ok: false, message: "作品名・公演名は100文字以内にしてください。" });
   });
   it("必須(会場・座席)が空ならエラー、上限を超えてもエラー", () => {
     expect(toNewSeatRecord("2026-10-10", { ...emptySeatForm(), seat: "F-5" })).toEqual({ ok: false, message: "会場名を入力してください。" });
@@ -90,13 +101,15 @@ describe("フォーム → API の入力", () => {
   });
   it("編集: 空にした任意項目は null で消す", () => {
     const form = { ...seatFormFromRecord(record), screen: "", note: " ", rating: null };
-    expect(toSeatRecordPatch(form)).toEqual({ ok: true, value: { venue: "A映画館", seat: "F-5", screen: null, rating: null, note: null } });
+    expect(toSeatRecordPatch(form)).toEqual({ ok: true, value: { title: null, venue: "A映画館", seat: "F-5", screen: null, rating: null, note: null } });
+    expect(toSeatRecordPatch({ ...form, title: " ダミー作品A " })).toMatchObject({ ok: true, value: { title: "ダミー作品A" } });
     expect(toSeatRecordPatch(seatFormFromRecord(record))).toEqual({
       ok: true,
-      value: { venue: "A映画館", seat: "F-5", screen: "スクリーン5", rating: 4, note: "見やすい" },
+      value: { title: null, venue: "A映画館", seat: "F-5", screen: "スクリーン5", rating: 4, note: "見やすい" },
     });
   });
   it("記録からフォームを作る", () => {
-    expect(seatFormFromRecord({ ...record, screen: null, rating: null, note: null })).toEqual({ venue: "A映画館", screen: "", seat: "F-5", rating: null, note: "" });
+    expect(seatFormFromRecord({ ...record, screen: null, rating: null, note: null })).toEqual({ title: "", venue: "A映画館", screen: "", seat: "F-5", rating: null, note: "" });
+    expect(seatFormFromRecord({ ...record, title: "ダミー作品A" }).title).toBe("ダミー作品A");
   });
 });
