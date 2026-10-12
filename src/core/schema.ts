@@ -88,7 +88,7 @@ export const transactionInputSchema = z
         "カテゴリ名。list_categories で取れる既存の名前から選ぶ。明細があるときは、行に category が無い行のカテゴリになる。決められなければ省略(同じ店の直近の支出にカテゴリがあれば、それを引き継ぐ。無ければ needs_review になる)",
       ),
     account: z.string().min(1).optional().describe("支払方法(口座)名。現金・カード・Suica など。不明なら省略"),
-    memo: z.string().max(500).optional().describe("メモ(任意)"),
+    memo: z.string().max(500).optional().describe("メモ(任意)。レシートのどの項目(口座・レジ番号・伝票番号・店番号・電話・住所・登録番号・担当者・税の内訳)にも当てはまらない補足だけ。支払方法などは入れない"),
     ...receiptDetailShape,
     tax_flag: taxFlagSchema.nullable().optional().describe(TAX_FLAG_DESCRIPTION),
     items: itemsSchema.optional().describe(ITEMS_DESCRIPTION),

@@ -217,11 +217,7 @@ function TransactionBody(props: {
         </div>
         <div class="tx__meta">
           <span>{formatDateJa(tx.date)}</span>
-          {paidClock && (
-            <span class="tx__time">
-              <span class="muted">決済時刻</span> <span class="num tx__time-value">{paidClock}</span>
-            </span>
-          )}
+          {paidClock && <span class="num tx__time tx__time-value">{paidClock}</span>}
           {holiday && <span class="chip chip--holiday">{holiday}</span>}
           {tx.account && <span class="muted">{tx.account}</span>}
         </div>
@@ -277,8 +273,20 @@ function TransactionBody(props: {
             )}
             {tx.receipt_no && (
               <div>
-                <dt>レシート番号</dt>
+                <dt>レシート番号・伝票番号</dt>
                 <dd class="tx__memo">{tx.receipt_no}</dd>
+              </div>
+            )}
+            {tx.register_no && (
+              <div>
+                <dt>レジ番号</dt>
+                <dd class="tx__memo">{tx.register_no}</dd>
+              </div>
+            )}
+            {tx.store_code && (
+              <div>
+                <dt>店番号</dt>
+                <dd class="tx__memo">{tx.store_code}</dd>
               </div>
             )}
           </dl>

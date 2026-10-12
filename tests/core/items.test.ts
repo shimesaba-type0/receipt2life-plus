@@ -356,8 +356,9 @@ describe("集計の一貫性(支出の行)", () => {
     expect(home.today).toEqual({ date: "2026-10-11", total: 1000, count: 1 });
     expect(home.month).toMatchObject({ total: 1500, count: 2 });
     expect(Object.fromEntries(home.groups.map((g) => [g.key, g.total]))).toEqual({ 食費: 700, 生活: 300, 娯楽: 500 });
-    expect(home.recent[0]!.items.map((i) => i.name)).toEqual(["A", "B"]);
-    expect(home.recent[1]!.items).toEqual([]);
+    // 登録日時が同じ(テストの NOW 固定)なので、recent の順は id で決まり不定。店名で引く
+    expect(home.recent.find((t) => t.merchant === "Aストア")!.items.map((i) => i.name)).toEqual(["A", "B"]);
+    expect(home.recent.find((t) => t.merchant === "Bマート")!.items).toEqual([]);
 
     const day = await getDay(db(), "2026-10-11");
     expect(day.ok && day).toMatchObject({ total: 1000, count: 1 });

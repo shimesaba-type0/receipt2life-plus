@@ -4,6 +4,7 @@ import { addAccount, deleteAccount, listAccounts, updateAccount } from "../core/
 import { addCategory, deleteCategory, listCategories, renameGroup, updateCategory } from "../core/categories";
 import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { getHome } from "../core/home";
+import { listMerchants } from "../core/merchants";
 import { addLink, deleteLink, updateLink } from "../core/links";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
@@ -60,6 +61,15 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
     const input: Record<string, unknown> = {};
     for (const key of ["from", "to", "group_by"]) if (q[key]) input[key] = q[key];
     return respond(c, await summarizeTax(c.env.DB, input));
+  });
+
+  // 店名の候補(過去の取引から店名ごとにまとめる)。q / category / limit。空のクエリは省略扱い。limit は数値にして検証に渡す
+  app.get("/api/merchants", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["q", "category"]) if (q[key]) input[key] = q[key];
+    if (q.limit) input.limit = Number(q.limit);
+    return respond(c, await listMerchants(c.env.DB, input));
   });
 
   app.get("/api/categories", async (c) => {

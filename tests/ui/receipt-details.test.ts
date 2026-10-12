@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { TransactionView } from "../../src/api/contract";
 import {
   invoiceNumberField,
+  MAX_REGISTER_NO,
+  MAX_STORE_CODE,
   merchantPhoneField,
+  registerNoField,
+  storeCodeField,
   normalizeInvoiceNumber as coreInvoice,
   normalizePaidTime as coreTime,
   normalizePhone as corePhone,
@@ -14,6 +18,8 @@ import {
   clockLabel,
   hasShopInfo,
   invoiceHint,
+  MAX_REGISTER_NO as UI_MAX_REGISTER_NO,
+  MAX_STORE_CODE as UI_MAX_STORE_CODE,
   normalizeInvoiceNumber,
   normalizePaidTime,
   normalizePhone,
@@ -120,7 +126,7 @@ describe("buildDetails / buildPatch", () => {
     };
     expect(buildDetails(form)).toEqual({
       ok: true,
-      value: { paid_time: "14:32", merchant_phone: "03-0000-0000", merchant_address: "東京都〇〇区〇〇1-2-3", invoice_number: "T0000000000000", clerk_name: null, receipt_no: null },
+      value: { paid_time: "14:32", merchant_phone: "03-0000-0000", merchant_address: "東京都〇〇区〇〇1-2-3", invoice_number: "T0000000000000", clerk_name: null, receipt_no: null, register_no: null, store_code: null },
     });
   });
   it("不正な値は、保存せずエラーの文を返す", () => {
@@ -129,9 +135,9 @@ describe("buildDetails / buildPatch", () => {
     expect(buildPatch({ ...base, paid_time: "25:00" }, [], false)).toMatchObject({ ok: false });
     expect(buildPatch({ ...base, merchant_phone: "abc" }, [], false)).toMatchObject({ ok: false });
   });
-  it("PATCH に6項目が含まれる(全部空でも null を送り、画面で消した値が空になる)", () => {
+  it("PATCH に8項目が含まれる(全部空でも null を送り、画面で消した値が空になる)", () => {
     const r = buildPatch({ ...emptyTxForm("2026-10-11"), amount: "100" }, [], false);
-    expect(r.ok && r.value).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null });
+    expect(r.ok && r.value).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null });
   });
   it("取引からフォームの文字列にする", () => {
     const tx: TransactionView = {
@@ -151,16 +157,18 @@ describe("buildDetails / buildPatch", () => {
       invoice_number: "T0000000000000",
       clerk_name: null,
       receipt_no: "A-1",
+      register_no: "0005",
+      store_code: "007832",
       items: [],
       tax_lines: [],
     };
-    expect(txFormFromView(tx)).toMatchObject({ paid_time: "09:05", merchant_phone: "03-0000-0000", merchant_address: "", invoice_number: "T0000000000000", clerk_name: "", receipt_no: "A-1" });
+    expect(txFormFromView(tx)).toMatchObject({ paid_time: "09:05", merchant_phone: "03-0000-0000", merchant_address: "", invoice_number: "T0000000000000", clerk_name: "", receipt_no: "A-1", register_no: "0005", store_code: "007832" });
   });
 });
 
 describe("表示", () => {
-  const none = { merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null };
-  it("店舗の情報: 5項目が全部空ならブロックを出さない", () => {
+  const none = { merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null };
+  it("店舗の情報: 7項目が全部空ならブロックを出さない", () => {
     expect(hasShopInfo(none)).toBe(false);
     expect(hasShopInfo({ ...none, merchant_phone: "  " })).toBe(false);
     for (const k of Object.keys(none) as (keyof typeof none)[]) expect(hasShopInfo({ ...none, [k]: "x" }), k).toBe(true);
@@ -200,5 +208,33 @@ describe("コピーのボタン", () => {
   it("メッセージ", () => {
     expect(copyMessage("copied", "住所")).toBe("住所をコピーしました");
     expect(copyMessage("selected", "住所")).toContain("選択しました");
+  });
+});
+
+describe("レジ番号・店番号", () => {
+  it("サーバー(core)と同じ上限(30文字)・前後の空白を除く・空欄は値なし", () => {
+    expect(UI_MAX_REGISTER_NO).toBe(MAX_REGISTER_NO);
+    expect(UI_MAX_STORE_CODE).toBe(MAX_STORE_CODE);
+    for (const [raw, ok] of [["0005", true], [" 007832 ", true], ["1".repeat(30), true], ["1".repeat(31), false]] as const) {
+      expect(parseText(raw, UI_MAX_REGISTER_NO, "レジ番号").ok, raw).toBe(ok);
+      expect(registerNoField.safeParse(raw).success, raw).toBe(ok);
+      expect(storeCodeField.safeParse(raw).success, raw).toBe(ok);
+    }
+    expect(parseText("  ", UI_MAX_STORE_CODE, "店番号")).toEqual({ ok: true, value: null });
+    expect(parseText(" 0005 ", UI_MAX_REGISTER_NO, "レジ番号")).toEqual({ ok: true, value: "0005" });
+  });
+
+  it("buildDetails: 入力を前後の空白なしで API の入力にする。長すぎるとエラーの文", () => {
+    const form = { ...emptyTxForm("2026-10-11"), amount: "100", register_no: " 0005 ", store_code: "007832", receipt_no: "P20261003152814" };
+    const r = buildDetails(form);
+    expect(r.ok && r.value).toMatchObject({ register_no: "0005", store_code: "007832", receipt_no: "P20261003152814" });
+    expect(buildPatch({ ...form, register_no: "1".repeat(31) }, [], false)).toEqual({ ok: false, error: "レジ番号は30文字以内にしてください。" });
+    expect(buildPatch({ ...form, store_code: "1".repeat(31) }, [], false)).toEqual({ ok: false, error: "店番号は30文字以内にしてください。" });
+  });
+
+  it("店舗の情報のブロックは、レジ番号・店番号だけでも出す", () => {
+    const none = { merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null };
+    expect(hasShopInfo({ ...none, register_no: "0005" })).toBe(true);
+    expect(hasShopInfo({ ...none, store_code: "007832" })).toBe(true);
   });
 });

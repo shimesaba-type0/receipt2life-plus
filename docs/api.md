@@ -85,13 +85,26 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 | `merchant_address` | 店の住所。200文字まで |
 | `invoice_number` | 適格請求書発行事業者の登録番号。全角・小文字の t・ハイフンや空白入りは正規化し、`T` + 数字13桁でなければ 400(「T と数字13桁で入力してください」) |
 | `clerk_name` | 対応した店員の名前(担当・責任者・レジ)。50文字まで |
-| `receipt_no` | レシート番号・伝票番号。50文字まで |
+| `receipt_no` | レシート番号・伝票番号(例: P20261003152814)。50文字まで |
+| `register_no` | レジ番号(例: 0005)。前後の空白は除き、30文字まで |
+| `store_code` | 店番号・店舗コード(例: 007832)。前後の空白は除き、30文字まで |
 
 - `TransactionView` に常に含まれる(なしは `null`)。`GET /api/transactions/:id`、`GET /api/day/:date`、`GET /api/home` の取引、`POST` / `PATCH` の戻りにも含まれる
 - `NewTransaction`: 省略または `null` で値なし。`TransactionPatch`: 省略は変更なし、`null` で空にする(空文字は 400)
 - 重複判定(`dedup_hash`): `paid_time` がある取引は `日付|金額|店名|時刻`。時刻が違えば、同じ日・同じ店・同額でも別の取引として登録できる。時刻なしは従来どおり
 - `GET /api/day/:date` の `transactions` は、決済時刻の昇順(時刻なしは末尾、同じ時刻・時刻なしどうしは登録順)
+- `register_no` / `store_code` は `dedup_hash` に含めない(重複判定は変わらない)。migration `0013`(列の追加のみ。既存の取引は `null`)
 - 検索の `keyword` は MCP の `list_transactions` にある(Web UI 用の API には足していない)
+
+## 店名の候補
+
+- `GET /api/merchants?q=&category=&limit=`: 過去の取引(`transactions`)から店名ごとにまとめた候補。取引入力の店名欄の絞り込みに使う。MCP のツールは作らない(AI は `list_transactions` の `keyword` で足りる)
+- `q`: 前後の空白を除く。空・省略なら「よく使う順」の上位。店名は部分一致(大文字小文字・全角半角・ひらがなカタカナ・空白の違いを区別しない)。電話番号は数字だけで比べる(ハイフン・括弧の有無を無視し、一部でも可)。住所・カテゴリ名も部分一致。`%` `_` `\` は文字として扱う。100文字まで
+- `category`: カテゴリ名(完全一致)。その店のいちばん多く使ったカテゴリがこれの店だけに絞る
+- `limit`: 既定8、最大20。範囲外・整数でなければ 400(`limit`)
+- 戻り(`MerchantsData`): `merchants` の各行は `merchant`(店名。最新の取引の表記)、`count`(取引の件数)、`last_date`(最後に使った日)、`category`・`account`(いちばん多く使ったカテゴリ名・口座名。同数なら新しいほう。なしは `null`)、`phone`・`address`・`invoice_number`(項目ごとに、値のある最新の取引から。なしは `null`)
+- 並び: (1) 店名が前方一致、(2) `count` の多い順、(3) `last_date` の新しい順。`merchant` が `NULL`・空白だけの取引は除く。表記ゆれ(全角半角・大文字小文字・かな)は同じ店にまとめる
+- 他の `/api/*` と同じく `Cache-Control: no-store`。画面側は約150msのデバウンスで呼び、短時間キャッシュが効く
 
 ## カテゴリ(大分類の下のサブカテゴリ)
 

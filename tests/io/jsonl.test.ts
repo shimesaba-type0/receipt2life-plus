@@ -81,6 +81,8 @@ describe("exportJsonl", () => {
       invoice_number: null,
       clerk_name: null,
       receipt_no: null,
+      register_no: null,
+      store_code: null,
       created_at: NOW.toISOString(),
       updated_at: NOW.toISOString(),
       tax_lines: [],
