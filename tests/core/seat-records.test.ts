@@ -17,14 +17,26 @@ async function add(over: Record<string, unknown> = {}) {
 describe("addSeatRecord", () => {
   it("登録して、全項目を返す", async () => {
     const r = await add();
-    expect(r).toEqual({ id: expect.any(String), ...base, title: null, transaction_id: null, created_at: expect.any(String) });
-    expect(await db().prepare("SELECT venue, screen, seat, rating, note FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({
-      venue: "A映画館",
-      screen: "スクリーン5",
+    expect(r).toEqual({
+      id: expect.any(String),
+      ...base,
+      venue_id: expect.any(String),
+      screen_id: expect.any(String),
+      screen_note: null,
+      title: null,
+      transaction_id: null,
+      created_at: expect.any(String),
+    });
+    // 会場とスクリーンは別のレコードで、座席の記録は id で参照する
+    expect(await db().prepare("SELECT venue_id, screen_id, seat, rating, note FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({
+      venue_id: r.venue_id,
+      screen_id: r.screen_id,
       seat: "F-5",
       rating: 4,
       note: "見やすい",
     });
+    expect(await db().prepare("SELECT name FROM venues WHERE id = ?").bind(r.venue_id).first()).toEqual({ name: "A映画館" });
+    expect(await db().prepare("SELECT name, venue_id, note FROM screens WHERE id = ?").bind(r.screen_id).first()).toEqual({ name: "スクリーン5", venue_id: r.venue_id, note: null });
   });
 
   it("必須は date・venue・seat だけ。任意項目は null で保存し、前後の空白は除く", async () => {
@@ -206,7 +218,7 @@ describe("updateSeatRecord", () => {
     expect(res).toMatchObject({ ok: true, seat_record: { id: r.id, seat: "G-7", rating: 2, venue: "A映画館", screen: "スクリーン5", note: "見やすい" } });
     const cleared = await updateSeatRecord(db(), { id: r.id, screen: null, rating: null, note: null });
     expect(cleared).toMatchObject({ ok: true, seat_record: { screen: null, rating: null, note: null, seat: "G-7" } });
-    expect(await db().prepare("SELECT screen, rating, note, created_at FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ screen: null, rating: null, note: null, created_at: r.created_at });
+    expect(await db().prepare("SELECT screen_id, rating, note, created_at FROM seat_records WHERE id = ?").bind(r.id).first()).toEqual({ screen_id: null, rating: null, note: null, created_at: r.created_at });
   });
 
   it("title を直せる。null や空文字で消せ、省略すると変えない", async () => {

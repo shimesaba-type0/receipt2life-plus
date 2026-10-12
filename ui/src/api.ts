@@ -26,6 +26,8 @@ import type {
   PhotoView,
   SeatRecordPatch,
   SeatRecordsData,
+  VenuesData,
+  SeatRecordSaved,
   SeatRecordView,
   TransactionDeleted,
   TransactionDetailData,
@@ -132,9 +134,10 @@ export function getSeatRecords(filter: { date?: string; title?: string; venue?: 
   const qs = params.toString();
   return request<SeatRecordsData>("GET", `/api/seat-records${qs ? `?${qs}` : ""}`);
 }
-export const addSeatRecord = (record: NewSeatRecord) => request<{ seat_record: SeatRecordView; message: string }>("POST", "/api/seat-records", record);
-export const updateSeatRecord = (id: string, patch: SeatRecordPatch) =>
-  request<{ seat_record: SeatRecordView; message: string }>("PATCH", `/api/seat-records/${encodeURIComponent(id)}`, patch);
+export const addSeatRecord = (record: NewSeatRecord) => request<SeatRecordSaved>("POST", "/api/seat-records", record);
+export const updateSeatRecord = (id: string, patch: SeatRecordPatch) => request<SeatRecordSaved>("PATCH", `/api/seat-records/${encodeURIComponent(id)}`, patch);
+// 会場とスクリーンの一覧(フォームの候補に使う)
+export const getVenues = () => request<VenuesData>("GET", "/api/venues");
 export const deleteSeatRecord = (id: string) => request<{ deleted: SeatRecordView; message: string }>("DELETE", `/api/seat-records/${encodeURIComponent(id)}`);
 
 // バックアップ(JSONL)の読み込み。本文はファイルの中身そのまま(JSONLかJSON配列)。上限の検査は呼び出し側で済ませる

@@ -100,8 +100,13 @@ export interface SeatRecordView {
   date: string;
   // 作品名・公演名(映画のタイトル、ライブ名など。100文字まで)。なければ null
   title: string | null;
+  // 会場名・スクリーン名(名前)と、その id(会場・スクリーンは別のレコード)
   venue: string;
+  venue_id: string;
   screen: string | null;
+  screen_id: string | null;
+  // そのスクリーンの特徴(screens.note)。スクリーンがない・noteがなければ null
+  screen_note: string | null;
   seat: string;
   // 席の評価(整数1〜5、5が最良)。未評価は null
   rating: number | null;
@@ -120,6 +125,26 @@ export interface SeatSummaryRow {
   count: number;
   rated_count: number;
   avg_rating: number | null;
+}
+
+// 会場とその下のスクリーン(席選びの参考用の件数・平均評価つき。avg_rating は小数1桁、評価がなければ null)
+export interface ScreenSummary {
+  id: string;
+  name: string;
+  // そのスクリーンの特徴(例: 前方は首が疲れる)
+  note: string | null;
+  record_count: number;
+  rated_count: number;
+  avg_rating: number | null;
+}
+
+export interface VenueSummary {
+  id: string;
+  name: string;
+  record_count: number;
+  rated_count: number;
+  avg_rating: number | null;
+  screens: ScreenSummary[];
 }
 
 export interface SummaryRow {
@@ -408,4 +433,30 @@ export interface SeatRecordPatch {
   rating?: number | null;
   note?: string | null;
   transaction_id?: string | null;
+}
+
+// POST /api/seat-records と PATCH の戻り: created_venue / created_screen は、会場・スクリーンを新規に作ったか
+export interface SeatRecordSaved {
+  seat_record: SeatRecordView;
+  created_venue: boolean;
+  created_screen: boolean;
+  message: string;
+}
+
+// GET /api/venues: 会場ごとにスクリーンと、記録の件数・平均評価。フォームの候補にも使う
+export interface VenuesData {
+  count: number;
+  venues: VenueSummary[];
+  message: string;
+}
+
+// PATCH /api/venues/:id の入力(会場名の変更。戻りは venue と message)
+export interface VenuePatch {
+  name: string;
+}
+
+// PATCH /api/screens/:id の入力(指定した項目だけ変える。note は null か空文字で消去。戻りは screen と message)
+export interface ScreenPatch {
+  name?: string;
+  note?: string | null;
 }

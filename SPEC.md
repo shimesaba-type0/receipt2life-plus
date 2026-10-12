@@ -120,7 +120,9 @@ receipt2life/
 **accounts**: id, name(UNIQUE)。現金、カード、Suica程度のラベル。残高は持たない
 **events**: id, start_date, end_date(単日はNULL), title, note, color(red / orange / green / blue / purple のいずれか。色コードはUI側)
 **attachments**: id, r2_key, date, transaction_id, event_id, caption, created_at。date、transaction_id、event_id のうち1つ以上を持つ
-**seat_records**(座席の記録。migration 0008、`title` は 0009): id, date(必須), title(作品名・公演名。任意), venue(必須), screen, seat(必須), rating(1〜5), note, transaction_id(取引が消えたらNULL), created_at。第13節「フェーズ5(座席の記録)」
+**venues**(会場。migration 0010): id, name(UNIQUE。完全一致), created_at
+**screens**(スクリーン・ホール。migration 0010): id, venue_id(venues への FK), name, note(そのスクリーンの特徴。任意。例「前方は首が疲れる」), created_at。(venue_id, name) は UNIQUE
+**seat_records**(座席の記録。migration 0008、`title` は 0009、会場・スクリーンの切り出しは 0010): id, date(必須), title(作品名・公演名。任意), venue_id(必須。venues への FK), screen_id(任意。screens への FK), seat(必須), rating(1〜5), note, transaction_id(取引が消えたらNULL), created_at。旧い `venue` / `screen`(文字列)の列は 0010 で venues / screens に移して無くなった。入出力は従来どおり venue / screen を名前で受け渡す。第13節「フェーズ5(座席の記録)」「会場とスクリーンを別レコードに分けた」
 
 収入は持たない(後から取引に種別の列を足す)。
 
@@ -128,7 +130,7 @@ receipt2life/
 
 Streamable HTTPで、ステートレスに実装する。ツールの説明文とスキーマがAIへの仕様書になるので、項目の意味、必須と任意、選べる値を必ず書く。
 
-現在は26個(取引4、集計・参照2、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3、座席の記録4)。`src/mcp/tools/*` が正。
+現在は29個(取引4、集計・参照2、カテゴリ管理4、口座管理3、出来事3、写真3、リンク3、座席の記録4、会場・スクリーン3)。`src/mcp/tools/*` が正。
 
 | ツール | 役割 |
 | --- | --- |
@@ -142,8 +144,9 @@ Streamable HTTPで、ステートレスに実装する。ツールの説明文�
 | add_event / update_event / list_events | 日付や期間のメモ(色つき) |
 | create_photo_upload_link / list_photos / get_photos | 写真の登録は Web UI の /photos/add へのリンクを返す。一覧と画像の取得 |
 | add_link / list_links / delete_link | Xの投稿・YouTubeの動画のリンク |
-| add_seat_record / list_seat_records / update_seat_record / delete_seat_record | 映画館などの座席の記録(会場・スクリーン・座席・評価1〜5・一言)。一覧は venue・screen・seat ごとの平均評価(summary)つき。次の席選びの参考にする |
-| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール26個には含まれない。入れるかは第13節の未決事項 |
+| add_seat_record / list_seat_records / update_seat_record / delete_seat_record | 映画館などの座席の記録(会場・スクリーン・座席・評価1〜5・一言)。venue / screen は名前で受け、無ければ会場・スクリーンを自動で作る(応答の `created_venue` / `created_screen`)。一覧は venue・screen・seat ごとの平均評価(summary)つき。次の席選びの参考にする |
+| list_venues / update_venue / update_screen | 会場とその下のスクリーンの一覧(記録件数・平均評価・スクリーンの特徴 note つき)、会場名の変更、スクリーン名の変更と note の設定・消去。削除のツールはない。登録前に `list_venues` で既存の名前を確かめ、新しい名前を作る前にユーザーに確認する |
+| query(未実装・候補) | 読み取り専用のSELECT。行数上限あり。現在のツール29個には含まれない。入れるかは第13節の未決事項 |
 
 - **重複**: dedup_hash が既存と一致したら、登録せずに既存のIDを返して警告する。同日同額の正当な購入があり得るので、`allow_duplicate: true` で強制登録できるようにする
 - **検証**: 金額は整数、日付はISO形式、未来日付と極端な金額は拒否。エラーは何が悪いかを文章で返し、AIが直して再送できるようにする
@@ -208,7 +211,7 @@ AIで読み取る場所ではなく、カレンダーで振り返りながら、
 
 優先順位は JSONL > Markdown > HTML。
 
-- **JSONL(+写真)**: 完全バックアップ。1行1レコードで、`type`(transaction / item / event / attachment / link / seat_record)で区別する。写真は photos フォルダに入れ、JSONLと一緒にzipにする
+- **JSONL(+写真)**: 完全バックアップ。1行1レコードで、`type`(transaction / item / event / attachment / link / screen / seat_record)で区別する。写真は photos フォルダに入れ、JSONLと一緒にzipにする
 - **Markdown**: 月、年、期間メモの期間から範囲を選ぶ。サマリ、カテゴリ内訳(表とMermaidの円グラフ)、カレンダー、期間メモ、日別明細。メモの色は🟥🟧🟩🟦🟪で再現し、写真は相対リンクにする
 - **HTML**: MarkdownをHTMLに変換してCSSを当てた1ファイルだけ。見た目の再現にはこだわらない
 - **インポート**: JSONL(とJSON配列)を受け付け、行ごとに結果(成功、重複スキップ、エラー理由)を返す。add_transactions は全件成功か全件失敗、インポートは行単位の部分成功を許す
@@ -354,10 +357,10 @@ backup/
   - 項目: `id`, `date`(YYYY-MM-DD・必須), `title`(任意。作品名・公演名。下の追記を参照), `venue`(必須), `screen`(任意), `seat`(必須。例「F-5」), `rating`(任意。整数1〜5、5が最良。範囲外・小数は Zod エラー), `note`(任意の一言), `transaction_id`(任意。取引への紐づけ), `created_at`。当初は作品名を持たなかったが、末尾の追記で `title` を足した。migration は `0008_seat_records.sql`(index は venue+date、date、transaction_id)
   - 上限・トリム: 前後の空白を除き、空は不可(任意項目は省略か、更新時の `null` で消す)。`venue` 100文字・`screen` 100文字・`seat` 50文字(ID・名前の流儀)、`note` 200文字(リンクの title と同じ。events のメモ1000字ほど長くしない「一言」)
   - 取引との関係: `transaction_id` は `REFERENCES transactions(id) ON DELETE SET NULL`。取引を削除しても座席の記録は残り、紐づけだけ外れる(リンク・写真のように連れて消さない。席の評価は取引と独立した財産のため)。座席の記録の削除で取引は消えない。存在しない取引の指定は 400
-  - ツール(MCP。ツールは22個から26個に): `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`。説明文に「登録前に `list_seat_records` で既存の会場名・スクリーン名を確認して、同じ表記にそろえる」「ユーザーが言った席が評価されていたか(rating・note)を、次の席選びの参考として要約して伝える」と書いた
+  - ツール(MCP。ツールは22個から26個に): `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record`。説明文に「登録前に `list_venues` で既存の会場・スクリーンを確認して、同じ名前を使う。新しい名前を作る前にユーザーに確認する」(当初は `list_seat_records` で確認する書き方だったが、会場とスクリーンを別レコードに分けたときに改めた)「ユーザーが言った席が評価されていたか(rating・note)を、次の席選びの参考として要約して伝える」と書いた
   - 一覧: 絞り込み(すべて AND)は `venue` / `screen` / `seat`(完全一致。あいまい検索はしない。表記は登録時にそろえる運用)、`min_rating` / `max_rating`(評価なしは除かれる)、`from` / `to`、`transaction_id`。並びは `date` の新しい順(同じ日は登録の新しい順)。`limit` は既定100・最大500。結果は `count`(絞り込みに合う全件の数)、`records`、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。平均は小数1桁、評価がなければ null。`limit` に関わらず全件で集計。最大200行)、`truncated`
   - API: `GET /api/seat-records`(クエリは `date`=その日だけ、`venue`、`screen`、`seat`、`min_rating`、`max_rating`、`from`、`to`、`transaction_id`、`limit`)、`POST /api/seat-records`、`PATCH /api/seat-records/:id`、`DELETE /api/seat-records/:id`。既存ガード(同一オリジン、JSON必須、長すぎる id は404)に乗せた。`GET /api/day/:date` に `seat_records`(その日の分、登録順)を足した(契約 `src/api/contract.ts` と型を更新)
-  - 画面: 日の詳細(`/day/:date`)に「座席の記録」のカード(一覧、追加・編集・削除のフォーム)。会場名とスクリーン名は `<datalist>` で既存の名前の候補から選べて、入力もできる(候補は `GET /api/seat-records?limit=1` の `summary` から)。評価は「★1〜★5」の文字入りのボタン(`aria-pressed`、もう一度押すと外れる。色だけに頼らない)、タップ領域は44px以上。一覧の評価は「★4」(未評価は「評価なし」)。PC幅の詳細ペイン(DayPane)にも読み取り専用で出す。純粋な部分は `ui/src/pages/seatRecordLogic.ts`
+  - 画面: 日の詳細(`/day/:date`)に「座席の記録」のカード(一覧、追加・編集・削除のフォーム)。会場名とスクリーン名は `<datalist>` で既存の名前の候補から選べて、入力もできる(候補は当初 `GET /api/seat-records?limit=1` の `summary` から作っていたが、会場とスクリーンを別レコードに分けたあとは `GET /api/venues` から作る。末尾の追記を参照)。評価は「★1〜★5」の文字入りのボタン(`aria-pressed`、もう一度押すと外れる。色だけに頼らない)、タップ領域は44px以上。一覧の評価は「★4」(未評価は「評価なし」)。PC幅の詳細ペイン(DayPane)にも読み取り専用で出す。純粋な部分は `ui/src/pages/seatRecordLogic.ts`
   - バックアップ: JSONL に `type: "seat_record"` を足した(エクスポートは link の後。インポートは取引の後に取り込む)。既存の type と形式は変えない。取り込みは行ごとに検証し、同じ `id` は `skipped_exists`、存在しない `transaction_id` はその行だけエラー(リンクと同じ流儀)。`docs/backup.md` に追記
   - テスト基盤: 各テストの前に `seat_records` も空にする(`tests/setup.ts`)
   - 作品名を追加した。直前の「作品名は持たない」を改める(ユーザー指示: 「明細は明細。映画・映画館の情報は映画館情報。作品名を明細として終わらせたくない」。映画だけでなくライブなど他の催しの名前も入れられるようにする)。以下、項目ごと
@@ -365,5 +368,15 @@ backup/
   - 上限・トリム: 100文字(`venue` と同じ)。前後の空白を除き、空文字(空白だけを含む)は未指定として扱う(追加と取り込みは NULL。更新は消去)。更新は `note` などと同じく、省略すると変えず、`null` でも消せる(空文字でも消える。他の任意項目は空文字がエラーだが、画面のフォームの都合で `title` は許す)
   - 一覧: 絞り込みに `title`(部分一致。大文字小文字は SQLite の LIKE の既定。`%` `_` `\` は文字として扱い、キーワード検索の `escapeLike` を使う)を足した。他の絞り込みは完全一致のまま。`records` の各行に `title` が入る。`summary`(venue・screen・seat ごとの集計)の形は変えない。MCP のツール数は26のまま、ツール名も変えない(add / update / list の入力と説明文だけ更新)
   - API: `POST` / `PATCH` / `GET`(`title` クエリ)/ `GET /api/day/:date` の `seat_records` に反映。契約 `src/api/contract.ts` と UI の型を更新
-  - 画面: 日の詳細のフォームに「作品名・公演名(任意)」を会場名の前に足した(100文字)。一覧の行は、作品名があれば太めの1行目に出し、会場・スクリーン、座席・★評価、一言を続ける。作品名がなければ従来どおり会場から。PC幅の DayPane の一覧も同じ表示(`SeatRecordLine` を共通で使う)。読み上げの説明は作品名を先頭に付ける
+  - 画面: 日の詳細のフォームに「作品名・公演名(任意)」を会場名の前に足した(100文字)。一覧の行は、作品名があれば太めの1行目に出し、会場・スクリーン、座席・★評価、一言を続ける。作品名がなければ従来どおり会場から。PC幅の DayPane の一覧も同じ表示(`SeatRecordLine` を共通で使う)。読み上げの説明は作品名を先頭に付ける(→ 会場・スクリーンを別の行にする形に、末尾の追記で改めた)
   - バックアップ: `seat_record` の行に `title` を含める(列は `date` の次)。`title` の無い旧形式の行もインポートできる(後方互換。`title` は NULL)。空文字の `title` は未設定、101文字以上はその行だけエラー
+- 会場とスクリーンを別のレコードに分けた(ユーザー指示: 「シアター名とスクリーン名は別データすぎる。レコードを分けよう」)。理由: 表記ゆれ防止と、スクリーンごとの情報(note)を持つため。venue / screen は名前で受ける後方互換。以下、項目ごと
+  - テーブル: `venues`(id, name UNIQUE, created_at)、`screens`(id, venue_id, name, note, created_at。(venue_id, name) UNIQUE)。`seat_records` は `venue_id`(NOT NULL)と `screen_id`(NULL可)を持つ。migration は `0010_venues_screens.sql`。新テーブルを作って移し、旧 `seat_records` を DROP して RENAME する(SQLite/D1 は列の削除・付け替えが面倒なため)。`seat_records` を参照するテーブルは無いので外部キーに触れない。評価・日付の CHECK、`transaction_id` の `ON DELETE SET NULL`、`title` は引き継ぎ、index は venue_id+date、screen_id、date、transaction_id
+  - バックフィル(既存データを失わない): 会場名(前後の空白を除いたもの)ごとに venues を1件(重複は1件にまとめる)、(会場, スクリーン名)ごとに screens を1件(note は NULL)作り、`seat_records` の各行を名前で引き当てて id を入れる。screen が NULL・空白だけの行は `screen_id = NULL`。id は SQL 内で `lower(hex(randomblob(16)))`(アプリの UUID とは形が違うが、不透明な文字列として扱う)。検証は `tests/core/migration-venues.test.ts`(0009 の形のテーブルに旧データを入れてから 0010 を当て、行数・列・名前での引き当て・制約・index を確かめる)
+  - find-or-create: 会場・スクリーンは名前の完全一致(前後の空白は除く。大文字小文字・全角半角は区別する=あいまい一致はしない)で探し、無ければ作る(`src/core/venues.ts`)。`add_seat_record` / `update_seat_record` の `venue` / `screen` は従来どおり名前で受け(入力は後方互換)、応答に `created_venue` / `created_screen`(新規に作ったか)を足し、message にも「会場『X』を新規に作りました(既存の表記と違うなら…)」と書く。AIが表記ゆれに気づくため。MCPの説明文に「登録前に `list_venues` で既存の会場・スクリーンを確認し、同じ名前を使う。新しい名前を作る前にユーザーに確認する」と書いた
+  - 更新: `update_seat_record` で `venue` だけ変えて `screen` を省略したときは、同じスクリーン名を新しい会場の下で探す(無ければ作る)。移して記録がなくなった会場・スクリーンは自動で片づく(スクリーンは note が無いものだけ。会場はスクリーンも記録も無いもの)。名前だけの残骸が、候補や `list_venues` に残らないようにするため。座席の記録を削除したときも同じ。削除のツール・APIは作らない
+  - ツール(MCP。ツールは26個から29個に): `list_venues`(引数なし。会場ごとに `record_count` / `rated_count` / `avg_rating` と、`screens`(`id` / `name` / `note` / 件数 / 平均評価)。席選びの参考)、`update_venue`(`id` と `name`。同じ名前の会場があるとエラー=統合はしない)、`update_screen`(`id` と `name` / `note`。`note` は null か空文字で消去。同じ会場に同じ名前があるとエラー)。`note` は200文字まで。既存4ツールの入力は変えない。`list_seat_records` の絞り込み(`venue` / `screen` は名前の完全一致)と `summary` は名前のまま動く(内部は JOIN)。結果の各 record は `venue`・`screen`(名前)に加えて `venue_id`・`screen_id`・`screen_note` を持つ
+  - API: 既存の `/api/seat-records` の入出力は後方互換(`venue` / `screen` は名前。応答の `SeatRecordView` に `venue_id` / `screen_id` / `screen_note`、POST/PATCH の応答に `created_venue` / `created_screen` が増えただけ)。`GET /api/venues`(会場+スクリーン+件数・平均評価)、`PATCH /api/venues/:id`(`name`)、`PATCH /api/screens/:id`(`name` / `note`)を足した。既存ガード(同一オリジン、JSON必須、長すぎる id は404)に乗せた。`GET /api/day/:date` の `seat_records` は従来の形に上の3項目が増えただけ
+  - 画面: 一覧の行を、1行目=作品名(太字・あれば)、2行目=会場名、3行目=スクリーン名(あれば。スクリーンの note があれば小さく添える)、4行目=座席と評価、5行目=一言、に分けた(PCの詳細ペインも同じ部品)。作品名がないときは会場名を太字にする。フォームの会場名・スクリーン名の候補は `GET /api/venues` から作り、スクリーンは選んだ会場のものだけに絞る(登録のない新しい会場名なら候補なし)。会場・スクリーンの名前変更と note の編集は、画面には作らない(MCP と API のみ)
+  - バックアップ(JSONL): 既存の `type: "seat_record"` は形式を変えない(`venue` / `screen` を名前で持つ。旧いバックアップがそのまま読める)。インポートは名前から venues / screens を find-or-create する。`screen` の note が失われないよう `type: "screen"`(`id`, `venue`=会場名, `name`, `note`, `created_at`)の行を足した。エクスポートは seat_record の直前、インポートも seat_record より前に取り込む(ファイル内の順に関係なく)。同じ id、または同じ(会場, 名前)の screen は `skipped_exists`(既存の note は変えない)。記録もスクリーンも無い会場は書き出されない(往復で作られない)。会場の id・作成日時は書き出さないので、往復で変わってよい
+  - テスト基盤: 各テストの前に `screens` と `venues` も空にする(`seat_records` の後。外部キーの順、`tests/setup.ts`)

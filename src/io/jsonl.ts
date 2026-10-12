@@ -17,7 +17,8 @@ import {
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_URL_LENGTH } from "../core/links";
-import { MAX_NOTE_LENGTH, MAX_SCREEN_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH, MAX_VENUE_LENGTH } from "../core/seat-records";
+import { MAX_NOTE_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
+import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
 import { dedupHash } from "../core/transactions";
 
 // ---- 上限 ----
@@ -65,9 +66,19 @@ const EXPORT_TABLES: TableSpec[] = [
     sql: `SELECT 'link' AS type, id, url, kind, title, date, transaction_id, event_id, created_at
           FROM links WHERE id > ? ORDER BY id LIMIT ?`,
   },
+  // スクリーン(会場の名前、スクリーン名、特徴 note)。会場の id は出さず、名前で持つ(座席の記録と同じ)
   {
-    sql: `SELECT 'seat_record' AS type, id, date, title, venue, screen, seat, rating, note, transaction_id, created_at
-          FROM seat_records WHERE id > ? ORDER BY id LIMIT ?`,
+    sql: `SELECT 'screen' AS type, s.id, v.name AS venue, s.name, s.note, s.created_at
+          FROM screens s JOIN venues v ON v.id = s.venue_id
+          WHERE s.id > ? ORDER BY s.id LIMIT ?`,
+  },
+  // 座席の記録。venue / screen は名前で出す(会場・スクリーンが別のレコードになる前の形式のまま)
+  {
+    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.rating, r.note, r.transaction_id, r.created_at
+          FROM seat_records r
+          JOIN venues v ON v.id = r.venue_id
+          LEFT JOIN screens s ON s.id = r.screen_id
+          WHERE r.id > ? ORDER BY r.id LIMIT ?`,
   },
 ];
 
@@ -85,7 +96,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link → seat_record の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction → item(明細)→ attachment → link → screen → seat_record の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -134,7 +145,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "seat_record"] as const;
+const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -207,6 +218,15 @@ const seatRecordSchema = z.strictObject({
   created_at: timestampField.optional(),
 });
 
+// スクリーン(会場の名前・スクリーン名・特徴 note)。座席の記録より前に取り込む。会場が無ければ作る
+const screenSchema = z.strictObject({
+  id: idField.optional(),
+  venue: z.string().trim().min(1).max(MAX_VENUE_LENGTH),
+  name: z.string().trim().min(1).max(MAX_SCREEN_LENGTH),
+  note: z.string().trim().min(1).max(MAX_SCREEN_NOTE_LENGTH).optional(),
+  created_at: timestampField.optional(),
+});
+
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function tooLarge(error: string): ImportResponse {
@@ -259,7 +279,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "seat_records", ids: string[]): Promise<Set<string>> {
+async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "screens" | "seat_records", ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (const part of chunks([...new Set(ids)], IN_CHUNK)) {
     const { results } = await db
@@ -760,6 +780,72 @@ async function importLinks(db: D1Database, entries: Entry[], report: Report, now
   await insertAll(db, pending, report);
 }
 
+// 会場・スクリーンを名前から find-or-create して、座席の記録を入れる(いっしょに成功するか、いっしょに失敗する)
+function seatRecordStatements(db: D1Database, id: string, d: z.infer<typeof seatRecordSchema>, nowIso: string): D1PreparedStatement[] {
+  const createdAt = d.created_at ?? nowIso;
+  const statements = [db.prepare("INSERT OR IGNORE INTO venues (id, name, created_at) VALUES (?, ?, ?)").bind(crypto.randomUUID(), d.venue, createdAt)];
+  if (d.screen !== undefined) {
+    statements.push(
+      db
+        .prepare("INSERT OR IGNORE INTO screens (id, venue_id, name, note, created_at) SELECT ?, v.id, ?, NULL, ? FROM venues v WHERE v.name = ?")
+        .bind(crypto.randomUUID(), d.screen, createdAt, d.venue),
+    );
+  }
+  const screenId = d.screen === undefined ? "NULL" : "(SELECT s.id FROM screens s JOIN venues v ON v.id = s.venue_id WHERE v.name = ? AND s.name = ?)";
+  statements.push(
+    db
+      .prepare(
+        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, rating, note, transaction_id, created_at)
+         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?)`,
+      )
+      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.rating ?? null, d.note ?? null, d.transaction_id ?? null, createdAt),
+  );
+  return statements;
+}
+
+async function importScreens(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
+  if (entries.length === 0) return;
+  const valid: { entry: Entry; id: string; given: boolean; data: z.infer<typeof screenSchema> }[] = [];
+  for (const entry of entries) {
+    const r = screenSchema.safeParse(entry.record);
+    if (!r.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
+      continue;
+    }
+    valid.push({ entry, id: r.data.id ?? crypto.randomUUID(), given: r.data.id !== undefined, data: r.data });
+  }
+
+  const existing = await existingIds(db, "screens", valid.filter((v) => v.given).map((v) => v.id));
+  const seen = new Set<string>();
+  const seenKeys = new Set<string>();
+  const pending: Pending[] = [];
+  for (const v of valid) {
+    // 同じ id、または同じ(会場, スクリーン名)が既にあればスキップ(既存の note は変えない)
+    const key = JSON.stringify([v.data.venue, v.data.name]);
+    const sameName = seenKeys.has(key)
+      ? true
+      : (await db.prepare("SELECT 1 AS x FROM screens s JOIN venues v ON v.id = s.venue_id WHERE v.name = ? AND s.name = ?").bind(v.data.venue, v.data.name).first()) !== null;
+    if (existing.has(v.id) || seen.has(v.id) || sameName) {
+      report(v.entry, { status: "skipped_exists", id: v.id, message: `会場「${v.data.venue}」のスクリーン「${v.data.name}」(またはその id)は既にあるためスキップしました` });
+      continue;
+    }
+    seen.add(v.id);
+    seenKeys.add(key);
+    const createdAt = v.data.created_at ?? nowIso;
+    pending.push({
+      entry: v.entry,
+      id: v.id,
+      statements: [
+        db.prepare("INSERT OR IGNORE INTO venues (id, name, created_at) VALUES (?, ?, ?)").bind(crypto.randomUUID(), v.data.venue, createdAt),
+        db
+          .prepare("INSERT INTO screens (id, venue_id, name, note, created_at) VALUES (?, (SELECT id FROM venues WHERE name = ?), ?, ?, ?)")
+          .bind(v.id, v.data.venue, v.data.name, v.data.note ?? null, createdAt),
+      ],
+    });
+  }
+  await insertAll(db, pending, report);
+}
+
 async function importSeatRecords(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
   if (entries.length === 0) return;
   const valid: { entry: Entry; id: string; given: boolean; data: z.infer<typeof seatRecordSchema> }[] = [];
@@ -796,11 +882,7 @@ async function importSeatRecords(db: D1Database, entries: Entry[], report: Repor
     pending.push({
       entry: v.entry,
       id: v.id,
-      statements: [
-        db
-          .prepare("INSERT INTO seat_records (id, date, title, venue, screen, seat, rating, note, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(v.id, v.data.date, v.data.title || null, v.data.venue, v.data.screen ?? null, v.data.seat, v.data.rating ?? null, v.data.note ?? null, v.data.transaction_id ?? null, v.data.created_at ?? nowIso),
-      ],
+      statements: seatRecordStatements(db, v.id, v.data, nowIso),
     });
   }
   await insertAll(db, pending, report);
@@ -808,7 +890,7 @@ async function importSeatRecords(db: D1Database, entries: Entry[], report: Repor
 
 /**
  * JSONL(または JSON 配列)を取り込む。行ごとに結果を返し、一部の行がエラーでも他の行は取り込む。
- * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → seat_record(外部キーの都合)。結果は元の行の順。
+ * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → screen → seat_record(外部キーの都合)。結果は元の行の順。
  */
 export async function importRecords(db: D1Database, text: string, options: ImportOptions = {}): Promise<ImportResponse> {
   if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
@@ -824,7 +906,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], seat_record: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -856,6 +938,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
   await importTransactions(db, byType.transaction, byType.item, report, now);
   await importAttachments(db, byType.attachment, report, nowIso);
   await importLinks(db, byType.link, report, nowIso);
+  await importScreens(db, byType.screen, report, nowIso);
   await importSeatRecords(db, byType.seat_record, report, nowIso);
 
   const summary: ImportSummary = { total: results.length, ok: 0, skipped: 0, errors: 0 };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, SeatRecordView, SeatSummaryRow } from "../../../src/api/contract";
+import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
   UnauthorizedError,
   addEvent,
@@ -12,7 +12,7 @@ import {
   deleteSeatRecord,
   getCategories,
   getDay,
-  getSeatRecords,
+  getVenues,
   photoUrl,
   updateEvent,
   updateLink,
@@ -72,7 +72,7 @@ export function Day(props: { date: string }) {
   const [data, setData] = useState<DayData | null>(null);
   const [cats, setCats] = useState<CategoriesData>({ categories: [], accounts: [] });
   // 会場名・スクリーン名の候補のもと(全期間の座席の記録の集計)
-  const [seatSummary, setSeatSummary] = useState<SeatSummaryRow[]>([]);
+  const [venues, setVenues] = useState<VenueSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,13 +118,13 @@ export function Day(props: { date: string }) {
   }, [viewPhoto]);
 
   // 候補の取得に失敗しても、記録そのものには影響しないので黙って空のままにする
-  async function loadSeatSummary() {
-    const res = await run(() => getSeatRecords({ limit: 1 }));
-    if (res.ok) setSeatSummary(res.value.summary);
+  async function loadVenues() {
+    const res = await run(() => getVenues());
+    if (res.ok) setVenues(res.value.venues);
   }
 
   useEffect(() => {
-    void loadSeatSummary();
+    void loadVenues();
   }, []);
 
   // 保存中の二重送信を防ぐ。成功したら true
@@ -241,7 +241,7 @@ export function Day(props: { date: string }) {
       const res = await action();
       if (!res.ok) return res.message;
       setNotice(successNotice);
-      await Promise.all([load(), loadSeatSummary()]);
+      await Promise.all([load(), loadVenues()]);
       return null;
     } finally {
       busyRef.current = false;
@@ -415,7 +415,7 @@ export function Day(props: { date: string }) {
 
           <PhotosCard date={date} photos={data.photos} disabled={busy} onView={setViewPhoto} onChanged={load} />
 
-          <SeatRecordsCard records={data.seat_records} summary={seatSummary} busy={busy} onAdd={addSeat} onUpdate={saveSeat} onDelete={removeSeat} />
+          <SeatRecordsCard records={data.seat_records} venues={venues} busy={busy} onAdd={addSeat} onUpdate={saveSeat} onDelete={removeSeat} />
 
           <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onDelete={removeLink} />
         </>

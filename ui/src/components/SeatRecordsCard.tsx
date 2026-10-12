@@ -1,13 +1,12 @@
 import { useRef, useState } from "preact/hooks";
-import type { SeatRecordView, SeatSummaryRow } from "../../../src/api/contract";
+import type { SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
   RATINGS,
   SEAT_LIMITS,
   emptySeatForm,
-  headLabel,
-  placeLabel,
   ratingLabel,
   ratingSpoken,
+  seatHeadLines,
   screenSuggestions,
   seatFormFromRecord,
   seatRecordSummary,
@@ -18,17 +17,19 @@ import {
 import "./SeatRecordsCard.css";
 
 // 座席の記録1件の表示(日の詳細とPCの詳細ペインで共通)。評価は「★4」の文字で出す(色に頼らない)
+// 行は、作品名(太字)→会場名→スクリーン名(あれば。特徴 note があれば小さく添える)→座席と評価→一言。会場とスクリーンは別の行にする
 export function SeatRecordLine(props: { record: SeatRecordView }) {
   const { record } = props;
+  const head = seatHeadLines(record);
   return (
     <>
-      {record.title ? (
-        <>
-          <strong class="seat__title">{record.title}</strong>
-          <span class="seat__place">{placeLabel(record)}</span>
-        </>
-      ) : (
-        <span class="seat__place seat__place--head">{headLabel(record)}</span>
+      {head.title && <strong class="seat__title">{head.title}</strong>}
+      <span class={`seat__venue${head.title ? "" : " seat__venue--head"}`}>{head.venue}</span>
+      {head.screen && (
+        <span class="seat__screen">
+          {head.screen}
+          {head.screenNote && <small class="seat__screen-note muted">{head.screenNote}</small>}
+        </span>
       )}
       <span class="seat__line">
         <strong class="seat__seat num">{record.seat}</strong>
@@ -43,7 +44,7 @@ export function SeatRecordLine(props: { record: SeatRecordView }) {
 
 function SeatForm(props: {
   initial: SeatFormValues;
-  summary: SeatSummaryRow[];
+  venues: VenueSummary[];
   busy: boolean;
   error: string | null;
   submitLabel: string;
@@ -54,8 +55,8 @@ function SeatForm(props: {
   const { busy } = props;
   const [f, setF] = useState<SeatFormValues>(props.initial);
   const id = useRef(`st-${Math.random().toString(36).slice(2, 8)}`).current;
-  const venues = venueSuggestions(props.summary);
-  const screens = screenSuggestions(props.summary, f.venue);
+  const venues = venueSuggestions(props.venues);
+  const screens = screenSuggestions(props.venues, f.venue);
   return (
     <form
       class="day__form seat__form"
@@ -170,8 +171,8 @@ function SeatForm(props: {
 // 日の詳細の「座席の記録」。追加・編集・削除ができる。エラーはフォームの近くに出す(失敗は文言を返す。成功は null)
 export function SeatRecordsCard(props: {
   records: SeatRecordView[];
-  // 会場名・スクリーン名の候補のもと(全期間の venue・screen・seat ごとの集計)
-  summary: SeatSummaryRow[];
+  // 会場名・スクリーン名の候補のもと(登録済みの会場と、その下のスクリーン)
+  venues: VenueSummary[];
   busy: boolean;
   onAdd: (f: SeatFormValues) => Promise<string | null>;
   onUpdate: (id: string, f: SeatFormValues) => Promise<string | null>;
@@ -206,7 +207,7 @@ export function SeatRecordsCard(props: {
       {editing === "new" && (
         <SeatForm
           initial={emptySeatForm(records[records.length - 1]?.venue ?? "")}
-          summary={props.summary}
+          venues={props.venues}
           busy={busy}
           error={formError}
           submitLabel="追加"
@@ -222,7 +223,7 @@ export function SeatRecordsCard(props: {
               {editing === r.id ? (
                 <SeatForm
                   initial={seatFormFromRecord(r)}
-                  summary={props.summary}
+                  venues={props.venues}
                   busy={busy}
                   error={formError}
                   submitLabel="保存"
