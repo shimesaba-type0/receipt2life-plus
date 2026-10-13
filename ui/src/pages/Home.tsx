@@ -5,6 +5,7 @@ import { getCategories, getHome } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { DiscountIcon } from "../components/DiscountIcon";
 import { BreakdownCard } from "../components/BreakdownCard";
+import { CompareCard } from "../components/CompareCard";
 import { chipIcon } from "../categoryIcons";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
@@ -130,6 +131,8 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
         </section>
 
         <BreakdownCard title="今月の内訳" note={`${range}・${data.month.count}件を記録`} groups={data.groups} total={data.month.total} emptyText="今月の支出はまだありません。" />
+
+        <CompareCard month={data.month.month} />
 
         <section class="home__recent-section" aria-label="最近の記録">
           <div class="home__section-head home__section-head--outer">

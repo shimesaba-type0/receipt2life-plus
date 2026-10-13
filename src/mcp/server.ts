@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TitleFetcher } from "../core/link-titles";
 import { registerAccountTools } from "./tools/accounts";
 import { registerCategoryTools } from "./tools/categories";
+import { registerCompareTools } from "./tools/compare";
 import { registerEventTools } from "./tools/events";
 import { registerLinkTools } from "./tools/links";
 import { registerPhotoTools } from "./tools/photos";
@@ -24,5 +25,6 @@ export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string
   registerSeatRecordTools(server, db);
   registerSubscriptionTools(server, db);
   registerSearchTools(server, db);
+  registerCompareTools(server, db);
   return server;
 }

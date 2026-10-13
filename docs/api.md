@@ -182,6 +182,10 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - 紐づけ先の取引・出来事が存在しなければ 400。存在しないリンクの id は 404
 - 取引・出来事を削除すると、紐づくリンクもいっしょに消える(リンクがあっても削除は拒否しない)。MCP には `add_link` / `list_links` / `delete_link`
 
+## 月の比較
+
+`GET /api/compare?month=&base=&group_by=&until_day=` 月の比較(読み取り専用)。`month` は比べる月(YYYY-MM。省略で今月)。`base` は `previous`(先月。既定)・`year_ago`(前年の同じ月)・`YYYY-MM`(好きな月。同じ月は400)。`group_by` は `group`(大分類。既定)か `category`。`until_day`(1〜31)を付けると、どちらの月もその日まで(月末を超える日は月末まで)にそろえる。戻りは `month`, `base_month`, `group_by`, `until_day`, `period`, `base_period`, `total`, `base_total`, `diff`(増えたら正), `diff_percent`(比べる側が0円以下は null), `count`, `base_count`, `rows`(各 `key`, `label`, `total`, `base_total`, `diff`, `diff_percent`。今月の金額の大きい順。片方の月にしかない項目も入る)。集計は `summarize` と同じ(明細の行ごと)。MCP は `compare_months`。
+
 ## 検索
 
 `GET /api/search?q=&from=&to=&types=&limit=&offset=` 記録の横断検索(読み取り専用)。`q` は必須で、空白で区切った語(最大5語)をすべて含むものに絞る。取引(店名・電話・住所・メモ・カテゴリ名・明細の名前とメモ)、出来事(タイトル・メモ)、座席の記録(題名・メモ・会場・スクリーン)、リンク(タイトル・説明・URL)、写真(キャプション)に部分一致する(英字の大文字小文字、全角半角、ひらがなカタカナは区別しない。電話番号はハイフンの有無も問わない。漢字と仮名の違いは区別する)。`types` はカンマ区切り(`transaction` / `event` / `seat_record` / `link` / `photo`)。`limit` は既定30、最大100。`offset` で読み飛ばす(昔までさかのぼるページ送り)。戻りは `query`, `total`(条件に合う全件数), `latest_date`, `count`, `offset`, `has_more`(続きがあるか), `hits`(新しい日付から。`type`, `id`, `date`, `title`, `detail`, `amount`(取引だけ), `transaction_id`)。MCP は `search_records`。

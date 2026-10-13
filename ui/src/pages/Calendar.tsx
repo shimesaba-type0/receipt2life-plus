@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { BreakdownCard } from "../components/BreakdownCard";
+import { CompareCard } from "../components/CompareCard";
 import { BrandMark } from "../components/BrandMark";
 import type { CalendarData, EventView, FieldError } from "../../../src/api/contract";
 import { getCalendar } from "../api";
@@ -206,6 +207,8 @@ export function Calendar(props: { month: string | null }) {
           emptyText="この月の支出はありません。"
         />
       )}
+
+      {data && <CompareCard key={month} month={month} />}
 
       <section class="cal__events" aria-label="今月の出来事">
         <h2 class="cal__events-title">今月の出来事</h2>

@@ -719,6 +719,31 @@ export interface DeletedSubscriptionData {
   message: string;
 }
 
+// GET /api/compare?month=&base=&group_by=&until_day=。月の比較(base は previous / year_ago / YYYY-MM)
+export interface CompareRowView {
+  key: string;
+  label: string;
+  total: number;
+  base_total: number;
+  diff: number;
+  diff_percent: number | null;
+}
+export interface CompareData {
+  month: string;
+  base_month: string;
+  group_by: "group" | "category";
+  until_day: number | null;
+  period: { from: string; to: string };
+  base_period: { from: string; to: string };
+  total: number;
+  base_total: number;
+  diff: number;
+  diff_percent: number | null;
+  count: number;
+  base_count: number;
+  rows: CompareRowView[];
+}
+
 // GET /api/search?q=&from=&to=&types=&limit=&offset=(types はカンマ区切り)。記録の横断検索。新しい日付から
 export type SearchHitType = "transaction" | "event" | "seat_record" | "link" | "photo";
 export interface SearchHitView {
