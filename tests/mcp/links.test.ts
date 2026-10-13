@@ -23,10 +23,10 @@ const X_POST = "https://x.com/example_user/status/1234567890";
 const YT = "https://youtu.be/dQw4w9WgXcQ";
 
 describe("MCP リンクのツール", () => {
-  it("tools/list は34個で、リンクの3ツールの説明が具体的", async () => {
+  it("tools/list は35個で、リンクの3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
-    expect(tools).toHaveLength(34);
+    expect(tools).toHaveLength(35);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("add_link").description).toContain("Xの投稿");
     expect(byName("add_link").description).toContain("YouTube");
@@ -53,6 +53,18 @@ describe("MCP リンクのツール", () => {
     expect(text(await callTool("list_links", { date: "2026-10-10" }))).toMatchObject({ count: 0 });
     const gone = await callTool("delete_link", { id: added.link.id });
     expect(gone.body.result.isError).toBe(true);
+  });
+
+  it("update_link で表題を付け・消せる(AI が調べたタイトルを、あとから付ける)。存在しない id はエラー", async () => {
+    const add = text(await callTool("add_link", { url: YT, date: "2026-10-10" }));
+    expect(add.link.title).toBeNull();
+    const up = text(await callTool("update_link", { id: add.link.id, title: "ダミー作品 公式予告編" }));
+    expect(up).toMatchObject({ ok: true, link: { title: "ダミー作品 公式予告編" } });
+    expect(text(await callTool("update_link", { id: add.link.id, title: null }))).toMatchObject({ ok: true, link: { title: null } });
+    expect((await callTool("update_link", { id: "nope", title: "x" })).body.result.isError).toBe(true);
+    const r = await rpc("tools/list");
+    const tool = (r.body.result.tools as { name: string; description: string }[]).find((t) => t.name === "update_link")!;
+    expect(tool.description).toContain("list_links");
   });
 
   it("許可リスト外のURLは、対応サイトと直し方を示すエラー", async () => {

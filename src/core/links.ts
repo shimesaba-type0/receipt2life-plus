@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { checkRefs, onDay } from "./photos";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
-import type { TitleFetcher } from "./link-titles";
+import { TitleFetchError, type TitleFetcher } from "./link-titles";
 import type { CoreOptions } from "./transactions";
 
 // 外部リンク(links)。Xの投稿・YouTubeの動画・Instagramの投稿のURLを、日付・取引・出来事に付ける。
@@ -258,7 +258,12 @@ export async function addLink(db: D1Database, input: unknown, options: AddLinkOp
 
   // 表題が無ければ取りに行く。取れなければ表題なしで登録する(登録は失敗させない)
   let title = m.title ?? null;
-  if (title === null && options.fetchTitle && url.kind !== "instagram") title = await options.fetchTitle(url.kind, url.url).catch(() => null);
+  if (title === null && options.fetchTitle && url.kind !== "instagram") {
+    title = await options.fetchTitle(url.kind, url.url).catch((e: unknown) => {
+      console.log(`link title: ${url.kind} ${e instanceof TitleFetchError ? e.reason : "取得に失敗しました"}`);
+      return null;
+    });
+  }
   const link: LinkView = {
     id: crypto.randomUUID(),
     url: url.url,
@@ -295,9 +300,18 @@ export async function refreshLinkTitle(db: D1Database, input: unknown, fetchTitl
   if (current.kind === "instagram") {
     return { ok: false, errors: [{ field: "title", message: "title: Instagram のタイトルは自動では取得できません(公式の取得方法は事前の登録が必要なため)。「タイトルを編集」で手入力してください" }] };
   }
-  const title = await fetchTitle(current.kind, current.url).catch(() => null);
+  let title: string | null = null;
+  let reason = "タイトルが見つかりませんでした";
+  try {
+    title = await fetchTitle(current.kind, current.url);
+  } catch (e) {
+    if (e instanceof TitleFetchError) reason = e.reason;
+    else reason = "取得に失敗しました";
+    // どこで失敗したかを、ダッシュボードのログに残す(リンクのURLは書かない)
+    console.log(`link title: ${current.kind} ${reason}`);
+  }
   if (title === null) {
-    return { ok: false, errors: [{ field: "title", message: "title: タイトルを取得できませんでした(動画や投稿が非公開・削除されているか、通信に失敗しました)。「タイトルを編集」で手入力できます" }] };
+    return { ok: false, errors: [{ field: "title", message: `title: タイトルを取得できませんでした(${reason})。「タイトルを編集」で手入力できます` }] };
   }
   await db.prepare("UPDATE links SET title = ? WHERE id = ?").bind(title, id).run();
   const link = { ...current, title };

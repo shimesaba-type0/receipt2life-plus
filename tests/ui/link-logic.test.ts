@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LinkView } from "../../src/api/contract";
-import { isSafeLinkHref, linkDisplayText, linkKindLabel, shortenUrl, tweetIdOf } from "../../ui/src/pages/dayLogic";
+import { isSafeLinkHref, linkDisplayText, linkKindLabel, shortenUrl, tweetIdOf, youtubeThumbnailUrl, youtubeVideoIdOf } from "../../ui/src/pages/dayLogic";
 
 const link = (over: Partial<LinkView>): LinkView => ({
   id: "l1",
@@ -77,5 +77,27 @@ describe("Instagram と Xの投稿ID", () => {
     expect(tweetIdOf("http://x.com/example_user/status/1")).toBeNull();
     expect(tweetIdOf("https://x.com.evil.example/u/status/1")).toBeNull();
     expect(tweetIdOf("not a url")).toBeNull();
+  });
+});
+
+describe("YouTube のサムネイル", () => {
+  const ID = "dQw4w9WgXcQ";
+  it("youtubeVideoIdOf: watch・youtu.be・shorts・live から動画のID。再生リストだけ・ほかのサイト・不正な形は null", () => {
+    expect(youtubeVideoIdOf(`https://www.youtube.com/watch?v=${ID}`)).toBe(ID);
+    expect(youtubeVideoIdOf(`https://youtube.com/watch?v=${ID}&t=90`)).toBe(ID);
+    expect(youtubeVideoIdOf(`https://m.youtube.com/watch?v=${ID}`)).toBe(ID);
+    expect(youtubeVideoIdOf(`https://youtu.be/${ID}?t=5`)).toBe(ID);
+    expect(youtubeVideoIdOf(`https://www.youtube.com/shorts/${ID}`)).toBe(ID);
+    expect(youtubeVideoIdOf(`https://www.youtube.com/live/${ID}/`)).toBe(ID);
+    expect(youtubeVideoIdOf("https://www.youtube.com/playlist?list=PLabcdefghijk")).toBeNull();
+    expect(youtubeVideoIdOf("https://www.youtube.com/watch?v=short")).toBeNull();
+    expect(youtubeVideoIdOf(`http://www.youtube.com/watch?v=${ID}`)).toBeNull();
+    expect(youtubeVideoIdOf(`https://youtube.com.evil.example/watch?v=${ID}`)).toBeNull();
+    expect(youtubeVideoIdOf("https://x.com/example_user/status/1")).toBeNull();
+    expect(youtubeVideoIdOf("not a url")).toBeNull();
+  });
+
+  it("youtubeThumbnailUrl: 動画のIDから決まる i.ytimg.com の画像(取りに行かない)", () => {
+    expect(youtubeThumbnailUrl(ID)).toBe(`https://i.ytimg.com/vi/${ID}/mqdefault.jpg`);
   });
 });

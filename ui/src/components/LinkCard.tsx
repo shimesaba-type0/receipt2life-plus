@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { LinkView } from "../../../src/api/contract";
-import { isSafeLinkHref, linkDisplayText, linkKindLabel, tweetIdOf } from "../pages/dayLogic";
+import { isSafeLinkHref, linkDisplayText, linkKindLabel, tweetIdOf, youtubeThumbnailUrl, youtubeVideoIdOf } from "../pages/dayLogic";
 import "./LinkCard.css";
 
 // 種類ごとのアイコン。ブランドロゴの再現ではなく、モノトーンの簡略図形(装飾なので aria-hidden)
@@ -85,7 +85,7 @@ function TweetEmbed(props: { id: string }) {
   );
 }
 
-// リンク1件のカード。埋め込み・画像・サムネイルは出さない(リンクを開くだけ)。タイトルは、登録のときにサーバーが取りに行く(無ければ「タイトルを取得」で付け直せる)
+// リンク1件のカード。YouTube はサムネイルを出す(再生はしない)。ほかは画像を出さない(リンクを開くだけ)。タイトルは、登録のときにサーバーが取りに行く(無ければ「タイトルを取得」で付け直せる)
 export function LinkCard(props: {
   link: LinkView;
   busy: boolean;
@@ -98,6 +98,13 @@ export function LinkCard(props: {
   const [mode, setMode] = useState<"view" | "edit" | "confirm">("view");
   const [embedOpen, setEmbedOpen] = useState(false);
   const tweetId = link.kind === "x" ? tweetIdOf(link.url) : null;
+  // YouTube は、動画のIDからサムネイルを出す(再生はしない。カードを押すと新しいタブで YouTube が開く)
+  const videoId = link.kind === "youtube" ? youtubeVideoIdOf(link.url) : null;
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const thumb =
+    videoId && !thumbFailed ? (
+      <img class="link__thumb" src={youtubeThumbnailUrl(videoId)} alt="" width={160} height={90} loading="lazy" referrerpolicy="no-referrer" onError={() => setThumbFailed(true)} />
+    ) : null;
   const [title, setTitle] = useState(link.title ?? "");
   const inputId = useRef(`lk-${Math.random().toString(36).slice(2, 8)}`).current;
   const text = linkDisplayText(link);
@@ -107,7 +114,7 @@ export function LinkCard(props: {
     <div class="link">
       {isSafeLinkHref(link.url) ? (
         <a class="link__open" href={link.url} target="_blank" rel="noopener noreferrer" aria-label={`${label}のリンクを新しいタブで開く: ${text}`}>
-          <KindIcon kind={link.kind} />
+          {thumb ?? <KindIcon kind={link.kind} />}
           <span class="link__text">
             <span class="link__title">{text}</span>
             <span class="link__kind muted">{label}</span>

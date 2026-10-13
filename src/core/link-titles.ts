@@ -84,23 +84,58 @@ export function oembedEndpoint(kind: Exclude<LinkKind, "instagram">, url: string
   return kind === "youtube" ? `https://www.youtube.com/oembed?format=json&url=${q}` : `https://publish.twitter.com/oembed?omit_script=1&url=${q}`;
 }
 
-// fetchImpl はテスト用の差し替え
+// 取得に失敗した理由(画面とログに出す)。タイトルが取れなかったときに、原因を切り分けるため
+export class TitleFetchError extends Error {
+  constructor(public reason: string) {
+    super(reason);
+    this.name = "TitleFetchError";
+  }
+}
+
+// 手動でたどってよいリダイレクト先(固定のホストだけ)。oEmbed が公式の別のホストに移っていても、取れるようにする
+const REDIRECT_HOSTS = new Set(["www.youtube.com", "youtube.com", "publish.twitter.com", "publish.x.com"]);
+const MAX_REDIRECTS = 2;
+const SERVICE: Record<"youtube" | "x", string> = { youtube: "YouTube", x: "X" };
+
+// fetchImpl はテスト用の差し替え。成功すればタイトル、タイトルが無ければ null、失敗は TitleFetchError(理由つき)を投げる
 export function makeTitleFetcher(fetchImpl: typeof fetch = fetch): TitleFetcher {
   return async (kind, url) => {
     if (kind === "instagram") return null;
+    const service = SERVICE[kind];
+    let endpoint = oembedEndpoint(kind, url);
     try {
-      const res = await fetchImpl(oembedEndpoint(kind, url), {
-        headers: { accept: "application/json" },
-        redirect: "error",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      if (!res.ok) return null;
+      let res: Response | null = null;
+      for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+        res = await fetchImpl(endpoint, { headers: { accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+        if (res.status < 300 || res.status >= 400) break;
+        const location = res.headers.get("location");
+        const next = location ? new URL(location, endpoint) : null;
+        if (!next || next.protocol !== "https:" || !REDIRECT_HOSTS.has(next.hostname)) {
+          throw new TitleFetchError(`${service}の取得先が、想定外の場所(${next?.hostname ?? "不明"})へ移そうとしました`);
+        }
+        endpoint = next.toString();
+        res = null;
+      }
+      if (!res) throw new TitleFetchError(`${service}の取得先の転送が多すぎます`);
+      if (!res.ok) {
+        const hint = res.status === 401 || res.status === 403 ? "(埋め込みが許可されていない、または非公開の可能性)" : res.status === 404 ? "(動画・投稿が見つからない、または削除・非公開)" : res.status === 429 ? "(アクセスが多すぎて制限された)" : "";
+        throw new TitleFetchError(`${service}が ${res.status} を返しました${hint}`);
+      }
       const text = await readLimited(res);
-      if (text === null) return null;
-      const json: unknown = JSON.parse(text);
-      return kind === "youtube" ? titleFromYouTube(json) : titleFromX(json);
-    } catch {
-      return null;
+      if (text === null) throw new TitleFetchError(`${service}の応答が大きすぎます`);
+      let json: unknown;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new TitleFetchError(`${service}の応答を読み取れませんでした`);
+      }
+      const title = kind === "youtube" ? titleFromYouTube(json) : titleFromX(json);
+      if (title === null) throw new TitleFetchError(`${service}の応答にタイトルがありませんでした`);
+      return title;
+    } catch (e) {
+      if (e instanceof TitleFetchError) throw e;
+      const timeout = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+      throw new TitleFetchError(timeout ? `${service}が3秒以内に応答しませんでした` : `${service}への通信に失敗しました`);
     }
   };
 }

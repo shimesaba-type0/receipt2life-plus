@@ -11,3 +11,6 @@
 /* Xの埋め込み(押したときだけ読み込む) */
 .link__embed { margin-top: 8px; min-width: 0; }
 .link__embed-note { margin: 4px 0 0; font-size: 13px; }
+
+/* YouTube のサムネイル(16:9。画像が読み込めなければ出さない) */
+.link__thumb { flex: none; display: block; width: 160px; max-width: 40vw; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--line-soft); }
