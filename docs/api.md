@@ -161,20 +161,21 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 出来事の削除は、MCP には無い(UI 専用)。`core` に `deleteEvent` を足して使う。
 
-## リンク(Xの投稿・YouTubeの動画・Instagramの投稿)
+## リンク(Xの投稿・YouTubeの動画・Instagramの投稿・ウェブのページ)
 
-日付・取引・出来事に、外部リンクを付ける。YouTube のサムネイルは、画面が動画のIDから決まるURL(`i.ytimg.com`)をブラウザで読み込む(サーバーは取りに行かない・保存しない)。ほかの埋め込みや画像は出さない。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため取得しない(`POST /api/links/:id/title` は400)。`kind` は `x` / `youtube` / `instagram`。URLの検証と正規化は `src/core/links.ts`。
+日付・取引・出来事に、外部リンクを付ける。YouTube のサムネイルは、画面が動画のIDから決まるURL(`i.ytimg.com`)をブラウザで読み込む(サーバーは取りに行かない・保存しない)。ほかの埋め込みや画像は出さない。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため取得しない(`POST /api/links/:id/title` は400)。ウェブ(`kind=web`。上の3つ以外の、どのサイトの https のページでもよい)も、サーバーは中身を読みに行かない。タイトル(`title`)と説明文(`description`、500文字まで)は、ページを読んだ AI が MCP の `add_link` / `update_link` で付ける(画面からも手で付けられる)。`POST /api/links/:id/title` は Instagram・ウェブでは400。`kind` は `x` / `youtube` / `instagram` / `web`。URLの検証と正規化は `src/core/links.ts`。
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `POST /api/links` | `NewLink`(`url` 必須、`title?`、`date?` / `transaction_id?` / `event_id?` のうち1つ以上) | `link: LinkView`, `duplicate`, `message` |
-| `PATCH /api/links/:id` | `LinkPatch`(`title` のみ。null で消去) | `link`, `duplicate: false`, `message` |
+| `POST /api/links` | `NewLink`(`url` 必須、`title?`、`description?`、`date?` / `transaction_id?` / `event_id?` のうち1つ以上) | `link: LinkView`, `duplicate`, `message` |
+| `PATCH /api/links/:id` | `LinkPatch`(`title` / `description` のどちらか1つ以上。渡した項目だけ変わる。null で消去) | `link`, `duplicate: false`, `message` |
 | `POST /api/links/:id/title` | なし(タイトルが無いリンクのタイトルを、取りに行って付ける) | `link`, `duplicate: false`, `message`。取得できなければ400(`errors` に理由。いまのタイトルは変わらない)。理由の例: 「YouTubeが 401 を返しました(埋め込みが許可されていない、または非公開の可能性)」「Xが3秒以内に応答しませんでした」 |
 | `DELETE /api/links/:id` | なし | `deleted`, `message` |
 
-- `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube`), `title`, `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)
-- URL: https のみ。`user:pass@` と、443 以外のポートは不可。最大2048文字。ホストは完全一致の許可リスト
+- `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube` / `instagram` / `web`), `title`, `description`, `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)
+- URL: https のみ。`user:pass@` と、443 以外のポートは不可。最大2048文字。X・YouTube・Instagram は、ホストが完全一致のときだけその種類として扱う(偽装ホストは `web` になる)
   - X(`kind=x`): `x.com` / `www.x.com` / `mobile.x.com` / `twitter.com` / `www.twitter.com` / `mobile.twitter.com`。パスは `/<ユーザー名>/status/<数字>`(投稿)か `/<ユーザー名>`(プロフィール)
+  - ウェブ(`kind=web`): 上記以外のホスト。IPアドレス・`localhost`・ドットの無い名前・`.local` などの内部向けホストは不可。`#` 以降と `utm_*` / `fbclid` / `gclid` など追跡用のクエリを消し、そのほかのクエリは残す
   - YouTube(`kind=youtube`): `youtube.com` / `www.youtube.com` / `m.youtube.com` / `music.youtube.com`(`/watch?v=<ID>`、`/shorts/<ID>`、`/live/<ID>`、`/playlist?list=<ID>`)と `youtu.be/<ID>`
 - 正規化: `#` 以降を消す、`utm_*` / `si` / `fbclid` / `feature` を消す(Xは `s` / `t` も消す。YouTubeの `t`(開始位置)は残す)、ホストは小文字(入力のホストのまま保存)
 - 重複: 同じ紐づけ先(date・transaction_id・event_id が全部同じ)に同じ正規化URLがあれば、登録せず既存のリンクを `duplicate: true` で返す(200)

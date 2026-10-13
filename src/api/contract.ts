@@ -127,10 +127,12 @@ export interface PhotoView {
 
 export interface LinkView {
   id: string;
-  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画 / Instagramの投稿)。タイトルは登録のときに取得する(YouTube・Xだけ)
+  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画 / Instagramの投稿 / ウェブのページ)。タイトルは登録のときに取得する(YouTube・Xだけ)。それ以外は AI が付ける
   url: string;
-  kind: "x" | "youtube" | "instagram";
+  kind: "x" | "youtube" | "instagram" | "web";
   title: string | null;
+  // 説明文(AI が読んだ要約など)
+  description: string | null;
   date: string | null;
   transaction_id: string | null;
   event_id: string | null;
@@ -532,14 +534,16 @@ export interface PhotoMeta {
 export interface NewLink {
   url: string;
   title?: string;
+  description?: string;
   date?: string;
   transaction_id?: string;
   event_id?: string;
 }
 
-// PATCH /api/links/:id の入力(表題だけ変えられる。null で消去)
+// PATCH /api/links/:id の入力(表題・説明文のどちらか1つ以上。渡した項目だけ変わる。null で消去)
 export interface LinkPatch {
-  title: string | null;
+  title?: string | null;
+  description?: string | null;
 }
 
 // GET /api/seat-records?date=&title=(部分一致)&venue=&screen=&seat=&seat_class=(部分一致)&min_rating=&max_rating=&from=&to=&transaction_id=&limit=

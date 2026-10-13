@@ -22,6 +22,14 @@ function KindIcon(props: { kind: LinkView["kind"] }) {
       </svg>
     );
   }
+  if (props.kind === "web") {
+    return (
+      <svg class="link__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" />
+      </svg>
+    );
+  }
   return (
     <svg class="link__icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
       <path d="M5 4.5l14 15M19 4.5l-14 15" />
@@ -89,7 +97,7 @@ function TweetEmbed(props: { id: string }) {
 export function LinkCard(props: {
   link: LinkView;
   busy: boolean;
-  onSaveTitle: (id: string, title: string | null) => Promise<boolean>;
+  onSave: (id: string, patch: { title: string | null; description: string | null }) => Promise<boolean>;
   // タイトルが無いリンクのタイトルを、取りに行って付ける(省略するとボタンを出さない)
   onFetchTitle?: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
@@ -106,9 +114,11 @@ export function LinkCard(props: {
       <img class="link__thumb" src={youtubeThumbnailUrl(videoId)} alt="" width={160} height={90} loading="lazy" referrerpolicy="no-referrer" onError={() => setThumbFailed(true)} />
     ) : null;
   const [title, setTitle] = useState(link.title ?? "");
+  const [description, setDescription] = useState(link.description ?? "");
+  const descId = useRef(`ld-${Math.random().toString(36).slice(2, 8)}`).current;
   const inputId = useRef(`lk-${Math.random().toString(36).slice(2, 8)}`).current;
   const text = linkDisplayText(link);
-  const label = linkKindLabel(link.kind);
+  const label = linkKindLabel(link.kind, link.url);
 
   return (
     <div class="link">
@@ -138,17 +148,18 @@ export function LinkCard(props: {
             disabled={busy}
             onClick={() => {
               setTitle(link.title ?? "");
+              setDescription(link.description ?? "");
               setMode("edit");
             }}
           >
-            タイトルを編集
+            タイトル・説明を編集
           </button>
           {tweetId && (
             <button type="button" class="btn" aria-expanded={embedOpen} onClick={() => setEmbedOpen((v) => !v)}>
               {embedOpen ? "投稿を閉じる" : "投稿を表示"}
             </button>
           )}
-          {!link.title && link.kind !== "instagram" && props.onFetchTitle && (
+          {!link.title && link.kind !== "instagram" && link.kind !== "web" && props.onFetchTitle && (
             <button type="button" class="btn" disabled={busy} onClick={() => void props.onFetchTitle?.(link.id)}>
               タイトルを取得
             </button>
@@ -159,6 +170,8 @@ export function LinkCard(props: {
         </div>
       )}
 
+      {link.description && mode !== "edit" && <p class="link__desc muted">{link.description}</p>}
+
       {embedOpen && tweetId && <TweetEmbed id={tweetId} />}
 
       {mode === "edit" && (
@@ -166,13 +179,15 @@ export function LinkCard(props: {
           class="day__form link__form"
           onSubmit={(e) => {
             e.preventDefault();
-            void props.onSaveTitle(link.id, title.trim() === "" ? null : title.trim()).then((ok) => {
+            void props.onSave(link.id, { title: title.trim() === "" ? null : title.trim(), description: description.trim() === "" ? null : description.trim() }).then((ok) => {
               if (ok) setMode("view");
             });
           }}
         >
           <label for={inputId}>タイトル(空にすると消えます)</label>
           <input id={inputId} type="text" maxLength={200} value={title} onInput={(e) => setTitle((e.currentTarget as HTMLInputElement).value)} />
+          <label for={descId}>説明(500文字まで。空にすると消えます)</label>
+          <textarea id={descId} rows={3} maxLength={500} value={description} onInput={(e) => setDescription((e.currentTarget as HTMLTextAreaElement).value)} />
           <div class="day__actions">
             <button type="submit" class="btn btn--primary" disabled={busy}>
               {busy ? "保存中…" : "保存"}

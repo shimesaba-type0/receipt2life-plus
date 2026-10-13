@@ -130,7 +130,7 @@ export async function buildPeriodReport(db: D1Database, period: ReportPeriod): P
       .all<DatedRow & ReportPhoto>(),
     db
       .prepare(
-        `SELECT COALESCE(l.date, t.date, e.start_date) AS d, l.id, l.url, l.kind, l.title, l.date, l.transaction_id, l.event_id, l.created_at
+        `SELECT COALESCE(l.date, t.date, e.start_date) AS d, l.id, l.url, l.kind, l.title, l.description, l.date, l.transaction_id, l.event_id, l.created_at
          FROM links l
          LEFT JOIN transactions t ON t.id = l.transaction_id
          LEFT JOIN events e ON e.id = l.event_id

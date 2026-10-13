@@ -79,7 +79,7 @@ async function readLimited(res: Response): Promise<string | null> {
   return new TextDecoder().decode(all);
 }
 
-export function oembedEndpoint(kind: Exclude<LinkKind, "instagram">, url: string): string {
+export function oembedEndpoint(kind: "youtube" | "x", url: string): string {
   const q = encodeURIComponent(url);
   return kind === "youtube" ? `https://www.youtube.com/oembed?format=json&url=${q}` : `https://publish.twitter.com/oembed?omit_script=1&url=${q}`;
 }
@@ -100,7 +100,7 @@ const SERVICE: Record<"youtube" | "x", string> = { youtube: "YouTube", x: "X" };
 // fetchImpl はテスト用の差し替え。成功すればタイトル、タイトルが無ければ null、失敗は TitleFetchError(理由つき)を投げる
 export function makeTitleFetcher(fetchImpl: typeof fetch = fetch): TitleFetcher {
   return async (kind, url) => {
-    if (kind === "instagram") return null;
+    if (kind === "instagram" || kind === "web") return null;
     const service = SERVICE[kind];
     let endpoint = oembedEndpoint(kind, url);
     try {

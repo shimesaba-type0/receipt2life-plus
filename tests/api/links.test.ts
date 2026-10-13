@@ -76,4 +76,13 @@ describe("リンクのAPI", () => {
     expect((await send("DELETE", `/api/events/${ev.event.id}`)).status).toBe(200);
     expect((await testEnv().DB.prepare("SELECT COUNT(*) AS n FROM links").first<{ n: number }>())!.n).toBe(0);
   });
+
+  it("ウェブのリンク: description つきで登録し、説明文だけ更新・消去できる", async () => {
+    const web = await json(await send("POST", "/api/links", { url: "https://example.com/p?fbclid=z", title: "ページ", description: "要約", date: "2026-10-10" }));
+    expect(web).toMatchObject({ ok: true, link: { kind: "web", url: "https://example.com/p", description: "要約" } });
+    const wid = (web as { link: { id: string } }).link.id;
+    expect(await json(await send("PATCH", `/api/links/${wid}`, { description: null }))).toMatchObject({ ok: true, link: { title: "ページ", description: null } });
+    expect((await send("PATCH", `/api/links/${wid}`, {})).status).toBe(400);
+    expect((await send("POST", `/api/links/${wid}/title`, {})).status).toBe(500);
+  });
 });

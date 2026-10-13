@@ -230,8 +230,8 @@ export function Day(props: { date: string }) {
     }
   }
 
-  async function saveLinkTitle(id: string, title: string | null): Promise<boolean> {
-    return guarded(async () => failOf(await run(() => updateLink(id, { title }))), "リンクのタイトルを保存しました。");
+  async function saveLink(id: string, patch: { title: string | null; description: string | null }): Promise<boolean> {
+    return guarded(async () => failOf(await run(() => updateLink(id, patch))), "リンクを保存しました。");
   }
 
   async function fetchTitleOfLink(id: string): Promise<boolean> {
@@ -434,7 +434,7 @@ export function Day(props: { date: string }) {
 
           <SeatRecordsCard records={data.seat_records} venues={venues} busy={busy} onAdd={addSeat} onUpdate={saveSeat} onDelete={removeSeat} />
 
-          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onFetchTitle={fetchTitleOfLink} onDelete={removeLink} />
+          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSave={saveLink} onFetchTitle={fetchTitleOfLink} onDelete={removeLink} />
         </>
       )}
 
@@ -655,7 +655,7 @@ function LinksCard(props: {
   links: LinkView[];
   busy: boolean;
   onAdd: (url: string, title: string) => Promise<string | null>;
-  onSaveTitle: (id: string, title: string | null) => Promise<boolean>;
+  onSave: (id: string, patch: { title: string | null; description: string | null }) => Promise<boolean>;
   onFetchTitle: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
@@ -705,7 +705,7 @@ function LinksCard(props: {
             void submit();
           }}
         >
-          <label for={`${id}-url`}>リンク(X・YouTube・Instagram)</label>
+          <label for={`${id}-url`}>リンク(X・YouTube・Instagram・ウェブ)</label>
           <input
             id={`${id}-url`}
             type="url"
@@ -740,7 +740,7 @@ function LinksCard(props: {
         <ul class="day__list day__links">
           {links.map((l) => (
             <li key={l.id}>
-              <LinkCard link={l} busy={busy} onSaveTitle={props.onSaveTitle} onFetchTitle={props.onFetchTitle} onDelete={props.onDelete} />
+              <LinkCard link={l} busy={busy} onSave={props.onSave} onFetchTitle={props.onFetchTitle} onDelete={props.onDelete} />
             </li>
           ))}
         </ul>
