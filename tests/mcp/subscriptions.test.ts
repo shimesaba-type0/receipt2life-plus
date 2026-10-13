@@ -24,7 +24,7 @@ describe("MCP サブスク・固定費のツール", () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
     const byName = (n: string) => tools.find((t) => t.name === n)!;
-    expect(byName("add_subscription").inputSchema.required).toEqual(["name", "amount", "period"]);
+    expect(byName("add_subscription").inputSchema.required).toEqual(["name", "period"]);
     expect(byName("add_subscription").description).toContain("別枠");
     expect(byName("add_subscription").description).toContain("年額");
     expect(byName("update_subscription").description).toContain("price_checked");

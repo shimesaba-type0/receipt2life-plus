@@ -10,7 +10,10 @@ import {
   MAX_SUBSCRIPTION_NAME,
   MAX_SUBSCRIPTION_NOTE,
   PERIOD_LABELS,
+  CURRENCY_OPTIONS,
   amountLabel,
+  estimateYen,
+  foreignLabel,
   billingDayLabel,
   buildStack,
   emptySubscriptionForm,
@@ -102,7 +105,7 @@ export function Subscriptions() {
             busy={busy}
             label={`「${s.name}」の編集`}
             submitLabel="保存"
-            onSubmit={(v) => act(() => updateSubscription(s.id, v))}
+            onSubmit={(v) => act(() => updateSubscription(s.id, toPatch(v)))}
             onCheckPrice={() => act(() => updateSubscription(s.id, { price_checked: true }))}
             onDelete={() => act(() => deleteSubscription(s.id))}
             onCancel={close}
@@ -244,11 +247,33 @@ export function Subscriptions() {
   );
 }
 
+// 金額まわりの入力。円払いは amount、外貨払いは外貨の金額とレート(円はサーバーが計算する)
+function moneyOf(v: SubscriptionFormValue) {
+  return v.currency === "JPY" || v.foreign_amount === null || v.exchange_rate === null
+    ? { currency: "JPY" as const, amount: v.amount ?? 0 }
+    : { currency: v.currency, foreign_amount: v.foreign_amount, exchange_rate: v.exchange_rate };
+}
+
+// 更新の入力(フォームの全項目。billing_month などは空なら null で消す)
+function toPatch(v: SubscriptionFormValue) {
+  return {
+    name: v.name,
+    ...moneyOf(v),
+    period: v.period,
+    kind: v.kind,
+    active: v.active,
+    billing_month: v.billing_month,
+    billing_day: v.billing_day,
+    url: v.url,
+    note: v.note,
+  };
+}
+
 // 追加の入力。null の項目は送らない
 function toNew(v: SubscriptionFormValue) {
   return {
     name: v.name,
-    amount: v.amount,
+    ...moneyOf(v),
     period: v.period,
     kind: v.kind,
     active: v.active,
@@ -262,7 +287,8 @@ function toNew(v: SubscriptionFormValue) {
 function Row(props: { s: SubscriptionView; onEdit: () => void }) {
   const { s } = props;
   const change = priceChangeLabel(s);
-  const up = s.previous_amount !== null && s.amount > s.previous_amount;
+  const foreign = foreignLabel(s);
+  const up = s.currency === "JPY" ? s.previous_amount !== null && s.amount > s.previous_amount : (s.foreign_amount ?? 0) > (s.previous_foreign_amount ?? Infinity);
   const next = s.period === "yearly" ? nextPaymentLabel(s.next_billing_month) : null;
   const checked = priceCheckedLabel(s.price_checked_on);
   const day = billingDayLabel(s);
@@ -275,6 +301,7 @@ function Row(props: { s: SubscriptionView; onEdit: () => void }) {
           <span class="sub__kind">{KIND_LABELS[s.kind]}</span>
         </div>
         <span class="sub__amount num">{amountLabel(s)}</span>
+        {foreign && <p class="sub__meta">{foreign}</p>}
         {next && <p class="sub__meta">{next}</p>}
         {day && <p class="sub__meta">{day}</p>}
         {change && <p class={`sub__meta ${up ? "sub__up" : "sub__down"}`}>{change}</p>}
@@ -317,7 +344,7 @@ function SubscriptionForm(props: {
   }, []);
 
   const set = <K extends keyof SubscriptionFormInput>(key: K, value: SubscriptionFormInput[K]) => setF((prev) => ({ ...prev, [key]: value }));
-  const text = (key: "name" | "amount" | "billingDay" | "url") => (e: Event) => set(key, (e.currentTarget as HTMLInputElement).value);
+  const text = (key: "name" | "amount" | "foreignAmount" | "exchangeRate" | "billingDay" | "url") => (e: Event) => set(key, (e.currentTarget as HTMLInputElement).value);
 
   async function submit(e: Event) {
     e.preventDefault();
@@ -346,10 +373,28 @@ function SubscriptionForm(props: {
         ))}
       </select>
 
+      <label for={`${idBase}-currency`}>通貨</label>
+      <select id={`${idBase}-currency`} value={f.currency} onChange={(e) => set("currency", (e.currentTarget as HTMLSelectElement).value as SubscriptionFormInput["currency"])}>
+        {CURRENCY_OPTIONS.map((c) => (
+          <option key={c.value} value={c.value}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+
       <div class="sub__two">
         <div>
-          <label for={`${idBase}-amount`}>金額(円)</label>
-          <input id={`${idBase}-amount`} type="text" inputMode="numeric" value={f.amount} onInput={text("amount")} autocomplete="off" />
+          {f.currency === "JPY" ? (
+            <>
+              <label for={`${idBase}-amount`}>金額(円)</label>
+              <input id={`${idBase}-amount`} type="text" inputMode="numeric" value={f.amount} onInput={text("amount")} autocomplete="off" />
+            </>
+          ) : (
+            <>
+              <label for={`${idBase}-foreign`}>金額({f.currency})</label>
+              <input id={`${idBase}-foreign`} type="text" inputMode="decimal" value={f.foreignAmount} onInput={text("foreignAmount")} autocomplete="off" placeholder="例: 20" />
+            </>
+          )}
         </div>
         <div>
           <label for={`${idBase}-period`}>周期</label>
@@ -369,6 +414,14 @@ function SubscriptionForm(props: {
           </select>
         </div>
       </div>
+
+      {f.currency !== "JPY" && (
+        <div class="sub__rate">
+          <label for={`${idBase}-rate`}>換算レート(1{f.currency}=何円。目安)</label>
+          <input id={`${idBase}-rate`} type="text" inputMode="decimal" value={f.exchangeRate} onInput={text("exchangeRate")} autocomplete="off" placeholder="例: 150" />
+          <p class="muted cat__hint">{rateHint(f)}</p>
+        </div>
+      )}
 
       <div class="sub__two">
         {f.period === "yearly" && (
@@ -444,4 +497,13 @@ function SubscriptionForm(props: {
       )}
     </form>
   );
+}
+
+// 換算レートの下の説明。円の目安を出す(実際の引き落とし額は、カードの明細の円)
+function rateHint(f: SubscriptionFormInput): string {
+  const amount = Number(f.foreignAmount.normalize("NFKC").replace(/[,\s]/g, ""));
+  const rate = Number(f.exchangeRate.normalize("NFKC").replace(/[,\s]/g, ""));
+  const base = "実際の引き落とし額は、カードの明細の円(レートと手数料はカード会社が決めます)。ここは合計を出すための目安です。";
+  if (!(amount > 0) || !(rate > 0)) return base;
+  return `円の目安: ${formatYen(estimateYen(amount, rate))}。${base}`;
 }

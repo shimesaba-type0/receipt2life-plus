@@ -15,6 +15,12 @@ export const SUBSCRIPTION_PERIODS = ["monthly", "yearly"] as const;
 export type SubscriptionPeriod = (typeof SUBSCRIPTION_PERIODS)[number];
 export const SUBSCRIPTION_PERIOD_LABELS: Record<SubscriptionPeriod, string> = { monthly: "月払い", yearly: "年払い" };
 
+// 外貨払い(ドルなど)に使える通貨。小数点以下2桁の通貨だけ(最小単位=セント)
+export const CURRENCIES = ["JPY", "USD", "EUR", "GBP", "AUD", "CAD"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+export const MAX_FOREIGN_AMOUNT = 1_000_000;
+export const MAX_EXCHANGE_RATE = 100_000;
+
 export const MAX_SUBSCRIPTION_AMOUNT = 10_000_000;
 export const MAX_SUBSCRIPTION_NAME = 100;
 export const MAX_SUBSCRIPTION_NOTE = 200;
@@ -24,9 +30,18 @@ export interface SubscriptionView {
   id: string;
   name: string;
   kind: SubscriptionKind;
-  // 1回の支払い額(円)。period が monthly なら月額、yearly なら年額
+  // 1回の支払い額(円)。period が monthly なら月額、yearly なら年額。外貨のときは、外貨の金額×換算レートの目安の円
   amount: number;
   period: SubscriptionPeriod;
+  // 通貨。JPY(円)以外は、外貨払い
+  currency: Currency;
+  // 外貨の金額(例: 20.5 = 20.50ドル)と換算レート(1外貨=何円。目安)。円のときは null
+  foreign_amount: number | null;
+  exchange_rate: number | null;
+  // 外貨の金額を変えたとき、直前の外貨の金額
+  previous_foreign_amount: number | null;
+  // amount(円)が換算レートからの目安か(外貨のとき true)
+  amount_is_estimate: boolean;
   // 月あたり・年あたりに直した金額(年払いは月あたり=年額÷12の四捨五入)
   monthly_equivalent: number;
   yearly_equivalent: number;
@@ -52,6 +67,10 @@ interface SubscriptionRow {
   kind: SubscriptionKind;
   amount: number;
   period: SubscriptionPeriod;
+  currency: Currency;
+  foreign_amount_minor: number | null;
+  exchange_rate: number | null;
+  previous_foreign_minor: number | null;
   billing_month: number | null;
   billing_day: number | null;
   previous_amount: number | null;
@@ -64,9 +83,48 @@ interface SubscriptionRow {
   updated_at: string;
 }
 
-const COLUMNS = "id, name, kind, amount, period, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at";
+const COLUMNS = "id, name, kind, amount, period, currency, foreign_amount_minor, exchange_rate, previous_foreign_minor, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at";
 
 const yen = (n: number) => `${n.toLocaleString("ja-JP")}円`;
+
+// 外貨の金額の最小単位(セント)への変換と、円への換算(四捨五入)
+export const toMinor = (amount: number): number => Math.round(amount * 100);
+export const yenFromForeign = (minor: number, rate: number): number => Math.round((minor / 100) * rate);
+const hasDecimals = (x: number, places: number) => Math.abs(x * 10 ** places - Math.round(x * 10 ** places)) < 1e-6;
+const foreignText = (currency: Currency, minor: number) => `${currency} ${(minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+interface MoneyInput {
+  currency: Currency;
+  amount?: number;
+  foreign_amount?: number;
+  exchange_rate?: number;
+}
+type MoneyResult = { ok: true; amount: number; foreign_minor: number | null; rate: number | null } | { ok: false; errors: FieldError[] };
+
+// 円か外貨かで、金額の入れ方を検証して、円の金額(amount)を決める。
+// 円: amount 必須(外貨の項目は不可)。外貨: foreign_amount と exchange_rate が必須で、amount は計算する(allowAmount のとき=バックアップの復元は、渡された amount をそのまま使う)
+export function resolveMoney(input: MoneyInput, allowAmount = false): MoneyResult {
+  const errors: FieldError[] = [];
+  if (input.currency === "JPY") {
+    if (input.foreign_amount !== undefined) errors.push({ field: "foreign_amount", message: "foreign_amount: 円のときは指定できません(currency に外貨を指定してください)" });
+    if (input.exchange_rate !== undefined) errors.push({ field: "exchange_rate", message: "exchange_rate: 円のときは指定できません(currency に外貨を指定してください)" });
+    if (input.amount === undefined) errors.push({ field: "amount", message: "amount: 円の金額は必須です" });
+    if (errors.length > 0) return { ok: false, errors };
+    return { ok: true, amount: input.amount!, foreign_minor: null, rate: null };
+  }
+  if (input.amount !== undefined && !allowAmount) {
+    errors.push({ field: "amount", message: `amount: ${input.currency} のときは円の金額を直接は指定できません(foreign_amount × exchange_rate から計算します)` });
+  }
+  if (input.foreign_amount === undefined) errors.push({ field: "foreign_amount", message: `foreign_amount: ${input.currency} の金額は必須です(例: 20.5)` });
+  else if (!hasDecimals(input.foreign_amount, 2)) errors.push({ field: "foreign_amount", message: "foreign_amount: 小数点以下は2桁までにしてください" });
+  if (input.exchange_rate === undefined) errors.push({ field: "exchange_rate", message: `exchange_rate: 換算レート(1${input.currency}=何円。目安)は必須です(例: 150)` });
+  else if (!hasDecimals(input.exchange_rate, 4)) errors.push({ field: "exchange_rate", message: "exchange_rate: 小数点以下は4桁までにしてください" });
+  if (errors.length > 0) return { ok: false, errors };
+  const minor = toMinor(input.foreign_amount!);
+  const amount = input.amount ?? yenFromForeign(minor, input.exchange_rate!);
+  if (amount > MAX_SUBSCRIPTION_AMOUNT) return { ok: false, errors: [{ field: "foreign_amount", message: `円に換算した金額が${MAX_SUBSCRIPTION_AMOUNT.toLocaleString("ja-JP")}円を超えます` }] };
+  return { ok: true, amount, foreign_minor: minor, rate: input.exchange_rate! };
+}
 
 export function monthlyEquivalent(amount: number, period: SubscriptionPeriod): number {
   return period === "monthly" ? amount : Math.round(amount / 12);
@@ -91,6 +149,11 @@ export function toView(row: SubscriptionRow, today: string): SubscriptionView {
     kind: row.kind,
     amount: row.amount,
     period: row.period,
+    currency: row.currency,
+    foreign_amount: row.foreign_amount_minor === null ? null : row.foreign_amount_minor / 100,
+    exchange_rate: row.exchange_rate,
+    previous_foreign_amount: row.previous_foreign_minor === null ? null : row.previous_foreign_minor / 100,
+    amount_is_estimate: row.currency !== "JPY",
     monthly_equivalent: monthlyEquivalent(row.amount, row.period),
     yearly_equivalent: yearlyEquivalent(row.amount, row.period),
     billing_month: row.billing_month,
@@ -115,6 +178,15 @@ const amountField = z
   .int("amount は整数(円)で指定してください")
   .min(0, "amount は0以上にしてください")
   .max(MAX_SUBSCRIPTION_AMOUNT, `amount は${MAX_SUBSCRIPTION_AMOUNT.toLocaleString("ja-JP")}円以下にしてください`);
+const currencyField = z.enum(CURRENCIES, { error: `currency は ${CURRENCIES.join(" / ")} のいずれかで指定してください` });
+const foreignAmountField = z
+  .number({ error: "foreign_amount は数値で指定してください" })
+  .positive("foreign_amount は0より大きい数にしてください")
+  .max(MAX_FOREIGN_AMOUNT, `foreign_amount は${MAX_FOREIGN_AMOUNT.toLocaleString("en-US")}以下にしてください`);
+const exchangeRateField = z
+  .number({ error: "exchange_rate は数値で指定してください" })
+  .positive("exchange_rate は0より大きい数にしてください")
+  .max(MAX_EXCHANGE_RATE, `exchange_rate は${MAX_EXCHANGE_RATE.toLocaleString("en-US")}以下にしてください`);
 const kindField = z.enum(SUBSCRIPTION_KINDS, { error: `kind は ${SUBSCRIPTION_KINDS.join(" / ")} のいずれかで指定してください` });
 const periodField = z.enum(SUBSCRIPTION_PERIODS, { error: `period は ${SUBSCRIPTION_PERIODS.join(" / ")} のいずれかで指定してください` });
 const monthField = z.number().int().min(1, "billing_month は1〜12で指定してください").max(12, "billing_month は1〜12で指定してください");
@@ -124,8 +196,11 @@ const noteField = z.string().trim().max(MAX_SUBSCRIPTION_NOTE, `note は${MAX_SU
 
 export const subscriptionFieldsSchema = z.strictObject({
   name: nameField.describe("名前(例: 動画配信サービス、自動車保険)。必須"),
-  amount: amountField.describe("1回の支払い額(円・整数)。period が monthly なら月額、yearly なら年額。必須"),
+  amount: amountField.optional().describe("1回の支払い額(円・整数)。period が monthly なら月額、yearly なら年額。currency が JPY(既定)のとき必須。外貨のときは指定しない(foreign_amount × exchange_rate から計算する)"),
   period: periodField.describe("monthly=月払い / yearly=年払い(年額を一括で払う)。必須"),
+  currency: currencyField.default("JPY").describe(`通貨。JPY=円(既定)。ドルなどの外貨払いは ${CURRENCIES.filter((c) => c !== "JPY").join(" / ")}。外貨のときは foreign_amount と exchange_rate が必須`),
+  foreign_amount: foreignAmountField.optional().describe("外貨の1回の支払い額(例: 20.5 = 20.50ドル。小数点以下2桁まで)。period が yearly なら年額。外貨のとき必須"),
+  exchange_rate: exchangeRateField.optional().describe("換算レート(1外貨=何円。例: 150)。実際のレートではなく、月あたり・年あたりの合計を出すための目安。AI が調べて入れてもよいが、確かでなければ利用者に聞く。外貨のとき必須"),
   kind: kindField.default("subscription").describe("subscription=サブスク(既定) / insurance=保険 / other=その他の固定費"),
   billing_month: monthField.optional().describe("支払う月(1〜12)。年払いの更新月。任意"),
   billing_day: dayField.optional().describe("支払う日(1〜31)。任意"),
@@ -137,7 +212,10 @@ export const subscriptionFieldsSchema = z.strictObject({
 export const updateSubscriptionFieldsSchema = z.strictObject({
   id: z.string().min(1, "id は必須です").describe("更新するサブスクの id(list_subscriptions で分かる)。必須"),
   name: nameField.optional().describe("新しい名前"),
-  amount: amountField.optional().describe("新しい金額(円)。変えると、直前の金額・変えた日・確認した日が自動で記録される"),
+  amount: amountField.optional().describe("新しい金額(円)。円のサブスクだけ。変えると、直前の金額・変えた日・確認した日が自動で記録される。外貨のサブスクは foreign_amount / exchange_rate を使う"),
+  currency: currencyField.optional().describe("新しい通貨。JPY に戻すと外貨の項目は消え、円の金額(amount を省略すると、いまの円の目安のまま)になる。外貨にするときは foreign_amount と exchange_rate も渡す"),
+  foreign_amount: foreignAmountField.optional().describe("新しい外貨の金額(最大小数点以下2桁)。変えると、直前の外貨の金額・変えた日・確認した日が自動で記録される"),
+  exchange_rate: exchangeRateField.optional().describe("新しい換算レート(1外貨=何円)。円の目安がこのレートで計算し直される(金額の変更としては記録しない)"),
   period: periodField.optional().describe("新しい支払い周期"),
   kind: kindField.optional().describe("新しい種類"),
   billing_month: monthField.nullable().optional().describe("支払う月。null で消す"),
@@ -196,6 +274,10 @@ function normalizeUrl(url: string | null | undefined, errors: FieldError[]): str
   return normalized;
 }
 
+// 「3,000円」「USD 20.00(目安 3,000円。1USD=150円)」
+const priceText = (row: Pick<SubscriptionRow, "amount" | "currency" | "foreign_amount_minor" | "exchange_rate">): string =>
+  row.currency === "JPY" || row.foreign_amount_minor === null ? yen(row.amount) : `${foreignText(row.currency, row.foreign_amount_minor)}(目安 ${yen(row.amount)}。1${row.currency}=${row.exchange_rate}円)`;
+
 const summarizeTotals = (items: readonly SubscriptionView[]): SubscriptionTotals => {
   const active = items.filter((s) => s.active);
   const yearly = active.reduce((sum, s) => sum + s.yearly_equivalent, 0);
@@ -211,7 +293,9 @@ export async function addSubscription(db: D1Database, input: unknown, options: C
   const errors: FieldError[] = [];
   if (m.period === "monthly" && m.billing_month !== undefined) errors.push({ field: "billing_month", message: "billing_month: 月払いには指定できません(年払いの更新月です)" });
   const url = normalizeUrl(m.url, errors);
-  if (errors.length > 0) return { ok: false, errors };
+  const money = resolveMoney(m);
+  if (!money.ok) errors.push(...money.errors);
+  if (errors.length > 0 || !money.ok) return { ok: false, errors };
 
   const { count } = (await db.prepare("SELECT COUNT(*) AS count FROM subscriptions").first<{ count: number }>()) ?? { count: 0 };
   if (count >= MAX_SUBSCRIPTIONS) return { ok: false, errors: [{ field: "name", message: `登録は${MAX_SUBSCRIPTIONS}件までです` }] };
@@ -223,8 +307,12 @@ export async function addSubscription(db: D1Database, input: unknown, options: C
     id: crypto.randomUUID(),
     name: m.name,
     kind: m.kind,
-    amount: m.amount,
+    amount: money.amount,
     period: m.period,
+    currency: m.currency,
+    foreign_amount_minor: money.foreign_minor,
+    exchange_rate: money.rate,
+    previous_foreign_minor: null,
     billing_month: m.billing_month ?? null,
     billing_day: m.billing_day ?? null,
     previous_amount: null,
@@ -238,11 +326,11 @@ export async function addSubscription(db: D1Database, input: unknown, options: C
     updated_at: nowIso,
   };
   await db
-    .prepare(`INSERT INTO subscriptions (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(row.id, row.name, row.kind, row.amount, row.period, row.billing_month, row.billing_day, row.previous_amount, row.amount_changed_on, row.price_checked_on, row.url, row.note, row.active, row.created_at, row.updated_at)
+    .prepare(`INSERT INTO subscriptions (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(row.id, row.name, row.kind, row.amount, row.period, row.currency, row.foreign_amount_minor, row.exchange_rate, row.previous_foreign_minor, row.billing_month, row.billing_day, row.previous_amount, row.amount_changed_on, row.price_checked_on, row.url, row.note, row.active, row.created_at, row.updated_at)
     .run();
   const view = toView(row, today);
-  return { ok: true, subscription: view, message: `登録しました: ${row.name} ${yen(row.amount)}(${SUBSCRIPTION_PERIOD_LABELS[row.period]}。月あたり ${yen(view.monthly_equivalent)})` };
+  return { ok: true, subscription: view, message: `登録しました: ${row.name} ${priceText(row)}(${SUBSCRIPTION_PERIOD_LABELS[row.period]}。月あたり ${yen(view.monthly_equivalent)}${row.currency === "JPY" ? "" : "。円は換算レートからの目安"})` };
 }
 
 export async function updateSubscription(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<SubscriptionResult> {
@@ -267,6 +355,51 @@ export async function updateSubscription(db: D1Database, input: unknown, options
   if (patch.active !== undefined) next.active = patch.active ? 1 : 0;
 
   const errors: FieldError[] = [];
+  // 通貨・金額・レート。円のときは amount、外貨のときは foreign_amount と exchange_rate(円は計算した目安)
+  const nextCurrency = patch.currency ?? current.currency;
+  const sameCurrency = nextCurrency === current.currency;
+  let amountNote = "";
+  if (nextCurrency === "JPY") {
+    const money = resolveMoney({ currency: "JPY", amount: patch.amount ?? current.amount, foreign_amount: patch.foreign_amount, exchange_rate: patch.exchange_rate });
+    if (!money.ok) errors.push(...money.errors);
+    next.currency = "JPY";
+    next.foreign_amount_minor = null;
+    next.exchange_rate = null;
+    next.previous_foreign_minor = null;
+    if (patch.amount !== undefined) {
+      if (patch.amount !== current.amount) {
+        next.previous_amount = current.amount;
+        next.amount_changed_on = today;
+        amountNote = `。金額を ${yen(current.amount)} から ${yen(patch.amount)} に変えました`;
+      }
+      next.amount = patch.amount;
+      next.price_checked_on = today;
+    }
+  } else {
+    const foreign = patch.foreign_amount ?? (sameCurrency && current.foreign_amount_minor !== null ? current.foreign_amount_minor / 100 : undefined);
+    const rate = patch.exchange_rate ?? (sameCurrency ? (current.exchange_rate ?? undefined) : undefined);
+    const money = resolveMoney({ currency: nextCurrency, amount: patch.amount, foreign_amount: foreign, exchange_rate: rate });
+    if (!money.ok) errors.push(...money.errors);
+    else {
+      next.currency = nextCurrency;
+      next.amount = money.amount;
+      next.foreign_amount_minor = money.foreign_minor;
+      next.exchange_rate = money.rate;
+      next.previous_amount = null;
+      next.previous_foreign_minor = sameCurrency ? current.previous_foreign_minor : null;
+      if (!sameCurrency) {
+        next.amount_changed_on = null;
+        next.price_checked_on = today;
+      } else if (patch.foreign_amount !== undefined && money.foreign_minor !== current.foreign_amount_minor) {
+        next.previous_foreign_minor = current.foreign_amount_minor;
+        next.amount_changed_on = today;
+        next.price_checked_on = today;
+        amountNote = `。金額を ${foreignText(nextCurrency, current.foreign_amount_minor ?? 0)} から ${foreignText(nextCurrency, money.foreign_minor ?? 0)} に変えました`;
+      } else if (patch.exchange_rate !== undefined && patch.exchange_rate !== current.exchange_rate) {
+        amountNote = `。換算レートを ${current.exchange_rate ?? "-"}円 から ${patch.exchange_rate}円 に変えました(円の目安を計算し直しました)`;
+      }
+    }
+  }
   if (next.period === "monthly" && next.billing_month !== null) {
     // 年払いから月払いに変えるときは、更新月を消すのを忘れないようにエラーにせず自動で消す
     if (patch.billing_month === undefined) next.billing_month = null;
@@ -276,27 +409,17 @@ export async function updateSubscription(db: D1Database, input: unknown, options
   if (errors.length > 0) return { ok: false, errors };
   if (url !== undefined) next.url = url;
 
-  let amountNote = "";
-  if (patch.amount !== undefined) {
-    if (patch.amount !== current.amount) {
-      next.previous_amount = current.amount;
-      next.amount_changed_on = today;
-      amountNote = `。金額を ${yen(current.amount)} から ${yen(patch.amount)} に変えました`;
-    }
-    next.amount = patch.amount;
-    next.price_checked_on = today;
-  }
   if (priceChecked) next.price_checked_on = today;
   next.updated_at = now.toISOString();
 
   await db
     .prepare(
-      `UPDATE subscriptions SET name = ?, kind = ?, amount = ?, period = ?, billing_month = ?, billing_day = ?, previous_amount = ?, amount_changed_on = ?, price_checked_on = ?, url = ?, note = ?, active = ?, updated_at = ? WHERE id = ?`,
+      `UPDATE subscriptions SET name = ?, kind = ?, amount = ?, period = ?, currency = ?, foreign_amount_minor = ?, exchange_rate = ?, previous_foreign_minor = ?, billing_month = ?, billing_day = ?, previous_amount = ?, amount_changed_on = ?, price_checked_on = ?, url = ?, note = ?, active = ?, updated_at = ? WHERE id = ?`,
     )
-    .bind(next.name, next.kind, next.amount, next.period, next.billing_month, next.billing_day, next.previous_amount, next.amount_changed_on, next.price_checked_on, next.url, next.note, next.active, next.updated_at, id)
+    .bind(next.name, next.kind, next.amount, next.period, next.currency, next.foreign_amount_minor, next.exchange_rate, next.previous_foreign_minor, next.billing_month, next.billing_day, next.previous_amount, next.amount_changed_on, next.price_checked_on, next.url, next.note, next.active, next.updated_at, id)
     .run();
   const view = toView(next, today);
-  return { ok: true, subscription: view, message: `更新しました: ${next.name} ${yen(next.amount)}(${SUBSCRIPTION_PERIOD_LABELS[next.period]}。月あたり ${yen(view.monthly_equivalent)})${amountNote}` };
+  return { ok: true, subscription: view, message: `更新しました: ${next.name} ${priceText(next)}(${SUBSCRIPTION_PERIOD_LABELS[next.period]}。月あたり ${yen(view.monthly_equivalent)})${amountNote}` };
 }
 
 export async function deleteSubscription(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<DeleteSubscriptionResult> {

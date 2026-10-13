@@ -20,7 +20,8 @@ export function registerSubscriptionTools(server: McpServer, db: D1Database): vo
       title: "サブスク・固定費を登録する",
       description: [
         "サブスク(動画・音楽の配信など)、保険、その他の固定費を1件登録する。支出の記録(add_transactions)とは別枠の一覧で、ここに登録しても支出には数えない(実際に払った分は、レシートとして add_transactions で記録する)。",
-        "必須は name(名前)、amount(1回の支払い額。円・整数)、period(monthly=月払い / yearly=年払い)。amount は period に合わせる: 月払いなら月額、年払いなら年額(月額に割らない)。",
+        "必須は name(名前)、period(monthly=月払い / yearly=年払い)と、金額。円払いなら amount(1回の支払い額。円・整数)。amount は period に合わせる: 月払いなら月額、年払いなら年額(月額に割らない)。",
+        "ドルなどの外貨払い(ChatGPT Plus など)は、currency(USD / EUR / GBP / AUD / CAD)と foreign_amount(外貨の金額。例: 20 や 4.99。period に合わせる)と exchange_rate(1外貨=何円。例: 150)を渡す。amount は渡さない(円は foreign_amount × exchange_rate の四捨五入で、月あたり・年あたりの合計を出すための目安になる)。実際の引き落とし額は、カードの明細の円(レートと手数料はカード会社が決める)なので、引き落とされたら支出(レシート)として add_transactions で記録する。レートは利用者が決める目安なので、確かでなければ利用者に聞き、為替が大きく動いたら update_subscription の exchange_rate で直す。",
         "kind は subscription=サブスク(既定) / insurance=保険 / other=その他の固定費。年払いなら billing_month(支払う月、1〜12)も分かれば入れる(次の更新月の目安になる)。billing_day(支払う日)、url(料金ページなど。https)、note(プラン名など)は任意。",
         "登録前に list_subscriptions で既存を確かめて、同じものを二重に作らない。金額は変わることがあるので、公式の料金ページで調べた最新の金額を入れ、確認できなければ利用者に聞く。調べた根拠のURLがあれば url に入れる。",
         "成功すると、登録した内容(id、月あたり・年あたりに直した金額つき)が返る。",
@@ -35,7 +36,7 @@ export function registerSubscriptionTools(server: McpServer, db: D1Database): vo
     {
       title: "サブスク・固定費を一覧する",
       description: [
-        "登録済みのサブスク・保険・固定費を返す(契約中が先、名前順)。各要素は id、name、kind、amount、period、monthly_equivalent(月あたり)、yearly_equivalent(年あたり)、billing_month、billing_day、next_billing_month(年払いの次の支払い月)、previous_amount と amount_changed_on(金額を変えたとき)、price_checked_on(金額を最後に確認した日)、url、note、active。",
+        "登録済みのサブスク・保険・固定費を返す(契約中が先、名前順)。各要素は id、name、kind、amount(円。外貨のときは目安)、period、currency(JPY 以外は外貨払い)、foreign_amount、exchange_rate、amount_is_estimate、monthly_equivalent(月あたり)、yearly_equivalent(年あたり)、billing_month、billing_day、next_billing_month(年払いの次の支払い月)、previous_amount と amount_changed_on(金額を変えたとき)、price_checked_on(金額を最後に確認した日)、url、note、active。",
         "totals は契約中の合計(monthly=月あたり、yearly=年あたり。年払いは月あたりに直して足す)。",
         "active(true=契約中だけ / false=解約済みだけ)と kind で絞れる。使いどころ: 「サブスクはいくら?」と聞かれたとき、金額が古くなっていないか(price_checked_on が古いもの)を調べるとき、update_subscription / delete_subscription に渡す id を調べるとき。",
       ].join("\n"),

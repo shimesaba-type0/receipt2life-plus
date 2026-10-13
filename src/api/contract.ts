@@ -636,14 +636,24 @@ export interface MerchantsData {
 // ---- サブスク・保険などの固定費(別枠。支出の記録とは独立で、二重に数えない) ----
 export type SubscriptionKind = "subscription" | "insurance" | "other";
 export type SubscriptionPeriod = "monthly" | "yearly";
+// 通貨。JPY(円)以外は外貨払い(小数点以下2桁の通貨)
+export type Currency = "JPY" | "USD" | "EUR" | "GBP" | "AUD" | "CAD";
 
 export interface SubscriptionView {
   id: string;
   name: string;
   kind: SubscriptionKind;
-  // 1回の支払い額(円)。period が monthly なら月額、yearly なら年額
+  // 1回の支払い額(円)。period が monthly なら月額、yearly なら年額。外貨のときは、外貨の金額×換算レートの四捨五入(目安の円)
   amount: number;
   period: SubscriptionPeriod;
+  currency: Currency;
+  // 外貨の金額(例: 20.5 = 20.50ドル)と換算レート(1外貨=何円。目安)。円のときは null
+  foreign_amount: number | null;
+  exchange_rate: number | null;
+  // 外貨の金額を変えたとき、直前の外貨の金額
+  previous_foreign_amount: number | null;
+  // amount(円)が換算レートからの目安か(外貨のとき true)
+  amount_is_estimate: boolean;
   // 月あたり・年あたりに直した金額(年払いの月あたりは、年額÷12の四捨五入)
   monthly_equivalent: number;
   yearly_equivalent: number;
@@ -680,9 +690,13 @@ export interface SubscriptionsData {
 }
 
 // POST /api/subscriptions の入力
+// 円払いは amount、外貨払いは currency と foreign_amount と exchange_rate(amount は渡さない)
 export interface NewSubscription {
   name: string;
-  amount: number;
+  amount?: number;
+  currency?: Currency;
+  foreign_amount?: number;
+  exchange_rate?: number;
   period: SubscriptionPeriod;
   kind?: SubscriptionKind;
   billing_month?: number;
@@ -696,6 +710,9 @@ export interface NewSubscription {
 export interface SubscriptionPatch {
   name?: string;
   amount?: number;
+  currency?: Currency;
+  foreign_amount?: number;
+  exchange_rate?: number;
   period?: SubscriptionPeriod;
   kind?: SubscriptionKind;
   billing_month?: number | null;

@@ -197,11 +197,12 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 | ルート | 入力 | 戻り |
 | --- | --- | --- |
 | `GET /api/subscriptions` | クエリ(任意): `active`(`true` / `false`)、`kind`(`subscription` / `insurance` / `other`) | `SubscriptionsData`: `count`、`subscriptions`(契約中が先、名前順)、`totals`(契約中の `monthly` / `yearly` / `count`)、`message` |
-| `POST /api/subscriptions` | `NewSubscription`: `name` / `amount`(0〜10,000,000の整数)/ `period`(`monthly` / `yearly`)が必須。`kind` / `billing_month`(年払いだけ)/ `billing_day` / `url`(https)/ `note` / `active` は任意 | `SubscriptionData`: `subscription`、`message` |
-| `PATCH /api/subscriptions/:id` | `SubscriptionPatch`(指定した項目だけ)。`billing_month` / `billing_day` / `url` / `note` は null で消す。`amount` を変えると `previous_amount` / `amount_changed_on` / `price_checked_on` が自動で入る。`price_checked: true` は確認した日だけ今日にする | `SubscriptionData` |
+| `POST /api/subscriptions` | `NewSubscription`: `name` / `period`(`monthly` / `yearly`)と、金額が必須。円払い(`currency` 省略か `JPY`)は `amount`(0〜10,000,000の整数)。外貨払いは `currency`(`USD` / `EUR` / `GBP` / `AUD` / `CAD`)と `foreign_amount`(小数点以下2桁まで)と `exchange_rate`(1外貨=何円。小数点以下4桁まで。目安)で、`amount` は渡せない。`kind` / `billing_month`(年払いだけ)/ `billing_day` / `url`(https)/ `note` / `active` は任意 | `SubscriptionData`: `subscription`、`message` |
+| `PATCH /api/subscriptions/:id` | `SubscriptionPatch`(指定した項目だけ)。`billing_month` / `billing_day` / `url` / `note` は null で消す。円は `amount` を変えると `previous_amount` / `amount_changed_on` / `price_checked_on` が自動で入る。外貨は `foreign_amount` を変えると `previous_foreign_amount` / `amount_changed_on` / `price_checked_on` が入り、`exchange_rate` だけ変えると円の目安が計算し直されるだけ(金額の変更としては記録しない)。`currency: "JPY"` に戻すと外貨の項目は消える。`price_checked: true` は確認した日だけ今日にする | `SubscriptionData` |
 | `DELETE /api/subscriptions/:id` | なし | `DeletedSubscriptionData`: `deleted`、`message` |
 
 - `SubscriptionView` の `monthly_equivalent` / `yearly_equivalent` は月あたり・年あたり(年払いの月あたりは年額÷12の四捨五入)。`next_billing_month` は年払いで `billing_month` があるときの次の支払い月(今月を含む)
+- 外貨払い: `amount`(円)は `foreign_amount` × `exchange_rate` の四捨五入の**目安**で、`amount_is_estimate` が `true`。月あたり・年あたり・合計はこの円で出す。実際の引き落とし額は、カードの明細の円(レートと手数料はカード会社が決める)で、支出(レシート)として別に記録する
 - 存在しない `id` は404、不正な入力は400。登録は500件まで
 
 ## 座席の記録(映画館などの席の評価)

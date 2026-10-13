@@ -120,3 +120,66 @@ describe("listSubscriptions / deleteSubscription", () => {
     if (res.ok) expect(res.count).toBe(0);
   });
 });
+
+describe("外貨払い(ドル・ユーロなど)", () => {
+  it("USD の月払いを登録する。円は 外貨×レート の四捨五入(目安)で、月あたり・年あたりもその円", async () => {
+    const s = await addOk({ name: "ダミーAI", currency: "USD", foreign_amount: 20, exchange_rate: 150.5, period: "monthly", billing_day: 23 });
+    expect(s).toMatchObject({ currency: "USD", foreign_amount: 20, exchange_rate: 150.5, amount: 3010, amount_is_estimate: true, monthly_equivalent: 3010, yearly_equivalent: 36120, billing_day: 23, previous_foreign_amount: null });
+  });
+
+  it("セントつきの金額・年払い・EUR", async () => {
+    const s = await addOk({ name: "ダミー年額", currency: "EUR", foreign_amount: 99.99, exchange_rate: 160, period: "yearly", billing_month: 5 });
+    expect(s).toMatchObject({ currency: "EUR", foreign_amount: 99.99, amount: 15998, monthly_equivalent: 1333, next_billing_month: "2027-05" });
+  });
+
+  it("円は従来どおり(currency 省略で JPY)。円の行に外貨の項目は付けられず、外貨の行に amount は付けられない", async () => {
+    const jpy = await addOk({ name: "円", amount: 500, period: "monthly" });
+    expect(jpy).toMatchObject({ currency: "JPY", foreign_amount: null, exchange_rate: null, amount_is_estimate: false });
+    expect((await add({ name: "A", amount: 500, foreign_amount: 5, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", amount: 500, exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", amount: 3000, foreign_amount: 20, exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+  });
+
+  it("外貨は foreign_amount と exchange_rate が必須。桁数・範囲・通貨の不正はエラー", async () => {
+    expect((await add({ name: "A", currency: "USD", exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", foreign_amount: 20, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", foreign_amount: 20.123, exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", foreign_amount: 20, exchange_rate: 150.12345, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", foreign_amount: 0, exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", foreign_amount: 20, exchange_rate: -1, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "XXX", foreign_amount: 20, exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+    expect((await add({ name: "A", currency: "USD", foreign_amount: 1_000_000, exchange_rate: 150, period: "monthly" })).ok).toBe(false);
+  });
+
+  it("外貨の金額を変えると、直前の外貨の金額・変えた日が残る。レートだけ変えても円の目安が計算し直されるだけ", async () => {
+    const s = await addOk({ name: "ダミーAI", currency: "USD", foreign_amount: 20, exchange_rate: 150, period: "monthly" });
+    const up = await updateSubscription(db(), { id: s.id, foreign_amount: 22.5 }, { now: NOW });
+    expect(up.ok && up.subscription).toMatchObject({ foreign_amount: 22.5, previous_foreign_amount: 20, amount: 3375, amount_changed_on: "2026-10-11", previous_amount: null });
+    expect(up.ok && up.message).toContain("USD 20.00 から USD 22.50");
+    const rate = await updateSubscription(db(), { id: s.id, exchange_rate: 140 }, { now: NOW });
+    expect(rate.ok && rate.subscription).toMatchObject({ foreign_amount: 22.5, exchange_rate: 140, amount: 3150, previous_foreign_amount: 20 });
+    expect(rate.ok && rate.message).toContain("換算レートを 150円 から 140円");
+  });
+
+  it("更新: 外貨の行に amount は渡せない。円→外貨は両方が必要。外貨→円に戻せる", async () => {
+    const s = await addOk({ name: "ダミーAI", currency: "USD", foreign_amount: 20, exchange_rate: 150, period: "monthly" });
+    expect((await updateSubscription(db(), { id: s.id, amount: 3000 }, { now: NOW })).ok).toBe(false);
+    const jpy = await addOk({ name: "円", amount: 1000, period: "monthly" });
+    expect((await updateSubscription(db(), { id: jpy.id, currency: "USD" }, { now: NOW })).ok).toBe(false);
+    expect((await updateSubscription(db(), { id: jpy.id, currency: "USD", foreign_amount: 7 }, { now: NOW })).ok).toBe(false);
+    const toUsd = await updateSubscription(db(), { id: jpy.id, currency: "USD", foreign_amount: 7, exchange_rate: 150 }, { now: NOW });
+    expect(toUsd.ok && toUsd.subscription).toMatchObject({ currency: "USD", amount: 1050, previous_amount: null, previous_foreign_amount: null });
+    const back = await updateSubscription(db(), { id: s.id, currency: "JPY" }, { now: NOW });
+    expect(back.ok && back.subscription).toMatchObject({ currency: "JPY", foreign_amount: null, exchange_rate: null, amount: 3000, amount_is_estimate: false });
+    expect((await updateSubscription(db(), { id: s.id, currency: "JPY", foreign_amount: 5 }, { now: NOW })).ok).toBe(false);
+  });
+
+  it("一覧の合計には、外貨は目安の円で入る", async () => {
+    await addOk({ name: "円", amount: 1000, period: "monthly" });
+    await addOk({ name: "ドル", currency: "USD", foreign_amount: 10, exchange_rate: 150, period: "monthly" });
+    const list = await listSubscriptions(db(), {}, { now: NOW });
+    expect(list.ok && list.totals).toEqual({ monthly: 2500, yearly: 30000, count: 2 });
+  });
+});
+
