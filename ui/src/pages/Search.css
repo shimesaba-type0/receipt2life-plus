@@ -17,3 +17,5 @@
 .search__title { font-size: 15px; overflow-wrap: anywhere; }
 .search__detail { font-size: 13px; overflow-wrap: anywhere; }
 .search__amount { flex: none; font-size: 15px; font-variant-numeric: tabular-nums; }
+.search__pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.search__pager .btn { text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; }

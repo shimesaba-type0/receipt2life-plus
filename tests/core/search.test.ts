@@ -95,4 +95,36 @@ describe("searchRecords", () => {
     expect(r.ok && r.count).toBe(2);
     expect(r.ok && r.total).toBeGreaterThan(2);
   });
+
+  it("表記ゆれ: 全角半角・英字の大文字小文字・ひらがなカタカナを区別しない", async () => {
+    await addEvent(db(), { start_date: "2026-06-01", title: "ＴＯＨＯシネマズ 新宿", color: "blue" }, { now: NOW });
+    await addEvent(db(), { start_date: "2026-06-02", title: "ひらがなのてすと", color: "blue" }, { now: NOW });
+    for (const q of ["toho", "ＴＯＨＯ", "ｔｏｈｏ"]) expect((await search({ q, types: ["event"] })).ok && (await search({ q, types: ["event"] }) as { total: number }).total, q).toBe(1);
+    const kata = await search({ q: "テスト", types: ["event"] });
+    expect(kata.ok && kata.hits.map((h) => h.date)).toEqual(["2026-06-02"]);
+    const hira = await search({ q: "しねま", types: ["event"] });
+    expect(hira.ok && hira.total).toBe(1);
+  });
+
+  it("電話番号は、ハイフンの有無・全角でも当たる", async () => {
+    await addTransactions(db(), { transactions: [{ date: "2026-10-05", amount: 500, merchant: "ダミー電話店", category: "その他", merchant_phone: "03-1234-5678" }] }, { now: NOW });
+    for (const q of ["03-1234-5678", "0312345678", "０３－１２３４－５６７８"]) {
+      const r = await search({ q, types: ["transaction"] });
+      expect(r.ok && r.hits.map((h) => h.title), q).toEqual(["ダミー電話店"]);
+    }
+  });
+
+  it("ページ送り: offset / limit で昔までさかのぼれる。has_more と offset を返す", async () => {
+    for (let d = 1; d <= 7; d++) await addEvent(db(), { start_date: `2026-05-0${d}`, title: `ページ検証${d}`, color: "red" }, { now: NOW });
+    const first = await search({ q: "ページ検証", limit: 3 });
+    expect(first).toMatchObject({ ok: true, total: 7, count: 3, offset: 0, has_more: true });
+    expect(first.ok && first.hits.map((h) => h.title)).toEqual(["ページ検証7", "ページ検証6", "ページ検証5"]);
+    const last = await search({ q: "ページ検証", limit: 3, offset: 6 });
+    expect(last).toMatchObject({ ok: true, total: 7, count: 1, offset: 6, has_more: false });
+    expect(last.ok && last.hits[0]!.title).toBe("ページ検証1");
+    const beyond = await search({ q: "ページ検証", limit: 3, offset: 30 });
+    expect(beyond).toMatchObject({ ok: true, total: 7, count: 0, has_more: false });
+    expect((await search({ q: "a", offset: -1 })).ok).toBe(false);
+  });
 });
+

@@ -14,7 +14,7 @@ export type Route =
   | { name: "subscriptions" }
   | { name: "tax" }
   | { name: "connect" }
-  | { name: "search"; q: string; type: SearchHitType | null }
+  | { name: "search"; q: string; type: SearchHitType | null; page: number }
   | { name: "notfound" };
 
 // /photos/add の紐づけ先。date は必須(実在日付)、あとは任意
@@ -41,7 +41,13 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/search") {
     const params = new URLSearchParams(search);
     const type = params.get("type");
-    return { name: "search", q: (params.get("q") ?? "").trim().slice(0, 200), type: type && SEARCH_TYPES.includes(type) ? (type as SearchHitType) : null };
+    const page = Number(params.get("page") ?? "1");
+    return {
+      name: "search",
+      q: (params.get("q") ?? "").trim().slice(0, 200),
+      type: type && SEARCH_TYPES.includes(type) ? (type as SearchHitType) : null,
+      page: Number.isInteger(page) && page >= 1 && page <= 1000 ? page : 1,
+    };
   }
   if (path === "/photos/add") {
     const q = parsePhotosAddQuery(search);
