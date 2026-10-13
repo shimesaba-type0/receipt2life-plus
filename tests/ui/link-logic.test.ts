@@ -7,6 +7,7 @@ const link = (over: Partial<LinkView>): LinkView => ({
   url: "https://x.com/example_user/status/1234567890",
   kind: "x",
   title: null,
+  description: null,
   date: "2026-10-11",
   transaction_id: null,
   event_id: null,
@@ -18,6 +19,12 @@ describe("linkKindLabel", () => {
   it("種類の表示名を返す", () => {
     expect(linkKindLabel("x")).toBe("X");
     expect(linkKindLabel("youtube")).toBe("YouTube");
+    expect(linkKindLabel("instagram")).toBe("Instagram");
+  });
+  it("ウェブはサイトのホスト名(www. なし)を返す", () => {
+    expect(linkKindLabel("web", "https://www.example.com/a/b")).toBe("example.com");
+    expect(linkKindLabel("web", "https://shop.example.co.jp/")).toBe("shop.example.co.jp");
+    expect(linkKindLabel("web")).toBe("ウェブ");
   });
 });
 
@@ -65,6 +72,12 @@ describe("Instagram と Xの投稿ID", () => {
     expect(linkKindLabel("instagram")).toBe("Instagram");
     expect(linkKindLabel("x")).toBe("X");
     expect(linkKindLabel("youtube")).toBe("YouTube");
+    expect(linkKindLabel("instagram")).toBe("Instagram");
+  });
+  it("ウェブはサイトのホスト名(www. なし)を返す", () => {
+    expect(linkKindLabel("web", "https://www.example.com/a/b")).toBe("example.com");
+    expect(linkKindLabel("web", "https://shop.example.co.jp/")).toBe("shop.example.co.jp");
+    expect(linkKindLabel("web")).toBe("ウェブ");
   });
 
   it("tweetIdOf: Xの投稿のURLだけ投稿ID(数字)を返す。プロフィール・ほかのサイト・https以外は null", () => {

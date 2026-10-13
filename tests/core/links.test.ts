@@ -66,18 +66,21 @@ describe("parseLinkUrl: 拒否するURL", () => {
     if (!r.ok) expect(r.message).toContain("対応しているのは");
   };
 
-  it("偽装ホスト(完全一致でないもの)", () => {
-    reject("https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ", "対応していません");
-    reject("https://x.com.evil.example/example_user/status/1", "対応していません");
-    reject("https://evil.com/?u=youtube.com", "対応していません");
-    reject("https://evil.com/watch?v=dQw4w9WgXcQ#youtube.com", "対応していません");
-    reject("https://evilyoutube.com/watch?v=dQw4w9WgXcQ");
-    reject("https://notx.com/example_user/status/1");
-    reject("https://sub.x.com/example_user/status/1");
-    reject("https://youtu.be.evil.example/dQw4w9WgXcQ");
-    reject("https://x.com./example_user/status/1");
-    reject("https://evil.com\\@x.com/example_user/status/1");
-    reject("https://x.com%2eevil.example/example_user/status/1");
+  it("偽装ホスト(完全一致でないもの)は、X・YouTube とは扱わず ウェブ のリンクにする", () => {
+    for (const url of [
+      "https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ",
+      "https://x.com.evil.example/example_user/status/1",
+      "https://evil.com/?u=youtube.com",
+      "https://evilyoutube.com/watch?v=dQw4w9WgXcQ",
+      "https://notx.com/example_user/status/1",
+      "https://sub.x.com/example_user/status/1",
+      "https://youtu.be.evil.example/dQw4w9WgXcQ",
+      "https://evil.com\\@x.com/example_user/status/1",
+      "https://x.com%2eevil.example/example_user/status/1",
+    ]) {
+      expect(parseLinkUrl(url), url).toMatchObject({ ok: true, kind: "web" });
+    }
+    reject("https://x.com./example_user/status/1", "公開されたドメイン名");
   });
 
   it("https 以外(javascript: / http: / data: など)", () => {
@@ -182,8 +185,8 @@ describe("addLink", () => {
     expect(r.errors[0]!.message).toContain("1つ以上");
   });
 
-  it("許可リスト外のURLは、対応サイトと直し方つきのエラー(field は url)", async () => {
-    const r = await add({ url: "https://example.com/a", date: "2026-10-10" });
+  it("不正なURL(http・内部ホスト)は、直し方つきのエラー(field は url)", async () => {
+    const r = await add({ url: "https://localhost/a", date: "2026-10-10" });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.errors[0]!.field).toBe("url");
@@ -330,7 +333,6 @@ describe("parseLinkUrl: Instagram", () => {
 
   it.each([
     "http://www.instagram.com/p/ABCde12_-xY/",
-    "https://instagram.com.evil.example/p/ABCde12_-xY/",
     "https://www.instagram.com/stories/example/123/",
     "https://www.instagram.com/explore/",
     "https://www.instagram.com/accounts/login/",
@@ -349,5 +351,76 @@ describe("parseLinkUrl: Instagram", () => {
     const res = await addLink(testEnv().DB, { url: `${IG}?igsh=x`, date: "2026-10-10" }, { now: NOW, fetchTitle: async () => ((called = true), "x") });
     expect(res).toMatchObject({ ok: true, link: { kind: "instagram", url: IG, title: null } });
     expect(called).toBe(false);
+  });
+});
+
+describe("parseLinkUrl: ウェブ(サイトを問わない)", () => {
+  it.each([
+    ["https://example.com/", "https://example.com/"],
+    ["https://Www.Example.COM/Path/a?id=3&b=2#frag", "https://www.example.com/Path/a?id=3&b=2"],
+    ["https://example.co.jp/movie?utm_source=x&utm_medium=y&fbclid=abc&gclid=1&page=2", "https://example.co.jp/movie?page=2"],
+    ["https://xn--eckwd4c7c.example/a", "https://xn--eckwd4c7c.example/a"],
+  ])("%s を正規化して受け付ける", (input, url) => {
+    expect(parseLinkUrl(input)).toEqual({ ok: true, url, kind: "web" });
+  });
+
+  it.each([
+    ["http://example.com/", "https"],
+    ["https://localhost/a", "公開されたドメイン名"],
+    ["https://intranet/a", "公開されたドメイン名"],
+    ["https://printer.local/a", "公開されたドメイン名"],
+    ["https://127.0.0.1/a", "IPアドレス"],
+    ["https://[::1]/a", "IPアドレス"],
+    ["https://2130706433/a", "IPアドレス"],
+    ["https://example.com:8443/a", "ポート"],
+    ["https://user:pw@example.com/a", "user:pass@"],
+    ["https://例え.jp/a", "ASCII以外"],
+    [`https://example.com/${"a".repeat(2100)}`, "長すぎ"],
+  ])("%s は拒否する", (input, includes) => {
+    const r = parseLinkUrl(input);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toContain(includes);
+  });
+});
+
+describe("ウェブのリンクの登録と説明文", () => {
+  const URL_WEB = "https://example.com/movie/1";
+
+  it("fetchTitle を呼ばず、AI が渡した title / description を保存する", async () => {
+    let called = false;
+    const r = await addLink(
+      db(),
+      { url: URL_WEB, date: "2026-10-10", title: "映画の公式ページ", description: "公開日や上映館の案内" },
+      { now: NOW, fetchTitle: async () => ((called = true), "取得しない") },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(called).toBe(false);
+    expect(r.link).toMatchObject({ kind: "web", title: "映画の公式ページ", description: "公開日や上映館の案内" });
+  });
+
+  it("title が無くても、取りに行かず タイトルなしで登録する", async () => {
+    let called = false;
+    const r = await addLink(db(), { url: URL_WEB, date: "2026-10-10" }, { now: NOW, fetchTitle: async () => ((called = true), "x") });
+    expect(r.ok && r.link.title).toBeNull();
+    expect(called).toBe(false);
+  });
+
+  it("description は500文字まで", async () => {
+    const r = await addLink(db(), { url: URL_WEB, date: "2026-10-10", description: "あ".repeat(501) }, { now: NOW });
+    expect(r.ok).toBe(false);
+  });
+
+  it("updateLink は渡した項目だけ変える。null で消せる。どちらも無いとエラー", async () => {
+    const added = await addLink(db(), { url: URL_WEB, date: "2026-10-10", title: "旧", description: "旧説明" }, { now: NOW });
+    if (!added.ok) throw new Error("setup");
+    const id = added.link.id;
+    const a = await updateLink(db(), { id, description: "新説明" });
+    expect(a.ok && a.link).toMatchObject({ title: "旧", description: "新説明" });
+    const b = await updateLink(db(), { id, title: null });
+    expect(b.ok && b.link).toMatchObject({ title: null, description: "新説明" });
+    const c = await updateLink(db(), { id, description: null });
+    expect(c.ok && c.link).toMatchObject({ title: null, description: null });
+    expect((await updateLink(db(), { id })).ok).toBe(false);
   });
 });

@@ -164,7 +164,7 @@ export function Transaction(props: { id: string }) {
 
       {state.kind === "ready" && mode === "view" && (
         <>
-          <TransactionBody data={state.data} cats={cats} onViewPhoto={setViewPhoto} busy={busy} onSaveLinkTitle={(lid, title) => linkAction(async () => run(() => updateLink(lid, { title })), "リンクのタイトルを保存しました。")} onFetchLinkTitle={(lid) => linkAction(async () => run(() => fetchLinkTitle(lid)), "タイトルを取得しました。")} onDeleteLink={(lid) => linkAction(async () => run(() => deleteLink(lid)), "リンクを削除しました。")} />
+          <TransactionBody data={state.data} cats={cats} onViewPhoto={setViewPhoto} busy={busy} onSaveLink={(lid, patch) => linkAction(async () => run(() => updateLink(lid, patch)), "リンクを保存しました。")} onFetchLinkTitle={(lid) => linkAction(async () => run(() => fetchLinkTitle(lid)), "タイトルを取得しました。")} onDeleteLink={(lid) => linkAction(async () => run(() => deleteLink(lid)), "リンクを削除しました。")} />
           <DeleteSection data={state.data} />
         </>
       )}
@@ -198,7 +198,7 @@ function TransactionBody(props: {
   cats: CategoriesData;
   busy: boolean;
   onViewPhoto: (p: PhotoView) => void;
-  onSaveLinkTitle: (id: string, title: string | null) => Promise<boolean>;
+  onSaveLink: (id: string, patch: { title: string | null; description: string | null }) => Promise<boolean>;
   onFetchLinkTitle: (id: string) => Promise<boolean>;
   onDeleteLink: (id: string) => Promise<boolean>;
 }) {
@@ -404,7 +404,7 @@ function TransactionBody(props: {
           <ul class="day__list day__links">
             {links.map((l) => (
               <li key={l.id}>
-                <LinkCard link={l} busy={props.busy} onSaveTitle={props.onSaveLinkTitle} onFetchTitle={props.onFetchLinkTitle} onDelete={props.onDeleteLink} />
+                <LinkCard link={l} busy={props.busy} onSave={props.onSaveLink} onFetchTitle={props.onFetchLinkTitle} onDelete={props.onDeleteLink} />
               </li>
             ))}
           </ul>

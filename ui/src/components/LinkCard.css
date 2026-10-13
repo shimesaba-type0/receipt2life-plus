@@ -14,3 +14,5 @@
 
 /* YouTube のサムネイル(16:9。画像が読み込めなければ出さない) */
 .link__thumb { flex: none; display: block; width: 160px; max-width: 40vw; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--line-soft); }
+
+.link__desc { margin: 4px 0 0; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }

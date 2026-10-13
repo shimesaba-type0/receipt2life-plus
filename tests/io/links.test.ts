@@ -41,11 +41,11 @@ describe("リンクのインポート", () => {
     expect(await db().prepare("SELECT url, kind, title FROM links WHERE id = 'lk1'").first()).toEqual({ url: X_POST, kind: "x", title: "t" });
   });
 
-  it("許可リスト外・偽装ホスト・userinfo・紐づけ先なし・kind 不一致は、その行だけエラー", async () => {
+  it("内部ホスト・IPアドレス・userinfo・紐づけ先なし・kind 不一致は、その行だけエラー", async () => {
     const res = await doImport(
       jsonl(
-        link({ id: "a", url: "https://example.com/a" }),
-        link({ id: "b", url: "https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ" }),
+        link({ id: "a", url: "https://localhost/a" }),
+        link({ id: "b", url: "https://192.168.0.1/watch?v=dQw4w9WgXcQ" }),
         link({ id: "c", url: "https://user:pw@x.com/example_user/status/1" }),
         link({ id: "d", date: undefined }),
         link({ id: "e", kind: "youtube" }),
@@ -83,6 +83,7 @@ describe("往復(export → 空にする → import)とバックアップ復元�
     await doImport(jsonl(event, tx));
     await addLink(db(), { url: YT, title: "動画", transaction_id: "tx1", date: "2026-10-10" }, { now: NOW });
     await addLink(db(), { url: X_POST, event_id: "ev1" }, { now: NOW });
+    await addLink(db(), { url: "https://example.com/movie/1", title: "公式ページ", description: "上映館の案内", date: "2026-10-10" }, { now: NOW });
     const before = await exportRecords();
     const text = before.map((r) => JSON.stringify(r)).join("\n");
 
@@ -90,11 +91,12 @@ describe("往復(export → 空にする → import)とバックアップ復元�
     await db().exec("DELETE FROM events");
     await db().exec("DELETE FROM transactions");
     const restored = await doImport(text);
-    expect(restored.summary).toMatchObject({ ok: 4, errors: 0, skipped: 0 });
+    expect(restored.summary).toMatchObject({ ok: 5, errors: 0, skipped: 0 });
     expect(await exportRecords()).toEqual(before);
 
     const again = await doImport(text);
-    expect(again.summary).toMatchObject({ ok: 0, errors: 0, skipped: 4 });
-    expect(await count("links")).toBe(2);
+    expect(again.summary).toMatchObject({ ok: 0, errors: 0, skipped: 5 });
+    expect(await count("links")).toBe(3);
+    expect(await db().prepare("SELECT kind, description FROM links WHERE kind = 'web'").first()).toEqual({ kind: "web", description: "上映館の案内" });
   });
 });

@@ -188,7 +188,7 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
 
   app.delete("/api/events/:id", async (c) => respond(c, await deleteEvent(c.env.DB, { id: c.req.param("id") })));
 
-  // 外部リンク(Xの投稿・YouTubeの動画)
+  // 外部リンク(Xの投稿・YouTubeの動画・Instagram・ウェブのページ)
   app.post("/api/links", async (c) => {
     const body = await readJson(c);
     if (!body) return badJson(c);

@@ -4,19 +4,23 @@ import { isoDate, toFieldErrors, type FieldError } from "./schema";
 import { TitleFetchError, type TitleFetcher } from "./link-titles";
 import type { CoreOptions } from "./transactions";
 
-// 外部リンク(links)。Xの投稿・YouTubeの動画・Instagramの投稿のURLを、日付・取引・出来事に付ける。
+// 外部リンク(links)。Xの投稿・YouTubeの動画・Instagramの投稿・サイトを問わない https のページのURLを、日付・取引・出来事に付ける。
 // URLの形だけを検証・正規化する。タイトルは、登録のときだけ公式の oEmbed から取得する(src/core/link-titles.ts。YouTube と X だけ)。
+// それ以外(Instagram・ウェブ)はサーバーから取りに行かない。AI が読んだタイトルと説明文を、MCP 経由で渡してもらう。
 
-export const LINK_KINDS = ["x", "youtube", "instagram"] as const;
+export const LINK_KINDS = ["x", "youtube", "instagram", "web"] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
 export const MAX_URL_LENGTH = 2048;
+export const MAX_DESCRIPTION_LENGTH = 500;
 
 export interface LinkView {
   id: string;
   url: string;
   kind: LinkKind;
   title: string | null;
+  // 説明文(AI が読んだ要約など、任意)
+  description: string | null;
   date: string | null;
   transaction_id: string | null;
   event_id: string | null;
@@ -29,7 +33,7 @@ const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"
 const INSTAGRAM_HOSTS = new Set(["instagram.com", "www.instagram.com"]);
 
 const SUPPORTED_HINT =
-  "対応しているのは、Xの投稿(https://x.com/<ユーザー名>/status/<数字>、twitter.com も可)と、YouTubeの動画(https://www.youtube.com/watch?v=<動画ID>、https://youtu.be/<動画ID>、/shorts/<動画ID>、/live/<動画ID>、再生リスト /playlist?list=<ID>)と、Instagramの投稿・リール(https://www.instagram.com/p/<コード>/、/reel/<コード>/。プロフィール /<ユーザー名>/ も可)です";
+  "対応しているのは、Xの投稿(https://x.com/<ユーザー名>/status/<数字>、twitter.com も可)と、YouTubeの動画(https://www.youtube.com/watch?v=<動画ID>、https://youtu.be/<動画ID>、/shorts/<動画ID>、/live/<動画ID>、再生リスト /playlist?list=<ID>)と、Instagramの投稿・リール(https://www.instagram.com/p/<コード>/、/reel/<コード>/。プロフィール /<ユーザー名>/ も可)と、それ以外のサイトの https のページです";
 
 const bad = (reason: string) => ({ ok: false as const, message: `${reason}。${SUPPORTED_HINT}` });
 
@@ -74,7 +78,21 @@ export function parseLinkUrl(input: string): ParsedLinkUrl {
   if (X_HOSTS.has(host)) return parseX(host, u);
   if (YOUTUBE_HOSTS.has(host)) return parseYouTube(host, u);
   if (INSTAGRAM_HOSTS.has(host)) return parseInstagram(host, u);
-  return bad(`url のサイト「${host.slice(0, 80)}」には対応していません`);
+  return parseWeb(host, u);
+}
+
+// サイトを問わないリンク。https のページだけ。内部向けのホスト(localhost・IPアドレス・ドットの無い名前)は受けない
+const WEB_TRACKING = new Set(["fbclid", "gclid", "gbraid", "wbraid", "msclkid", "yclid", "dclid", "mc_cid", "mc_eid", "igshid", "twclid", "_ga", "ref_src"]);
+const INTERNAL_SUFFIXES = [".localhost", ".local", ".internal", ".lan", ".home.arpa"];
+
+function parseWeb(host: string, u: URL): ParsedLinkUrl {
+  if (host.startsWith("[") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || /^\d+$/.test(host)) return bad("url のホストはドメイン名にしてください(IPアドレスは使えません)");
+  if (!host.includes(".") || host.endsWith(".") || host === "localhost" || INTERNAL_SUFFIXES.some((s) => host.endsWith(s))) {
+    return bad(`url のサイト「${host.slice(0, 80)}」は公開されたドメイン名ではありません`);
+  }
+  // フラグメントと追跡用のクエリ(utm_* など)を消す。そのほかのクエリは、順序もそのまま残す(ページを決めるものがあるため)
+  const params = [...u.searchParams.entries()].filter(([k]) => !k.startsWith("utm_") && !WEB_TRACKING.has(k));
+  return { ok: true, url: build(host, u.pathname, params), kind: "web" };
 }
 
 function parseX(host: string, u: URL): ParsedLinkUrl {
@@ -174,14 +192,16 @@ const urlField = z
     if (!parsed.ok) ctx.addIssue({ code: "custom", message: parsed.message });
   });
 const titleField = z.string().trim().min(1).max(200);
+const descriptionField = z.string().trim().min(1).max(MAX_DESCRIPTION_LENGTH);
 
 const TARGET_MESSAGE = "date、transaction_id、event_id のうち1つ以上を指定してください";
 const anyTarget = (m: { date?: string; transaction_id?: string; event_id?: string }) => Boolean(m.date || m.transaction_id || m.event_id);
 
 // MCP の入力定義(.shape)に使う。「どれか1つ以上」の検証は newLinkSchema で行う
 export const linkFieldsSchema = z.strictObject({
-  url: urlField.describe("リンクのURL。https のXの投稿(x.com / twitter.com の /<ユーザー名>/status/<数字>)かYouTubeの動画(youtube.com の watch?v= / shorts / live / playlist、youtu.be)。必須"),
-  title: titleField.optional().describe("リンクの表題(200文字まで、任意)。URLの先のタイトルは取得しないので、必要なら自分で付ける"),
+  url: urlField.describe("リンクのURL。https のページならサイトは問わない。Xの投稿・YouTubeの動画・Instagramの投稿は専用に扱う。必須"),
+  title: titleField.optional().describe("リンクの表題(200文字まで)。YouTube と X 以外は、サーバーがページを読みに行かないので、ページを読んだ AI が付ける"),
+  description: descriptionField.optional().describe("リンクの説明文(500文字まで、任意)。ページの内容の要約など"),
   date: isoDate.optional().describe("リンクを紐づける日付(YYYY-MM-DD)"),
   transaction_id: idField.optional().describe("リンクを紐づける取引の id(list_transactions や add_transactions の結果で分かる)"),
   event_id: idField.optional().describe("リンクを紐づける出来事の id(list_events で分かる)"),
@@ -190,10 +210,15 @@ export const linkFieldsSchema = z.strictObject({
 export const newLinkSchema = linkFieldsSchema.refine(anyTarget, { message: TARGET_MESSAGE, path: ["date"] });
 export type NewLink = z.infer<typeof newLinkSchema>;
 
-// title は null で消去できる(必須の項目として渡す)
-export const updateLinkSchema = z.strictObject({
+// title・description は null で消去できる。どちらか1つ以上を渡す
+export const updateLinkFieldsSchema = z.strictObject({
   id: idField,
-  title: titleField.nullable().describe("新しい表題。null で消去"),
+  title: titleField.nullable().optional().describe("新しい表題。null で消去"),
+  description: descriptionField.nullable().optional().describe("新しい説明文。null で消去"),
+});
+export const updateLinkSchema = updateLinkFieldsSchema.refine((m) => m.title !== undefined || m.description !== undefined, {
+  message: "title か description の少なくとも1つを指定してください",
+  path: ["title"],
 });
 
 export const deleteLinkSchema = z.strictObject({ id: idField.describe("削除するリンクの id(list_links で分かる)") });
@@ -207,7 +232,7 @@ export const listLinksSchema = listLinksFieldsSchema.refine(anyTarget, { message
 
 // ---- 保存 ----
 
-const COLUMNS = "id, url, kind, title, date, transaction_id, event_id, created_at";
+const COLUMNS = "id, url, kind, title, description, date, transaction_id, event_id, created_at";
 
 export type LinkResult =
   | { ok: true; link: LinkView; duplicate: boolean; message: string }
@@ -220,7 +245,7 @@ const notFound = (id: string): { ok: false; errors: FieldError[] } => ({
   errors: [{ field: "id", message: `id: 「${id.slice(0, 64)}」というリンクはありません。list_links で id を確かめてください` }],
 });
 
-const kindLabel = (kind: LinkKind) => (kind === "x" ? "X" : "YouTube");
+const kindLabel = (kind: LinkKind) => ({ x: "X", youtube: "YouTube", instagram: "Instagram", web: "ウェブ" })[kind];
 
 // 同じ紐づけ先(date / transaction_id / event_id が全部同じ)に、同じ正規化URLがあるか
 export async function findDuplicateLink(
@@ -258,7 +283,7 @@ export async function addLink(db: D1Database, input: unknown, options: AddLinkOp
 
   // 表題が無ければ取りに行く。取れなければ表題なしで登録する(登録は失敗させない)
   let title = m.title ?? null;
-  if (title === null && options.fetchTitle && url.kind !== "instagram") {
+  if (title === null && options.fetchTitle && url.kind !== "instagram" && url.kind !== "web") {
     title = await options.fetchTitle(url.kind, url.url).catch((e: unknown) => {
       console.log(`link title: ${url.kind} ${e instanceof TitleFetchError ? e.reason : "取得に失敗しました"}`);
       return null;
@@ -269,12 +294,13 @@ export async function addLink(db: D1Database, input: unknown, options: AddLinkOp
     url: url.url,
     kind: url.kind,
     title,
+    description: m.description ?? null,
     ...target,
     created_at: (options.now ?? new Date()).toISOString(),
   };
   await db
-    .prepare(`INSERT INTO links (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(link.id, link.url, link.kind, link.title, link.date, link.transaction_id, link.event_id, link.created_at)
+    .prepare(`INSERT INTO links (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(link.id, link.url, link.kind, link.title, link.description, link.date, link.transaction_id, link.event_id, link.created_at)
     .run();
   return { ok: true, link, duplicate: false, message: `リンクを登録しました: ${kindLabel(link.kind)} ${link.url}` };
 }
@@ -282,12 +308,15 @@ export async function addLink(db: D1Database, input: unknown, options: AddLinkOp
 export async function updateLink(db: D1Database, input: unknown): Promise<LinkResult> {
   const parsed = updateLinkSchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { id, title } = parsed.data;
+  const { id } = parsed.data;
   const current = await db.prepare(`SELECT ${COLUMNS} FROM links WHERE id = ?`).bind(id).first<LinkView>();
   if (!current) return notFound(id);
-  await db.prepare("UPDATE links SET title = ? WHERE id = ?").bind(title, id).run();
-  const link = { ...current, title };
-  return { ok: true, link, duplicate: false, message: `リンクの表題を更新しました: ${link.url}` };
+  // 渡された項目だけ変える(渡さなかった項目はそのまま)
+  const title = parsed.data.title === undefined ? current.title : parsed.data.title;
+  const description = parsed.data.description === undefined ? current.description : parsed.data.description;
+  await db.prepare("UPDATE links SET title = ?, description = ? WHERE id = ?").bind(title, description, id).run();
+  const link = { ...current, title, description };
+  return { ok: true, link, duplicate: false, message: `リンクを更新しました: ${link.url}` };
 }
 
 // 登録済みのリンクのタイトルを、取りに行って付け直す(タイトルが無いリンク用)。取れなければエラー(いまのタイトルは変えない)
@@ -299,6 +328,9 @@ export async function refreshLinkTitle(db: D1Database, input: unknown, fetchTitl
   if (!current) return notFound(id);
   if (current.kind === "instagram") {
     return { ok: false, errors: [{ field: "title", message: "title: Instagram のタイトルは自動では取得できません(公式の取得方法は事前の登録が必要なため)。「タイトルを編集」で手入力してください" }] };
+  }
+  if (current.kind === "web") {
+    return { ok: false, errors: [{ field: "title", message: "title: ウェブのリンクのタイトルは、サーバーからは取得しません。「タイトルを編集」で手入力するか、AI に update_link で付けてもらってください" }] };
   }
   let title: string | null = null;
   let reason = "タイトルが見つかりませんでした";
@@ -331,7 +363,7 @@ export async function deleteLink(db: D1Database, input: unknown): Promise<Delete
 // 日の詳細と同じ条件(日付そのもの、その日の取引、その日と重なる出来事)
 export async function listLinksOnDay(db: D1Database, date: string): Promise<LinkView[]> {
   const { results } = await db
-    .prepare(`SELECT l.id, l.url, l.kind, l.title, l.date, l.transaction_id, l.event_id, l.created_at FROM links l WHERE ${onDay("l", "?")} ORDER BY l.created_at, l.id`)
+    .prepare(`SELECT l.id, l.url, l.kind, l.title, l.description, l.date, l.transaction_id, l.event_id, l.created_at FROM links l WHERE ${onDay("l", "?")} ORDER BY l.created_at, l.id`)
     .bind(date, date, date, date)
     .all<LinkView>();
   return results;
@@ -361,7 +393,7 @@ export async function listLinks(db: D1Database, input: unknown): Promise<ListLin
   }
   const { results } = await db
     .prepare(
-      `SELECT l.id, l.url, l.kind, l.title, l.date, l.transaction_id, l.event_id, l.created_at FROM links l
+      `SELECT l.id, l.url, l.kind, l.title, l.description, l.date, l.transaction_id, l.event_id, l.created_at FROM links l
        WHERE ${conditions.join(" OR ")} ORDER BY l.created_at, l.id`,
     )
     .bind(...binds)

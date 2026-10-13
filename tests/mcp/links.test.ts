@@ -67,15 +67,23 @@ describe("MCP リンクのツール", () => {
     expect(tool.description).toContain("list_links");
   });
 
-  it("許可リスト外のURLは、対応サイトと直し方を示すエラー", async () => {
-    const r = await callTool("add_link", { url: "https://example.com/a", date: "2026-10-10" });
+  it("ウェブのリンクを title / description つきで登録し、update_link で説明文だけ変えられる", async () => {
+    const add = text(await callTool("add_link", { url: "https://example.com/movie?utm_source=a", date: "2026-10-10", title: "公式ページ", description: "上映館の案内" }));
+    expect(add.link).toMatchObject({ kind: "web", url: "https://example.com/movie", title: "公式ページ", description: "上映館の案内" });
+    const up = text(await callTool("update_link", { id: add.link.id, description: "更新した説明" }));
+    expect(up).toMatchObject({ ok: true, link: { title: "公式ページ", description: "更新した説明" } });
+    expect((await callTool("update_link", { id: add.link.id })).body.result.isError).toBe(true);
+    expect(text(await callTool("list_links", { date: "2026-10-10" })).links[0]).toMatchObject({ kind: "web", description: "更新した説明" });
+  });
+
+  it("不正なURL(http・内部ホスト)は、直し方を示すエラー", async () => {
+    const r = await callTool("add_link", { url: "http://example.com/a", date: "2026-10-10" });
     expect(r.body.result.isError).toBe(true);
     // 入力スキーマ(Zod)の検証メッセージがそのまま返る
     const message = r.body.result.content[0].text as string;
     expect(message).toContain("url");
     expect(message).toContain("対応しているのは");
-    expect(message).toContain("x.com");
-    expect(message).toContain("youtu.be");
+    expect((await callTool("add_link", { url: "https://localhost/a", date: "2026-10-10" })).body.result.isError).toBe(true);
   });
 
   it("紐づけ先なし・存在しない取引はエラー、取引に付けたリンクを取引の id で引ける", async () => {

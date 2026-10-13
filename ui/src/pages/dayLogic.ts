@@ -8,10 +8,20 @@ export function categoryChipLabel(category: string | null, cats: CategoriesData)
   return found && found.group_name !== category ? `${found.group_name}・${category}` : category;
 }
 
-// ---- リンク(Xの投稿・YouTubeの動画・Instagramの投稿)の表示用 ----
+// ---- リンク(Xの投稿・YouTubeの動画・Instagramの投稿・ウェブのページ)の表示用 ----
 
-export function linkKindLabel(kind: LinkView["kind"]): string {
-  return kind === "youtube" ? "YouTube" : kind === "instagram" ? "Instagram" : "X";
+// ウェブのリンクは、行き先が分かるようにサイトのホスト名を出す(url を渡したとき)
+export function linkKindLabel(kind: LinkView["kind"], url?: string): string {
+  if (kind === "youtube") return "YouTube";
+  if (kind === "instagram") return "Instagram";
+  if (kind === "web") {
+    try {
+      return new URL(url ?? "").hostname.replace(/^www\./, "");
+    } catch {
+      return "ウェブ";
+    }
+  }
+  return "X";
 }
 
 // URLをホスト+パスに短くする(https:// と www. は省く)。読めないURLはそのまま。max を超えたら末尾を「…」にする
