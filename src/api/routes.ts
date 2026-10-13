@@ -14,6 +14,7 @@ import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photo
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
+import { searchRecords } from "../core/search";
 import { summarizeTax } from "../core/tax-summary";
 import type { AppEnv } from "../env";
 import { noStoreJson, requireJson, sameOriginOnly, shortIdOnly } from "./guards";
@@ -94,6 +95,16 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     for (const key of ["q", "category"]) if (q[key]) input[key] = q[key];
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listMerchants(c.env.DB, input));
+  });
+
+  // 記録の横断検索。q(空白区切りで AND)/ from / to / types(カンマ区切り)/ limit
+  app.get("/api/search", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["q", "from", "to"]) if (q[key]) input[key] = q[key];
+    if (q.types) input.types = q.types.split(",");
+    if (q.limit) input.limit = Number(q.limit);
+    return respond(c, await searchRecords(c.env.DB, input));
   });
 
   app.get("/api/categories", async (c) => {
