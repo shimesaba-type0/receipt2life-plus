@@ -718,3 +718,22 @@ export interface DeletedSubscriptionData {
   deleted: SubscriptionView;
   message: string;
 }
+
+// GET /api/search?q=&from=&to=&types=&limit=(types はカンマ区切り)。記録の横断検索。新しい日付から
+export type SearchHitType = "transaction" | "event" | "seat_record" | "link" | "photo";
+export interface SearchHitView {
+  type: SearchHitType;
+  id: string;
+  date: string;
+  title: string;
+  detail: string | null;
+  amount: number | null;
+  transaction_id: string | null;
+}
+export interface SearchData {
+  query: string;
+  total: number;
+  latest_date: string | null;
+  count: number;
+  hits: SearchHitView[];
+}

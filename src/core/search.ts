@@ -1,0 +1,190 @@
+import { z } from "zod";
+import { isoDate, toFieldErrors, type FieldError } from "./schema";
+import { escapeLike, keywordCondition } from "./transactions";
+
+// 記録の横断検索。「映画に行った日」「皮膚科に最後に行ったのはいつ」のような問いのため、
+// 取引(店名・メモ・カテゴリ・明細)、出来事、座席の記録、リンク、写真のキャプションを、キーワードで探して日付の新しい順に返す。読み取り専用。
+// 空白で区切った語は、すべて(AND)含むものに絞る。1件の記録の中に、語ごとにどの項目でも当たればよい。
+
+export const SEARCH_TYPES = ["transaction", "event", "seat_record", "link", "photo"] as const;
+export type SearchType = (typeof SEARCH_TYPES)[number];
+
+export const DEFAULT_SEARCH_LIMIT = 30;
+export const MAX_SEARCH_LIMIT = 100;
+const MAX_TERMS = 5;
+const MAX_QUERY = 200;
+
+export const searchSchema = z.strictObject({
+  q: z
+    .string()
+    .trim()
+    .min(1, "q: 探す言葉を入れてください")
+    .max(MAX_QUERY, `q は${MAX_QUERY}文字以内にしてください`)
+    .describe(`探す言葉。空白で区切ると、すべてを含むものに絞る(最大${MAX_TERMS}語)。店名・メモ・カテゴリ名・明細の名前・出来事のタイトル・映画の題名・会場名・リンクのタイトルや説明・写真のキャプションに部分一致`),
+  from: isoDate.optional().describe("この日以降(YYYY-MM-DD)"),
+  to: isoDate.optional().describe("この日まで(YYYY-MM-DD)"),
+  types: z.array(z.enum(SEARCH_TYPES)).min(1).optional().describe("探す対象。省略すると全部(transaction=取引、event=出来事、seat_record=座席の記録、link=リンク、photo=写真)"),
+  limit: z
+    .number({ error: `limit は1〜${MAX_SEARCH_LIMIT}の整数で指定してください` })
+    .int()
+    .min(1, `limit は1〜${MAX_SEARCH_LIMIT}の整数で指定してください`)
+    .max(MAX_SEARCH_LIMIT, `limit は${MAX_SEARCH_LIMIT}以下にしてください`)
+    .default(DEFAULT_SEARCH_LIMIT)
+    .describe(`最大件数(既定${DEFAULT_SEARCH_LIMIT}、最大${MAX_SEARCH_LIMIT})。新しい日付から`),
+});
+
+export interface SearchHit {
+  type: SearchType;
+  id: string;
+  // 日の画面で開く日付(出来事は開始日、リンク・写真は紐づく日)
+  date: string;
+  // 見出し(店名、出来事のタイトル、映画の題名など)
+  title: string;
+  // 補足(カテゴリ、メモ、期間など。なければ null)
+  detail: string | null;
+  // 取引のときだけ金額
+  amount: number | null;
+  // 取引の id(取引・座席の記録・取引に付いたリンク/写真のとき)
+  transaction_id: string | null;
+}
+
+export type SearchResult =
+  | {
+      ok: true;
+      query: string;
+      // 条件に合う全件数(返すのは limit まで)
+      total: number;
+      // 条件に合う中でいちばん新しい日(なければ null)
+      latest_date: string | null;
+      count: number;
+      hits: SearchHit[];
+      message: string;
+    }
+  | { ok: false; errors: FieldError[] };
+
+type Cond = { sql: string; params: string[] };
+
+const like = (columns: readonly string[], term: string): Cond => {
+  const pattern = `%${escapeLike(term)}%`;
+  return { sql: `(${columns.map((c) => `${c} LIKE ? ESCAPE '\\'`).join(" OR ")})`, params: columns.map(() => pattern) };
+};
+
+const and = (conds: Cond[]): Cond => ({ sql: conds.map((c) => c.sql).join(" AND "), params: conds.flatMap((c) => c.params) });
+
+interface Source {
+  type: SearchType;
+  // 日付の式(from / to の絞り込みと並び順に使う)
+  date: string;
+  from: string;
+  // 1語ぶんの条件
+  term: (t: string) => Cond;
+  // 取り出す列。id, date, title, detail, amount, transaction_id の別名で返す
+  select: string;
+  order: string;
+}
+
+const LINK_DATE = "COALESCE(l.date, lt.date, le.start_date)";
+const PHOTO_DATE = "COALESCE(a.date, pt.date, pe.start_date)";
+
+const SOURCES: Source[] = [
+  {
+    type: "transaction",
+    date: "t.date",
+    from: "FROM transactions t LEFT JOIN categories c ON c.id = t.category_id",
+    term: (t) => {
+      const kw = keywordCondition(t);
+      const rest = like(["c.name"], t);
+      const item = like(["i.name", "i.memo"], t);
+      return {
+        sql: `(${kw.sql} OR ${rest.sql} OR EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id AND ${item.sql}))`,
+        params: [...kw.params, ...rest.params, ...item.params],
+      };
+    },
+    select: "t.id AS id, t.date AS date, COALESCE(t.merchant, '(店名なし)') AS title, COALESCE(c.name, '') || CASE WHEN t.memo IS NOT NULL AND t.memo != '' THEN ' ' || t.memo ELSE '' END AS detail, t.amount AS amount, t.id AS transaction_id",
+    order: "t.date DESC, t.created_at DESC, t.id",
+  },
+  {
+    type: "event",
+    date: "e.start_date",
+    from: "FROM events e",
+    term: (t) => like(["e.title", "e.note"], t),
+    select: "e.id AS id, e.start_date AS date, e.title AS title, CASE WHEN e.end_date IS NOT NULL THEN e.start_date || '〜' || e.end_date ELSE '' END || CASE WHEN e.note IS NOT NULL AND e.note != '' THEN ' ' || e.note ELSE '' END AS detail, NULL AS amount, NULL AS transaction_id",
+    order: "e.start_date DESC, e.created_at DESC, e.id",
+  },
+  {
+    type: "seat_record",
+    date: "r.date",
+    from: "FROM seat_records r JOIN venues v ON v.id = r.venue_id LEFT JOIN screens s ON s.id = r.screen_id",
+    term: (t) => like(["r.title", "r.note", "v.name", "s.name"], t),
+    select: "r.id AS id, r.date AS date, COALESCE(r.title, v.name) AS title, v.name || COALESCE(' ' || s.name, '') || ' ' || r.seat AS detail, NULL AS amount, r.transaction_id AS transaction_id",
+    order: "r.date DESC, r.created_at DESC, r.id",
+  },
+  {
+    type: "link",
+    date: LINK_DATE,
+    from: "FROM links l LEFT JOIN transactions lt ON lt.id = l.transaction_id LEFT JOIN events le ON le.id = l.event_id",
+    term: (t) => like(["l.title", "l.description", "l.url"], t),
+    select: `l.id AS id, ${LINK_DATE} AS date, COALESCE(l.title, l.url) AS title, l.description AS detail, NULL AS amount, l.transaction_id AS transaction_id`,
+    order: `${LINK_DATE} DESC, l.created_at DESC, l.id`,
+  },
+  {
+    type: "photo",
+    date: PHOTO_DATE,
+    from: "FROM attachments a LEFT JOIN transactions pt ON pt.id = a.transaction_id LEFT JOIN events pe ON pe.id = a.event_id",
+    term: (t) => like(["a.caption"], t),
+    select: `a.id AS id, ${PHOTO_DATE} AS date, COALESCE(a.caption, '写真') AS title, NULL AS detail, NULL AS amount, a.transaction_id AS transaction_id`,
+    order: `${PHOTO_DATE} DESC, a.created_at DESC, a.id`,
+  },
+];
+
+export async function searchRecords(db: D1Database, input: unknown): Promise<SearchResult> {
+  const parsed = searchSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const { q, from, to, types, limit } = parsed.data;
+  if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
+  const terms = q.split(/\s+/).filter(Boolean);
+  if (terms.length > MAX_TERMS) return { ok: false, errors: [{ field: "q", message: `q: 語は${MAX_TERMS}つまでにしてください` }] };
+
+  const wanted = SOURCES.filter((s) => !types || types.includes(s.type));
+  const perSource = await Promise.all(
+    wanted.map(async (s) => {
+      const conds = terms.map(s.term);
+      const where = [and(conds).sql, `${s.date} IS NOT NULL`];
+      const params = and(conds).params;
+      if (from) {
+        where.push(`${s.date} >= ?`);
+        params.push(from);
+      }
+      if (to) {
+        where.push(`${s.date} <= ?`);
+        params.push(to);
+      }
+      const base = `${s.from} WHERE ${where.join(" AND ")}`;
+      const [rows, count] = await Promise.all([
+        db
+          .prepare(`SELECT '${s.type}' AS type, ${s.select} ${base} ORDER BY ${s.order} LIMIT ?`)
+          .bind(...params, limit)
+          .all<SearchHit>(),
+        db.prepare(`SELECT COUNT(*) AS n ${base}`).bind(...params).first<{ n: number }>(),
+      ]);
+      return { rows: rows.results, n: count?.n ?? 0 };
+    }),
+  );
+
+  const total = perSource.reduce((sum, p) => sum + p.n, 0);
+  const hits = perSource
+    .flatMap((p) => p.rows)
+    .map((h) => ({ ...h, detail: h.detail && h.detail.trim() !== "" ? h.detail.trim() : null }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, limit);
+  const latest = hits[0]?.date ?? null;
+  return {
+    ok: true,
+    query: q,
+    total,
+    latest_date: latest,
+    count: hits.length,
+    hits,
+    message: total === 0 ? `「${q}」に当てはまる記録はありません` : `「${q}」に当てはまる記録が${total}件あります。いちばん新しいのは${latest}です${total > hits.length ? `(新しい順に${hits.length}件を返しました)` : ""}`,
+  };
+}

@@ -6,6 +6,7 @@ import { registerEventTools } from "./tools/events";
 import { registerLinkTools } from "./tools/links";
 import { registerPhotoTools } from "./tools/photos";
 import { registerReportTools } from "./tools/reports";
+import { registerSearchTools } from "./tools/search";
 import { registerSeatRecordTools } from "./tools/seat-records";
 import { registerSubscriptionTools } from "./tools/subscriptions";
 import { registerTransactionTools } from "./tools/transactions";
@@ -22,5 +23,6 @@ export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string
   registerLinkTools(server, db, fetchTitle);
   registerSeatRecordTools(server, db);
   registerSubscriptionTools(server, db);
+  registerSearchTools(server, db);
   return server;
 }

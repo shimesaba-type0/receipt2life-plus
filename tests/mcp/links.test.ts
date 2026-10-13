@@ -23,10 +23,10 @@ const X_POST = "https://x.com/example_user/status/1234567890";
 const YT = "https://youtu.be/dQw4w9WgXcQ";
 
 describe("MCP リンクのツール", () => {
-  it("tools/list は35個で、リンクの3ツールの説明が具体的", async () => {
+  it("tools/list は36個で、リンクの3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
-    expect(tools).toHaveLength(35);
+    expect(tools).toHaveLength(36);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("add_link").description).toContain("Xの投稿");
     expect(byName("add_link").description).toContain("YouTube");
@@ -96,3 +96,15 @@ describe("MCP リンクのツール", () => {
     expect((await callTool("list_links", {})).body.result.isError).toBe(true);
   });
 });
+
+describe("MCP search_records", () => {
+  it("リンクの題名で探せて、説明が使いどころを示す。不正な入力はエラー", async () => {
+    await callTool("add_link", { url: "https://example.com/m", title: "映画の公式ページ", date: "2026-10-10" });
+    const r = text(await callTool("search_records", { q: "映画" }));
+    expect(r).toMatchObject({ ok: true, total: 1, latest_date: "2026-10-10", hits: [{ type: "link" }] });
+    expect((await callTool("search_records", { q: "" })).body.result.isError).toBe(true);
+    const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string }[];
+    expect(tools.find((t) => t.name === "search_records")!.description).toContain("最後に行ったのは");
+  });
+});
+

@@ -1,4 +1,7 @@
 // ルーティングの純粋な部分(DOMに触れない。テストする)
+import type { SearchHitType } from "../../src/api/contract";
+
+const SEARCH_TYPES: readonly string[] = ["transaction", "event", "seat_record", "link", "photo"];
 export type Route =
   | { name: "home" }
   | { name: "calendar"; month: string | null }
@@ -11,6 +14,7 @@ export type Route =
   | { name: "subscriptions" }
   | { name: "tax" }
   | { name: "connect" }
+  | { name: "search"; q: string; type: SearchHitType | null }
   | { name: "notfound" };
 
 // /photos/add の紐づけ先。date は必須(実在日付)、あとは任意
@@ -33,6 +37,11 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/calendar") {
     const month = new URLSearchParams(search).get("month");
     return { name: "calendar", month: month && MONTH.test(month) ? month : null };
+  }
+  if (path === "/search") {
+    const params = new URLSearchParams(search);
+    const type = params.get("type");
+    return { name: "search", q: (params.get("q") ?? "").trim().slice(0, 200), type: type && SEARCH_TYPES.includes(type) ? (type as SearchHitType) : null };
   }
   if (path === "/photos/add") {
     const q = parsePhotosAddQuery(search);
