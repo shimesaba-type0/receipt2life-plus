@@ -161,9 +161,9 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 出来事の削除は、MCP には無い(UI 専用)。`core` に `deleteEvent` を足して使う。
 
-## リンク(Xの投稿・YouTubeの動画)
+## リンク(Xの投稿・YouTubeの動画・Instagramの投稿)
 
-日付・取引・出来事に、外部リンクを付ける。埋め込みやサムネイルは出さない。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。URLの検証と正規化は `src/core/links.ts`。
+日付・取引・出来事に、外部リンクを付ける。埋め込みやサムネイルは出さない。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため取得しない(`POST /api/links/:id/title` は400)。`kind` は `x` / `youtube` / `instagram`。URLの検証と正規化は `src/core/links.ts`。
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |

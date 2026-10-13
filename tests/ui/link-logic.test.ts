@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LinkView } from "../../src/api/contract";
-import { isSafeLinkHref, linkDisplayText, linkKindLabel, shortenUrl } from "../../ui/src/pages/dayLogic";
+import { isSafeLinkHref, linkDisplayText, linkKindLabel, shortenUrl, tweetIdOf } from "../../ui/src/pages/dayLogic";
 
 const link = (over: Partial<LinkView>): LinkView => ({
   id: "l1",
@@ -57,5 +57,25 @@ describe("isSafeLinkHref", () => {
     expect(isSafeLinkHref("http://youtu.be/dQw4w9WgXcQ")).toBe(false);
     expect(isSafeLinkHref("javascript:alert(1)")).toBe(false);
     expect(isSafeLinkHref("")).toBe(false);
+  });
+});
+
+describe("Instagram と Xの投稿ID", () => {
+  it("種類のラベル", () => {
+    expect(linkKindLabel("instagram")).toBe("Instagram");
+    expect(linkKindLabel("x")).toBe("X");
+    expect(linkKindLabel("youtube")).toBe("YouTube");
+  });
+
+  it("tweetIdOf: Xの投稿のURLだけ投稿ID(数字)を返す。プロフィール・ほかのサイト・https以外は null", () => {
+    expect(tweetIdOf("https://x.com/example_user/status/1234567890")).toBe("1234567890");
+    expect(tweetIdOf("https://twitter.com/example_user/status/42/")).toBe("42");
+    expect(tweetIdOf("https://mobile.x.com/example_user/status/7")).toBe("7");
+    expect(tweetIdOf("https://x.com/example_user")).toBeNull();
+    expect(tweetIdOf("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBeNull();
+    expect(tweetIdOf("https://www.instagram.com/p/ABCde12_-xY/")).toBeNull();
+    expect(tweetIdOf("http://x.com/example_user/status/1")).toBeNull();
+    expect(tweetIdOf("https://x.com.evil.example/u/status/1")).toBeNull();
+    expect(tweetIdOf("not a url")).toBeNull();
   });
 });

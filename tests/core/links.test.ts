@@ -313,3 +313,41 @@ describe("取引・出来事の削除とリンク", () => {
     expect(rows.results.map((r) => r.id)).toEqual([keep.ok ? keep.link.id : ""]);
   });
 });
+
+describe("parseLinkUrl: Instagram", () => {
+  const IG = "https://www.instagram.com/p/ABCde12_-xY/";
+  it.each([
+    ["https://www.instagram.com/p/ABCde12_-xY/", IG],
+    ["https://instagram.com/p/ABCde12_-xY", "https://instagram.com/p/ABCde12_-xY/"],
+    ["https://www.instagram.com/reel/ABCde12_-xY/?igsh=abc&utm_source=qr#x", "https://www.instagram.com/reel/ABCde12_-xY/"],
+    ["https://www.instagram.com/example.user/p/ABCde12_-xY/?img_index=2", IG.replace("/p/", "/example.user/p/")],
+    ["https://www.instagram.com/tv/ABCde12_-xY/", "https://www.instagram.com/tv/ABCde12_-xY/"],
+    ["https://www.instagram.com/example.user/", "https://www.instagram.com/example.user/"],
+    ["https://www.instagram.com/example_user?hl=ja", "https://www.instagram.com/example_user/"],
+  ])("%s を受け付けて正規化する", (input, url) => {
+    expect(parseLinkUrl(input)).toEqual({ ok: true, url, kind: "instagram" });
+  });
+
+  it.each([
+    "http://www.instagram.com/p/ABCde12_-xY/",
+    "https://instagram.com.evil.example/p/ABCde12_-xY/",
+    "https://www.instagram.com/stories/example/123/",
+    "https://www.instagram.com/explore/",
+    "https://www.instagram.com/accounts/login/",
+    "https://www.instagram.com/p/",
+    "https://www.instagram.com/p/a/",
+    "https://www.instagram.com/p/ABCde12_-xY/extra",
+    "https://www.instagram.com/bad user/",
+    "https://user:pw@www.instagram.com/p/ABCde12_-xY/",
+    "https://www.instagram.com:8443/p/ABCde12_-xY/",
+  ])("%s は受け付けない", (input) => {
+    expect(parseLinkUrl(input).ok).toBe(false);
+  });
+
+  it("登録できる。タイトルは取りに行かない(取得の関数があっても呼ばない)", async () => {
+    let called = false;
+    const res = await addLink(testEnv().DB, { url: `${IG}?igsh=x`, date: "2026-10-10" }, { now: NOW, fetchTitle: async () => ((called = true), "x") });
+    expect(res).toMatchObject({ ok: true, link: { kind: "instagram", url: IG, title: null } });
+    expect(called).toBe(false);
+  });
+});

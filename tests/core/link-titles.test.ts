@@ -43,6 +43,13 @@ describe("makeTitleFetcher(通信は差し替え)", () => {
     expect(new URL(oembedEndpoint("x", X_POST)).host).toBe("publish.twitter.com");
   });
 
+  it("Instagram は取りに行かない(通信しない)", async () => {
+    let called = false;
+    const f = makeTitleFetcher((async () => ((called = true), jsonResponse({ title: "x" }))) as typeof fetch);
+    expect(await f("instagram", "https://www.instagram.com/p/ABCde12_-xY/")).toBeNull();
+    expect(called).toBe(false);
+  });
+
   it("失敗(404・通信エラー・壊れたJSON・大きすぎる応答)は null。例外は出さない", async () => {
     expect(await makeTitleFetcher((async () => new Response("no", { status: 404 })) as typeof fetch)("youtube", YT)).toBeNull();
     expect(await makeTitleFetcher((async () => { throw new Error("net"); }) as typeof fetch)("youtube", YT)).toBeNull();
@@ -72,6 +79,15 @@ describe("addLink と refreshLinkTitle", () => {
     // 取得の仕組みが無ければ(テスト・インポート)取りに行かない
     const none = await addLink(db(), { url: "https://youtu.be/cbcdefghijk", date: "2026-10-10" }, { now: NOW });
     expect(none).toMatchObject({ ok: true, link: { title: null } });
+  });
+
+  it("refreshLinkTitle: Instagram は取得できないと案内するエラー(取得の関数は呼ばない)", async () => {
+    const added = await addLink(db(), { url: "https://www.instagram.com/p/ABCde12_-xY/", date: "2026-10-10" }, { now: NOW });
+    if (!added.ok) throw new Error("add");
+    let called = false;
+    const r = await refreshLinkTitle(db(), { id: added.link.id }, async () => ((called = true), "x"));
+    expect(r).toMatchObject({ ok: false, errors: [{ field: "title", message: expect.stringContaining("Instagram") }] });
+    expect(called).toBe(false);
   });
 
   it("refreshLinkTitle: タイトルを付け直す。取れなければエラーでタイトルは変えない。存在しない id もエラー", async () => {

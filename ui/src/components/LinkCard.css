@@ -7,3 +7,7 @@
 .link__kind { font-size: 12px; }
 .link__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .link__form { padding: 0; }
+
+/* Xの埋め込み(押したときだけ読み込む) */
+.link__embed { margin-top: 8px; min-width: 0; }
+.link__embed-note { margin: 4px 0 0; font-size: 13px; }

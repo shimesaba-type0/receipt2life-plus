@@ -166,7 +166,7 @@ export async function uploadPhoto(file: Blob, meta: PhotoMeta = {}): Promise<Api
 }
 export const deletePhoto = (id: string) => request<{ deleted: PhotoView }>("DELETE", `/api/photos/${encodeURIComponent(id)}`);
 
-// リンク(Xの投稿・YouTubeの動画)。duplicate が true のときは登録せず、既存のリンクが返る
+// リンク(Xの投稿・YouTubeの動画・Instagramの投稿)。duplicate が true のときは登録せず、既存のリンクが返る
 export const addLink = (link: NewLink) => request<{ link: LinkView; duplicate: boolean; message: string }>("POST", "/api/links", link);
 export const updateLink = (id: string, patch: LinkPatch) => request<{ link: LinkView; duplicate: false; message: string }>("PATCH", `/api/links/${encodeURIComponent(id)}`, patch);
 // タイトルが無いリンクのタイトルを、サーバーが取りに行って付ける(YouTube・X の oEmbed)

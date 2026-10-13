@@ -4,6 +4,7 @@ import type { LinkKind } from "./links";
 // 取りに行く先は、次の2つの固定のホストだけ(リンクのURLは検索の値として渡す。リンクのホストへは行かない):
 //   YouTube: https://www.youtube.com/oembed → title
 //   X:       https://publish.twitter.com/oembed → 投稿者名と、投稿の本文の先頭
+// Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため、取りに行かない(null)
 // 失敗(通信エラー・タイムアウト・削除された動画や非公開の投稿・仕様の変更)は null を返す。タイトルが付かないだけで、リンクの登録は成功する
 
 export type TitleFetcher = (kind: LinkKind, url: string) => Promise<string | null>;
@@ -78,7 +79,7 @@ async function readLimited(res: Response): Promise<string | null> {
   return new TextDecoder().decode(all);
 }
 
-export function oembedEndpoint(kind: LinkKind, url: string): string {
+export function oembedEndpoint(kind: Exclude<LinkKind, "instagram">, url: string): string {
   const q = encodeURIComponent(url);
   return kind === "youtube" ? `https://www.youtube.com/oembed?format=json&url=${q}` : `https://publish.twitter.com/oembed?omit_script=1&url=${q}`;
 }
@@ -86,6 +87,7 @@ export function oembedEndpoint(kind: LinkKind, url: string): string {
 // fetchImpl はテスト用の差し替え
 export function makeTitleFetcher(fetchImpl: typeof fetch = fetch): TitleFetcher {
   return async (kind, url) => {
+    if (kind === "instagram") return null;
     try {
       const res = await fetchImpl(oembedEndpoint(kind, url), {
         headers: { accept: "application/json" },

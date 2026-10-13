@@ -650,7 +650,7 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
   );
 }
 
-// リンクエリア(Xの投稿・YouTubeの動画)。追加はこの日の日付に紐づける
+// リンクエリア(Xの投稿・YouTubeの動画・Instagramの投稿)。追加はこの日の日付に紐づける
 function LinksCard(props: {
   links: LinkView[];
   busy: boolean;
@@ -688,7 +688,7 @@ function LinksCard(props: {
     <div class="card">
       <div class="day__row-head day__row-head--sub">
         <h2 class="day__h">リンク</h2>
-        <span class="muted day__sub">Xの投稿・YouTubeの動画</span>
+        <span class="muted day__sub">X・YouTube・Instagram</span>
         {!open && (
           <div class="day__photo-tools">
             <button type="button" class="btn" disabled={busy} onClick={() => setOpen(true)}>
@@ -705,7 +705,7 @@ function LinksCard(props: {
             void submit();
           }}
         >
-          <label for={`${id}-url`}>リンク(XまたはYouTube)</label>
+          <label for={`${id}-url`}>リンク(X・YouTube・Instagram)</label>
           <input
             id={`${id}-url`}
             type="url"

@@ -4,10 +4,10 @@ import { isoDate, toFieldErrors, type FieldError } from "./schema";
 import type { TitleFetcher } from "./link-titles";
 import type { CoreOptions } from "./transactions";
 
-// 外部リンク(links)。Xの投稿・YouTubeの動画のURLを、日付・取引・出来事に付ける。
-// Worker から外のサイトへは取りに行かない(タイトル取得も埋め込みもしない)。URLの形だけを検証・正規化する。
+// 外部リンク(links)。Xの投稿・YouTubeの動画・Instagramの投稿のURLを、日付・取引・出来事に付ける。
+// URLの形だけを検証・正規化する。タイトルは、登録のときだけ公式の oEmbed から取得する(src/core/link-titles.ts。YouTube と X だけ)。
 
-export const LINK_KINDS = ["x", "youtube"] as const;
+export const LINK_KINDS = ["x", "youtube", "instagram"] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
 export const MAX_URL_LENGTH = 2048;
@@ -26,9 +26,10 @@ export interface LinkView {
 // ホストは完全一致で判定する(`youtube.com.evil.example` などの偽装を通さない)
 const X_HOSTS = new Set(["x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"]);
 const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"]);
+const INSTAGRAM_HOSTS = new Set(["instagram.com", "www.instagram.com"]);
 
 const SUPPORTED_HINT =
-  "対応しているのは、Xの投稿(https://x.com/<ユーザー名>/status/<数字>、twitter.com も可)と、YouTubeの動画(https://www.youtube.com/watch?v=<動画ID>、https://youtu.be/<動画ID>、/shorts/<動画ID>、/live/<動画ID>、再生リスト /playlist?list=<ID>)です";
+  "対応しているのは、Xの投稿(https://x.com/<ユーザー名>/status/<数字>、twitter.com も可)と、YouTubeの動画(https://www.youtube.com/watch?v=<動画ID>、https://youtu.be/<動画ID>、/shorts/<動画ID>、/live/<動画ID>、再生リスト /playlist?list=<ID>)と、Instagramの投稿・リール(https://www.instagram.com/p/<コード>/、/reel/<コード>/。プロフィール /<ユーザー名>/ も可)です";
 
 const bad = (reason: string) => ({ ok: false as const, message: `${reason}。${SUPPORTED_HINT}` });
 
@@ -72,6 +73,7 @@ export function parseLinkUrl(input: string): ParsedLinkUrl {
   const host = u.hostname;
   if (X_HOSTS.has(host)) return parseX(host, u);
   if (YOUTUBE_HOSTS.has(host)) return parseYouTube(host, u);
+  if (INSTAGRAM_HOSTS.has(host)) return parseInstagram(host, u);
   return bad(`url のサイト「${host.slice(0, 80)}」には対応していません`);
 }
 
@@ -91,6 +93,29 @@ function parseX(host: string, u: URL): ParsedLinkUrl {
   const params = [...u.searchParams.entries()].filter(([k]) => !isTracking(k) && k !== "s" && k !== "t");
   params.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return { ok: true, url: build(host, path, params), kind: "x" };
+}
+
+const INSTAGRAM_USER = /^[A-Za-z0-9._]{1,30}$/;
+const INSTAGRAM_CODE = /^[A-Za-z0-9_-]{5,40}$/;
+const INSTAGRAM_RESERVED_PROFILES = new Set(["p", "reel", "reels", "tv", "explore", "accounts", "stories", "direct", "about", "legal", "web", "developer", "directory", "emails", "challenge", "oauth", "privacy"]);
+
+// Instagram: 投稿 /p/<コード>、リール /reel/<コード>(/reels/<コード>)、/tv/<コード>(ユーザー名つき /<ユーザー名>/p/<コード> も可)、プロフィール /<ユーザー名>。
+// クエリ(igsh・img_index・utm_* など)はすべて消す。ストーリー(/stories/…。24時間で消える)は対象外
+function parseInstagram(host: string, u: URL): ParsedLinkUrl {
+  const path = u.pathname.replace(/\/$/, "");
+  const post = /^(?:\/([^/]+))?\/(p|reel|reels|tv)\/([^/]+)$/.exec(path);
+  if (post) {
+    if (post[1] !== undefined && !INSTAGRAM_USER.test(post[1])) return bad("url のユーザー名の形が正しくありません");
+    if (!INSTAGRAM_CODE.test(post[3]!)) return bad("url の投稿のコードの形が正しくありません");
+    return { ok: true, url: `https://${host}${path}/`, kind: "instagram" };
+  }
+  const profile = /^\/([^/]+)$/.exec(path);
+  if (profile) {
+    const name = profile[1]!;
+    if (!INSTAGRAM_USER.test(name) || INSTAGRAM_RESERVED_PROFILES.has(name.toLowerCase())) return bad("url がユーザーのプロフィールの形ではありません");
+    return { ok: true, url: `https://${host}${path}/`, kind: "instagram" };
+  }
+  return bad("url はInstagramの投稿(/p/<コード>)・リール(/reel/<コード>)またはプロフィール(/<ユーザー名>)の形にしてください");
 }
 
 function parseYouTube(host: string, u: URL): ParsedLinkUrl {
@@ -233,7 +258,7 @@ export async function addLink(db: D1Database, input: unknown, options: AddLinkOp
 
   // 表題が無ければ取りに行く。取れなければ表題なしで登録する(登録は失敗させない)
   let title = m.title ?? null;
-  if (title === null && options.fetchTitle) title = await options.fetchTitle(url.kind, url.url).catch(() => null);
+  if (title === null && options.fetchTitle && url.kind !== "instagram") title = await options.fetchTitle(url.kind, url.url).catch(() => null);
   const link: LinkView = {
     id: crypto.randomUUID(),
     url: url.url,
@@ -267,6 +292,9 @@ export async function refreshLinkTitle(db: D1Database, input: unknown, fetchTitl
   const { id } = parsed.data;
   const current = await db.prepare(`SELECT ${COLUMNS} FROM links WHERE id = ?`).bind(id).first<LinkView>();
   if (!current) return notFound(id);
+  if (current.kind === "instagram") {
+    return { ok: false, errors: [{ field: "title", message: "title: Instagram のタイトルは自動では取得できません(公式の取得方法は事前の登録が必要なため)。「タイトルを編集」で手入力してください" }] };
+  }
   const title = await fetchTitle(current.kind, current.url).catch(() => null);
   if (title === null) {
     return { ok: false, errors: [{ field: "title", message: "title: タイトルを取得できませんでした(動画や投稿が非公開・削除されているか、通信に失敗しました)。「タイトルを編集」で手入力できます" }] };
