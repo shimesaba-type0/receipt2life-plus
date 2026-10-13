@@ -3,10 +3,11 @@ import { addTransactionsSchema, listTransactionsSchema } from "../../core/schema
 import { deleteTransactionSchema, updateTransactionFieldsSchema } from "../../core/transaction-edit-schema";
 import { addTransactions, deleteTransaction, listTransactions, updateTransaction } from "../../core/transactions";
 import { toResult } from "../result";
+import { withTransactionUrls } from "../urls";
 
 // 取引のツール: add_transactions / list_transactions / update_transaction / delete_transaction
-// bucket は delete_transaction の delete_photos で写真の実体を消すために使う
-export function registerTransactionTools(server: McpServer, db: D1Database, bucket: R2Bucket): void {
+// bucket は delete_transaction の delete_photos で写真の実体を消すために使う。origin は結果に付ける明細ページのURLの組み立てに使う
+export function registerTransactionTools(server: McpServer, db: D1Database, bucket: R2Bucket, origin: string): void {
   server.registerTool(
     "add_transactions",
     {
@@ -37,11 +38,12 @@ export function registerTransactionTools(server: McpServer, db: D1Database, buck
         "読み取れない・薄くて判読できない項目は、推測で埋めない。判読できないときは、登録する前に利用者に選択肢を示して確認する: (1) 利用者に値を教えてもらって補う、(2) 合計金額だけ登録する(明細は省略)、(3) 登録をやめる。利用者が決めるまで登録しない。部分的に読めない項目(例: 電話番号だけ薄い)は、その項目だけ省略して登録し、結果を利用者に伝えて、必要なら後で update_transaction で補うよう案内する。",
         "同日・同額・同じ店の取引は重複として登録せず、既存IDを返す。実際に別の買い物なら allow_duplicate:true を付けて再送する。paid_time がある取引は、時刻も含めて判定する(同じ日に同じ店で同額でも、時刻が違えば別の買い物として登録する)。",
         "全件成功か全件失敗。エラーなら errors に index と項目名と理由が返るので、直して再送する。",
+        "結果の registered の各取引には url(その取引の明細ページ。利用者が自分のブラウザで開いて確認・修正できる)が付く。登録できたことを伝えるときは、この url を利用者に見せる(AI はこのURLを開けない)。重複で登録しなかったものには existing_url(既存の取引のページ)が付く。",
         "写真の添付は、このツールではできない(create_photo_upload_link でリンクを作り、利用者が Web UI の /photos/add で追加する)。",
       ].join("\n"),
       inputSchema: addTransactionsSchema.shape,
     },
-    async (args) => toResult(await addTransactions(db, args)),
+    async (args) => toResult(withTransactionUrls(origin, await addTransactions(db, args))),
   );
 
   server.registerTool(
@@ -56,11 +58,12 @@ export function registerTransactionTools(server: McpServer, db: D1Database, buck
         "tax_flag で税金の控除用フラグを絞り込める(medical / self_medication / donation、または \"any\" で何かのフラグが付いたもの全部)。確定申告の準備で、年の範囲(from / to)と組み合わせて明細を見るときに使う。各取引の tax_flag も返る(なしは null)。",
         "明細(items)のある取引は、行の実効カテゴリ・実効フラグ(行の値、無ければ取引の値)のどれかが category / tax_flag に当てはまれば含まれる。金額の内訳を見るときは、各行の amount と category / tax_flag を見る(行の category / tax_flag が null の行は取引の値に従う)。",
         "各取引には items(明細の配列。id、position、name、amount、category、tax_flag、memo、tax_rate=税率%(不明は null)、tax_label=印字の記号。明細なしは空配列)と tax_lines(税の内訳。rate、taxable_amount、tax_amount、amount_basis、label。税率の高い順。なしは空配列)が付く。include_items: false で両方を省ける。税率別の税額の合計は summarize_tax で出す。",
+        "各取引には url(その取引の明細ページ。利用者が自分のブラウザで開く)も付く。利用者に取引を示すときは url も添える。",
         "登録前に重複を確かめたいときや、直近の記録を見返したいときに使う。",
       ].join("\n"),
       inputSchema: listTransactionsSchema.shape,
     },
-    async (args) => toResult(await listTransactions(db, args)),
+    async (args) => toResult(withTransactionUrls(origin, await listTransactions(db, args))),
   );
 
   server.registerTool(
@@ -79,11 +82,12 @@ export function registerTransactionTools(server: McpServer, db: D1Database, buck
         "メモには入れない: 支払方法は account へ、レジ番号は register_no、伝票番号は receipt_no、店番号は store_code、電話は merchant_phone、住所は merchant_address、登録番号は invoice_number、担当者は clerk_name、税の内訳は tax_lines へ入れる。メモは、レシートのどの項目にも当てはまらない補足だけに使う(すでにメモに書いてある項目は、その項目へ移して memo を直す)。",
         "修正後、店名があり、すべての行に実効カテゴリ(行のカテゴリ、無ければ取引のカテゴリ)があれば status は ok、そうでなければ needs_review に自動で変わる。",
         "修正後に、同じ日・金額・店(paid_time があれば時刻も同じ)の別の取引があると、更新は行ったうえで warnings に重複の疑いのある取引 id が返る。重複なら、不要な側を delete_transaction で削除する。",
+        "結果の transaction には url(その取引の明細ページ)が付く。修正したことを伝えるときは、この url を利用者に見せる(AI はこのURLを開けない)。",
         "存在しない id や不正な値はエラーになり、errors に項目名と理由が返るので、直して再送する。",
       ].join("\n"),
       inputSchema: updateTransactionFieldsSchema.shape,
     },
-    async (args) => toResult(await updateTransaction(db, args)),
+    async (args) => toResult(withTransactionUrls(origin, await updateTransaction(db, args))),
   );
 
   server.registerTool(
