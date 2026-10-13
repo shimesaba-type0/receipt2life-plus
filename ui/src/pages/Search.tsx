@@ -54,6 +54,12 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
     navigate(searchPageHref(text, type === "" ? null : type));
   };
 
+  // 対象のチップは、押したらすぐ検索し直す(言葉が空のときは、選ぶだけ)
+  const pickType = (value: SearchHitType | "") => {
+    setType(value);
+    if (text.trim() !== "") navigate(searchPageHref(text, value === "" ? null : value));
+  };
+
   const groups = data ? groupHitsByDate(data.hits) : [];
 
   return (
@@ -77,7 +83,7 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
         </div>
         <div class="search__types" role="group" aria-label="探す対象">
           {TYPE_OPTIONS.map((o) => (
-            <button key={o.value} type="button" class={`search__chip${type === o.value ? " is-on" : ""}`} aria-pressed={type === o.value} onClick={() => setType(o.value)}>
+            <button key={o.value} type="button" class={`search__chip${type === o.value ? " is-on" : ""}`} aria-pressed={type === o.value} onClick={() => pickType(o.value)}>
               {o.label}
             </button>
           ))}
