@@ -30,7 +30,7 @@ interface Tool {
 describe("MCP の税率・税の内訳", () => {
   it("ツールは30個で summarize_tax がある。説明に読み取りの考え方が書かれている", async () => {
     const tools = (await rpc("tools/list")).body.result.tools as Tool[];
-    expect(tools).toHaveLength(34);
+    expect(tools).toHaveLength(35);
     const tool = (name: string) => tools.find((t) => t.name === name)!;
     const add = tool("add_transactions").description;
     expect(add).toContain("税率はレシートに印字された数字をそのまま入れる(8、10、1 など。計算しない)");

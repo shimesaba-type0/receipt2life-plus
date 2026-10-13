@@ -169,7 +169,7 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 | --- | --- | --- |
 | `POST /api/links` | `NewLink`(`url` 必須、`title?`、`date?` / `transaction_id?` / `event_id?` のうち1つ以上) | `link: LinkView`, `duplicate`, `message` |
 | `PATCH /api/links/:id` | `LinkPatch`(`title` のみ。null で消去) | `link`, `duplicate: false`, `message` |
-| `POST /api/links/:id/title` | なし(タイトルが無いリンクのタイトルを、取りに行って付ける) | `link`, `duplicate: false`, `message`。取得できなければ400(`errors` に理由。いまのタイトルは変わらない) |
+| `POST /api/links/:id/title` | なし(タイトルが無いリンクのタイトルを、取りに行って付ける) | `link`, `duplicate: false`, `message`。取得できなければ400(`errors` に理由。いまのタイトルは変わらない)。理由の例: 「YouTubeが 401 を返しました(埋め込みが許可されていない、または非公開の可能性)」「Xが3秒以内に応答しませんでした」 |
 | `DELETE /api/links/:id` | なし | `deleted`, `message` |
 
 - `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube`), `title`, `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)

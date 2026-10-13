@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addLink, refreshLinkTitle } from "../../src/core/links";
-import { makeTitleFetcher, oembedEndpoint, titleFromX, titleFromYouTube, type TitleFetcher } from "../../src/core/link-titles";
+import { TitleFetchError, makeTitleFetcher, oembedEndpoint, titleFromX, titleFromYouTube, type TitleFetcher } from "../../src/core/link-titles";
 import { NOW, testEnv } from "../helpers";
 
 const db = () => testEnv().DB;
@@ -50,17 +50,52 @@ describe("makeTitleFetcher(通信は差し替え)", () => {
     expect(called).toBe(false);
   });
 
-  it("失敗(404・通信エラー・壊れたJSON・大きすぎる応答)は null。例外は出さない", async () => {
-    expect(await makeTitleFetcher((async () => new Response("no", { status: 404 })) as typeof fetch)("youtube", YT)).toBeNull();
-    expect(await makeTitleFetcher((async () => { throw new Error("net"); }) as typeof fetch)("youtube", YT)).toBeNull();
-    expect(await makeTitleFetcher((async () => new Response("{", { status: 200 })) as typeof fetch)("youtube", YT)).toBeNull();
-    expect(await makeTitleFetcher((async () => new Response("x".repeat(70 * 1024), { status: 200 })) as typeof fetch)("youtube", YT)).toBeNull();
+  const reasonOf = async (f: TitleFetcher, kind: "youtube" | "x" = "youtube") => {
+    try {
+      await f(kind, kind === "youtube" ? YT : X_POST);
+      return null;
+    } catch (e) {
+      return e instanceof TitleFetchError ? e.reason : `想定外: ${String(e)}`;
+    }
+  };
+
+  it("失敗は、理由つきの TitleFetchError(404・401・429・通信エラー・壊れたJSON・大きすぎる応答・タイトルなし)", async () => {
+    expect(await reasonOf(makeTitleFetcher((async () => new Response("no", { status: 404 })) as typeof fetch))).toContain("404");
+    expect(await reasonOf(makeTitleFetcher((async () => new Response("no", { status: 401 })) as typeof fetch))).toContain("埋め込みが許可されていない");
+    expect(await reasonOf(makeTitleFetcher((async () => new Response("no", { status: 429 })) as typeof fetch), "x")).toContain("X");
+    expect(await reasonOf(makeTitleFetcher((async () => { throw new Error("net"); }) as typeof fetch))).toContain("通信に失敗");
+    expect(await reasonOf(makeTitleFetcher((async () => new Response("{", { status: 200 })) as typeof fetch))).toContain("読み取れません");
+    expect(await reasonOf(makeTitleFetcher((async () => new Response("x".repeat(70 * 1024), { status: 200 })) as typeof fetch))).toContain("大きすぎ");
+    expect(await reasonOf(makeTitleFetcher((async () => jsonResponse({ title: "" })) as typeof fetch))).toContain("タイトルがありません");
+    const timeout = Object.assign(new Error("t"), { name: "TimeoutError" });
+    expect(await reasonOf(makeTitleFetcher((async () => { throw timeout; }) as typeof fetch))).toContain("3秒");
+  });
+
+  it("リダイレクトは、固定の公式ホスト(publish.x.com など)にだけ追う。それ以外へは追わずに失敗", async () => {
+    const hosts: string[] = [];
+    const moved = makeTitleFetcher((async (input: RequestInfo | URL) => {
+      const u = new URL(String(input));
+      hosts.push(u.hostname);
+      if (u.hostname === "publish.twitter.com") return new Response(null, { status: 301, headers: { location: `https://publish.x.com${u.pathname}${u.search}` } });
+      return jsonResponse({ author_name: "ダミー", html: "<blockquote><p>本文</p></blockquote>" });
+    }) as typeof fetch);
+    expect(await moved("x", X_POST)).toBe("ダミー: 本文");
+    expect(hosts).toEqual(["publish.twitter.com", "publish.x.com"]);
+
+    const evil = makeTitleFetcher((async () => new Response(null, { status: 302, headers: { location: "https://evil.example/oembed" } })) as typeof fetch);
+    expect(await reasonOf(evil)).toContain("想定外の場所");
+    const http = makeTitleFetcher((async () => new Response(null, { status: 302, headers: { location: "http://www.youtube.com/oembed" } })) as typeof fetch);
+    expect(await reasonOf(http)).toContain("想定外の場所");
+    const loop = makeTitleFetcher((async () => new Response(null, { status: 302, headers: { location: "https://www.youtube.com/oembed" } })) as typeof fetch);
+    expect(await reasonOf(loop)).toContain("転送が多すぎ");
   });
 });
 
 describe("addLink と refreshLinkTitle", () => {
   const ok: TitleFetcher = async () => "取得したタイトル";
-  const fail: TitleFetcher = async () => null;
+  const fail: TitleFetcher = async () => {
+    throw new TitleFetchError("YouTubeが 404 を返しました");
+  };
   const boom: TitleFetcher = async () => {
     throw new Error("x");
   };
@@ -94,7 +129,8 @@ describe("addLink と refreshLinkTitle", () => {
     const added = await addLink(db(), { url: YT, date: "2026-10-10" }, { now: NOW });
     if (!added.ok) throw new Error("add");
     const id = added.link.id;
-    expect(await refreshLinkTitle(db(), { id }, fail)).toMatchObject({ ok: false, errors: [{ field: "title" }] });
+    const failed = await refreshLinkTitle(db(), { id }, fail);
+    expect(failed).toMatchObject({ ok: false, errors: [{ field: "title", message: expect.stringContaining("YouTubeが 404 を返しました") }] });
     expect(await refreshLinkTitle(db(), { id }, ok)).toMatchObject({ ok: true, link: { title: "取得したタイトル" } });
     expect(await refreshLinkTitle(db(), { id }, fail)).toMatchObject({ ok: false });
     const row = await db().prepare("SELECT title FROM links WHERE id = ?").bind(id).first<{ title: string }>();
