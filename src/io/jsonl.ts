@@ -18,7 +18,7 @@ import {
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
 import { parseLinkUrl, MAX_DESCRIPTION_LENGTH, MAX_URL_LENGTH } from "../core/links";
-import { subscriptionFieldsSchema } from "../core/subscriptions";
+import { resolveMoney, subscriptionFieldsSchema, toMinor } from "../core/subscriptions";
 import { parseHttpsUrl } from "../core/urls";
 import { MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
 import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
@@ -94,7 +94,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   // サブスク・保険などの固定費(別枠)。active は true / false で出す
   {
-    sql: `SELECT 'subscription' AS type, id, name, kind, amount, period, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at
+    sql: `SELECT 'subscription' AS type, id, name, kind, amount, period, currency, foreign_amount_minor / 100.0 AS foreign_amount, exchange_rate, previous_foreign_minor / 100.0 AS previous_foreign_amount, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at
           FROM subscriptions WHERE id > ? ORDER BY id LIMIT ?`,
     decorate: async (_db, rows) => rows.map((r) => ({ ...r, active: (r as { active?: number }).active === 1 })),
   },
@@ -418,6 +418,7 @@ async function importEvents(db: D1Database, entries: Entry[], report: Report, no
 const subscriptionLineSchema = subscriptionFieldsSchema.extend({
   id: idField.optional(),
   previous_amount: z.number().int().min(0).optional(),
+  previous_foreign_amount: z.number().positive().max(1_000_000).optional(),
   amount_changed_on: isoDate.optional(),
   price_checked_on: isoDate.optional(),
   created_at: timestampField.optional(),
@@ -426,7 +427,7 @@ const subscriptionLineSchema = subscriptionFieldsSchema.extend({
 
 async function importSubscriptions(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
   if (entries.length === 0) return;
-  const valid: { entry: Entry; id: string; given: boolean; url: string | null; data: z.infer<typeof subscriptionLineSchema> }[] = [];
+  const valid: { entry: Entry; id: string; given: boolean; url: string | null; money: { amount: number; foreign_minor: number | null; rate: number | null }; data: z.infer<typeof subscriptionLineSchema> }[] = [];
   for (const entry of entries) {
     const r = subscriptionLineSchema.safeParse(entry.record);
     if (!r.success) {
@@ -440,11 +441,14 @@ async function importSubscriptions(db: D1Database, entries: Entry[], report: Rep
       url = parseHttpsUrl(r.data.url);
       if (url === null) errors.push("url: https のURLだけ指定できます");
     }
-    if (errors.length > 0) {
+    // 外貨のときは、円(amount)がバックアップにあればそのまま使う(換算レートを変えても、記録した値を変えない)
+    const money = resolveMoney(r.data, true);
+    if (!money.ok) errors.push(...money.errors.map((e) => e.message));
+    if (errors.length > 0 || !money.ok) {
       report(entry, { status: "error", message: errors.join(" / ") });
       continue;
     }
-    valid.push({ entry, id: r.data.id ?? crypto.randomUUID(), given: r.data.id !== undefined, url, data: r.data });
+    valid.push({ entry, id: r.data.id ?? crypto.randomUUID(), given: r.data.id !== undefined, url, money, data: r.data });
   }
 
   const existing = await existingIds(db, "subscriptions", valid.filter((v) => v.given).map((v) => v.id));
@@ -464,10 +468,10 @@ async function importSubscriptions(db: D1Database, entries: Entry[], report: Rep
       statements: [
         db
           .prepare(
-            `INSERT INTO subscriptions (id, name, kind, amount, period, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO subscriptions (id, name, kind, amount, period, currency, foreign_amount_minor, exchange_rate, previous_foreign_minor, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .bind(v.id, d.name, d.kind, d.amount, d.period, d.billing_month ?? null, d.billing_day ?? null, d.previous_amount ?? null, d.amount_changed_on ?? null, d.price_checked_on ?? null, v.url, d.note || null, d.active ? 1 : 0, createdAt, d.updated_at ?? createdAt),
+          .bind(v.id, d.name, d.kind, v.money.amount, d.period, d.currency, v.money.foreign_minor, v.money.rate, d.previous_foreign_amount === undefined ? null : toMinor(d.previous_foreign_amount), d.billing_month ?? null, d.billing_day ?? null, d.previous_amount ?? null, d.amount_changed_on ?? null, d.price_checked_on ?? null, v.url, d.note || null, d.active ? 1 : 0, createdAt, d.updated_at ?? createdAt),
       ],
     });
   }

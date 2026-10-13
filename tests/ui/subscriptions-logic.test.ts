@@ -4,6 +4,9 @@ import {
   amountLabel,
   buildStack,
   emptySubscriptionForm,
+  estimateYen,
+  foreignLabel,
+  foreignText,
   groupSubscriptions,
   monthLabel,
   nextPaymentLabel,
@@ -20,6 +23,11 @@ const sub = (over: Partial<SubscriptionView> = {}): SubscriptionView => ({
   kind: "subscription",
   amount: 1000,
   period: "monthly",
+  currency: "JPY",
+  foreign_amount: null,
+  exchange_rate: null,
+  previous_foreign_amount: null,
+  amount_is_estimate: false,
   monthly_equivalent: 1000,
   yearly_equivalent: 12000,
   billing_month: null,
@@ -118,7 +126,7 @@ describe("validateSubscriptionForm", () => {
     const r = validateSubscriptionForm(ok);
     expect(r).toEqual({
       ok: true,
-      value: { name: "ダミー", kind: "subscription", amount: 1280, period: "monthly", billing_month: null, billing_day: null, url: null, note: null, active: true },
+      value: { name: "ダミー", kind: "subscription", currency: "JPY", amount: 1280, foreign_amount: null, exchange_rate: null, period: "monthly", billing_month: null, billing_day: null, url: null, note: null, active: true },
     });
   });
   it("名前必須", () => {
@@ -148,3 +156,33 @@ describe("validateSubscriptionForm", () => {
     expect(validateSubscriptionForm({ ...ok, note: "あ".repeat(201) }).ok).toBe(false);
   });
 });
+
+describe("外貨払い", () => {
+  const usd = { ...emptySubscriptionForm(), name: "ダミーAI", currency: "USD" as const, foreignAmount: "20", exchangeRate: "150" };
+
+  it("入力の検査: 外貨の金額とレートが必須で、桁数・範囲を見る。円の amount は送らない(null)", () => {
+    const r = validateSubscriptionForm(usd);
+    expect(r.ok && r.value).toMatchObject({ currency: "USD", amount: null, foreign_amount: 20, exchange_rate: 150 });
+    expect(validateSubscriptionForm({ ...usd, foreignAmount: "4.99", exchangeRate: "150.25" }).ok).toBe(true);
+    expect(validateSubscriptionForm({ ...usd, foreignAmount: "２０.５" }).ok).toBe(true);
+    for (const foreignAmount of ["", "0", "-1", "20.123", "abc", "2000000"]) expect(validateSubscriptionForm({ ...usd, foreignAmount }).ok, foreignAmount).toBe(false);
+    for (const exchangeRate of ["", "0", "-1", "150.12345", "x", "999999"]) expect(validateSubscriptionForm({ ...usd, exchangeRate }).ok, exchangeRate).toBe(false);
+  });
+
+  it("円のときは従来どおり(外貨の項目は null)", () => {
+    const r = validateSubscriptionForm({ ...emptySubscriptionForm(), name: "A", amount: "1,280" });
+    expect(r.ok && r.value).toMatchObject({ currency: "JPY", amount: 1280, foreign_amount: null, exchange_rate: null });
+  });
+
+  it("円の目安と表示", () => {
+    expect(estimateYen(20, 150.5)).toBe(3010);
+    expect(estimateYen(99.99, 160)).toBe(15998);
+    expect(foreignText("USD", 20)).toBe("USD 20.00");
+    expect(foreignLabel({ amount: 3010, period: "monthly", currency: "USD", foreign_amount: 20, exchange_rate: 150.5 })).toBe("USD 20.00/月(円は目安・1USD=¥150.5)");
+    expect(foreignLabel({ amount: 500, period: "monthly", currency: "JPY", foreign_amount: null, exchange_rate: null })).toBeNull();
+    expect(priceChangeLabel({ amount: 3375, previous_amount: null, amount_changed_on: "2026-10-12", currency: "USD", foreign_amount: 22.5, previous_foreign_amount: 20 })).toBe("値上がり +USD 2.50(10/12)");
+    expect(priceChangeLabel({ amount: 3000, previous_amount: null, amount_changed_on: "2026-10-12", currency: "USD", foreign_amount: 18, previous_foreign_amount: 20 })).toBe("値下がり −USD 2.00(10/12)");
+    expect(priceChangeLabel({ amount: 3000, previous_amount: null, amount_changed_on: null, currency: "USD", foreign_amount: 20, previous_foreign_amount: null })).toBeNull();
+  });
+});
+

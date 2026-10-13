@@ -44,3 +44,5 @@
   .sub__total-value { font-size: 28px; }
   .sub__form { max-width: 560px; }
 }
+.sub__rate { display: flex; flex-direction: column; gap: 6px; }
+.sub__rate .cat__hint { margin: 0; }

@@ -40,4 +40,18 @@ describe("API サブスク・固定費", () => {
     const res = await app.request("http://localhost/api/subscriptions", { method: "POST", body: "{", headers: { "content-type": "application/json" } }, local);
     expect(res.status).toBe(400);
   });
+
+  it("外貨(USD)の登録・一覧・更新・円への戻し", async () => {
+    const added = await json(await send("POST", "/api/subscriptions", { name: "ダミーAI", currency: "USD", foreign_amount: 20, exchange_rate: 150, period: "monthly", billing_day: 23 }));
+    expect(added).toMatchObject({ ok: true, subscription: { currency: "USD", foreign_amount: 20, exchange_rate: 150, amount: 3000, amount_is_estimate: true, billing_day: 23 } });
+    const id = added.subscription.id as string;
+    expect((await json(await send("GET", "/api/subscriptions"))).totals).toMatchObject({ monthly: 3000, yearly: 36000 });
+    const up = await json(await send("PATCH", `/api/subscriptions/${id}`, { exchange_rate: 155.5 }));
+    expect(up).toMatchObject({ ok: true, subscription: { amount: 3110, foreign_amount: 20 } });
+    expect((await send("PATCH", `/api/subscriptions/${id}`, { amount: 100 })).status).toBe(400);
+    expect((await send("POST", "/api/subscriptions", { name: "B", currency: "USD", amount: 100, period: "monthly" })).status).toBe(400);
+    const back = await json(await send("PATCH", `/api/subscriptions/${id}`, { currency: "JPY", amount: 3100 }));
+    expect(back).toMatchObject({ ok: true, subscription: { currency: "JPY", foreign_amount: null, amount: 3100, previous_amount: 3110 } });
+  });
 });
+

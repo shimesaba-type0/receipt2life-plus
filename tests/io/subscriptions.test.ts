@@ -54,4 +54,30 @@ describe("サブスクのバックアップ", () => {
     expect(res.results.map((r) => r.status)).toEqual(["error", "error", "error", "error", "ok"]);
     expect(await count()).toBe(1);
   });
+
+  it("外貨のサブスクも往復で同じ内容に戻る(円の目安・レート・直前の外貨の金額)", async () => {
+    const a = await addSubscription(db(), { name: "ダミーAI", currency: "USD", foreign_amount: 20, exchange_rate: 150.5, period: "monthly", billing_day: 23 }, { now: NOW });
+    if (!a.ok) throw new Error("add");
+    await updateSubscription(db(), { id: a.subscription.id, foreign_amount: 22.5 }, { now: NOW });
+    await addSubscription(db(), { name: "円", amount: 500, period: "monthly" }, { now: NOW });
+    const before = await exportRecords();
+    expect(before.find((r) => r.name === "ダミーAI")).toMatchObject({ currency: "USD", foreign_amount: 22.5, exchange_rate: 150.5, previous_foreign_amount: 20, amount: 3386 });
+    await db().prepare("DELETE FROM subscriptions").run();
+    const restored = await doImport(before.map((r) => JSON.stringify(r)).join("\n"));
+    expect(restored.summary).toMatchObject({ ok: 2, errors: 0 });
+    expect(await exportRecords()).toEqual(before);
+  });
+
+  it("取り込み: 外貨の項目が足りない・円なのに外貨の項目がある行は、その行だけエラー", async () => {
+    const res = await doImport(
+      jsonl(
+        { type: "subscription", name: "A", currency: "USD", amount: 3000, period: "monthly" },
+        { type: "subscription", name: "B", currency: "JPY", amount: 100, foreign_amount: 1, period: "monthly" },
+        { type: "subscription", name: "C", currency: "USD", foreign_amount: 10, exchange_rate: 150, period: "monthly" },
+      ),
+    );
+    expect(res.results.map((r) => r.status)).toEqual(["error", "error", "ok"]);
+    expect(await db().prepare("SELECT amount FROM subscriptions WHERE name = 'C'").first()).toEqual({ amount: 1500 });
+  });
 });
+
