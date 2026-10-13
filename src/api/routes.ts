@@ -97,13 +97,14 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     return respond(c, await listMerchants(c.env.DB, input));
   });
 
-  // 記録の横断検索。q(空白区切りで AND)/ from / to / types(カンマ区切り)/ limit
+  // 記録の横断検索。q(空白区切りで AND)/ from / to / types(カンマ区切り)/ limit / offset
   app.get("/api/search", async (c) => {
     const q = c.req.query();
     const input: Record<string, unknown> = {};
     for (const key of ["q", "from", "to"]) if (q[key]) input[key] = q[key];
     if (q.types) input.types = q.types.split(",");
     if (q.limit) input.limit = Number(q.limit);
+    if (q.offset) input.offset = Number(q.offset);
     return respond(c, await searchRecords(c.env.DB, input));
   });
 

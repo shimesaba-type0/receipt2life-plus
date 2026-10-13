@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
-import { escapeLike, keywordCondition } from "./transactions";
+import { phoneDigits } from "./receipt-details";
 
 // 記録の横断検索。「映画に行った日」「皮膚科に最後に行ったのはいつ」のような問いのため、
 // 取引(店名・メモ・カテゴリ・明細)、出来事、座席の記録、リンク、写真のキャプションを、キーワードで探して日付の新しい順に返す。読み取り専用。
 // 空白で区切った語は、すべて(AND)含むものに絞る。1件の記録の中に、語ごとにどの項目でも当たればよい。
+// 表記ゆれ(全角半角・大文字小文字・ひらがなカタカナ)は、SQL の LIKE では吸収できないので、候補の行を取ってから JS 側で正規化して比べる
+// (個人の記録の規模なので、期間で絞った行をすべて読む)。ページ送りは offset / limit。
 
 export const SEARCH_TYPES = ["transaction", "event", "seat_record", "link", "photo"] as const;
 export type SearchType = (typeof SEARCH_TYPES)[number];
@@ -30,7 +32,14 @@ export const searchSchema = z.strictObject({
     .min(1, `limit は1〜${MAX_SEARCH_LIMIT}の整数で指定してください`)
     .max(MAX_SEARCH_LIMIT, `limit は${MAX_SEARCH_LIMIT}以下にしてください`)
     .default(DEFAULT_SEARCH_LIMIT)
-    .describe(`最大件数(既定${DEFAULT_SEARCH_LIMIT}、最大${MAX_SEARCH_LIMIT})。新しい日付から`),
+    .describe(`1回に返す最大件数(既定${DEFAULT_SEARCH_LIMIT}、最大${MAX_SEARCH_LIMIT})。新しい日付から`),
+  offset: z
+    .number({ error: "offset は0以上の整数で指定してください" })
+    .int("offset は0以上の整数で指定してください")
+    .min(0, "offset は0以上の整数で指定してください")
+    .max(100_000, "offset が大きすぎます")
+    .default(0)
+    .describe("読み飛ばす件数(既定0)。次のページは offset に前の offset + count を渡す。has_more が true の間は続きがある"),
 });
 
 export interface SearchHit {
@@ -57,28 +66,33 @@ export type SearchResult =
       // 条件に合う中でいちばん新しい日(なければ null)
       latest_date: string | null;
       count: number;
+      // 読み飛ばした件数(リクエストの offset)
+      offset: number;
+      // offset + count より後ろにも、条件に合う記録があるか
+      has_more: boolean;
       hits: SearchHit[];
       message: string;
     }
   | { ok: false; errors: FieldError[] };
 
-type Cond = { sql: string; params: string[] };
+// 表記ゆれをそろえる: 全角半角(NFKC)、英字の大文字小文字、カタカナ→ひらがな
+export function normalizeForSearch(text: string): string {
+  return text
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
 
-const like = (columns: readonly string[], term: string): Cond => {
-  const pattern = `%${escapeLike(term)}%`;
-  return { sql: `(${columns.map((c) => `${c} LIKE ? ESCAPE '\\'`).join(" OR ")})`, params: columns.map(() => pattern) };
-};
-
-const and = (conds: Cond[]): Cond => ({ sql: conds.map((c) => c.sql).join(" AND "), params: conds.flatMap((c) => c.params) });
+const join = (...columns: string[]) => columns.map((c) => `COALESCE(${c}, '')`).join(" || ' ' || ");
 
 interface Source {
   type: SearchType;
   // 日付の式(from / to の絞り込みと並び順に使う)
   date: string;
   from: string;
-  // 1語ぶんの条件
-  term: (t: string) => Cond;
-  // 取り出す列。id, date, title, detail, amount, transaction_id の別名で返す
+  // 検索の対象にする文字(SQL の式)
+  hay: string;
+  // 取り出す列。id, date, title, detail, amount, transaction_id の別名で返す。phone は電話番号(数字だけでも当てるため)
   select: string;
   order: string;
 }
@@ -91,66 +105,64 @@ const SOURCES: Source[] = [
     type: "transaction",
     date: "t.date",
     from: "FROM transactions t LEFT JOIN categories c ON c.id = t.category_id",
-    term: (t) => {
-      const kw = keywordCondition(t);
-      const rest = like(["c.name"], t);
-      const item = like(["i.name", "i.memo"], t);
-      return {
-        sql: `(${kw.sql} OR ${rest.sql} OR EXISTS (SELECT 1 FROM transaction_items i WHERE i.transaction_id = t.id AND ${item.sql}))`,
-        params: [...kw.params, ...rest.params, ...item.params],
-      };
-    },
-    select: "t.id AS id, t.date AS date, COALESCE(t.merchant, '(店名なし)') AS title, COALESCE(c.name, '') || CASE WHEN t.memo IS NOT NULL AND t.memo != '' THEN ' ' || t.memo ELSE '' END AS detail, t.amount AS amount, t.id AS transaction_id",
+    hay: `${join("t.merchant", "t.merchant_phone", "t.merchant_address", "t.clerk_name", "t.memo", "t.receipt_no", "t.invoice_number", "c.name")} || ' ' || COALESCE((SELECT group_concat(COALESCE(i.name, '') || ' ' || COALESCE(i.memo, ''), ' ') FROM transaction_items i WHERE i.transaction_id = t.id), '')`,
+    select:
+      "t.id AS id, t.date AS date, COALESCE(t.merchant, '(店名なし)') AS title, COALESCE(c.name, '') || CASE WHEN t.memo IS NOT NULL AND t.memo != '' THEN ' ' || t.memo ELSE '' END AS detail, t.amount AS amount, t.id AS transaction_id, t.merchant_phone AS phone",
     order: "t.date DESC, t.created_at DESC, t.id",
   },
   {
     type: "event",
     date: "e.start_date",
     from: "FROM events e",
-    term: (t) => like(["e.title", "e.note"], t),
-    select: "e.id AS id, e.start_date AS date, e.title AS title, CASE WHEN e.end_date IS NOT NULL THEN e.start_date || '〜' || e.end_date ELSE '' END || CASE WHEN e.note IS NOT NULL AND e.note != '' THEN ' ' || e.note ELSE '' END AS detail, NULL AS amount, NULL AS transaction_id",
+    hay: join("e.title", "e.note"),
+    select:
+      "e.id AS id, e.start_date AS date, e.title AS title, CASE WHEN e.end_date IS NOT NULL THEN e.start_date || '〜' || e.end_date ELSE '' END || CASE WHEN e.note IS NOT NULL AND e.note != '' THEN ' ' || e.note ELSE '' END AS detail, NULL AS amount, NULL AS transaction_id, NULL AS phone",
     order: "e.start_date DESC, e.created_at DESC, e.id",
   },
   {
     type: "seat_record",
     date: "r.date",
     from: "FROM seat_records r JOIN venues v ON v.id = r.venue_id LEFT JOIN screens s ON s.id = r.screen_id",
-    term: (t) => like(["r.title", "r.note", "v.name", "s.name"], t),
-    select: "r.id AS id, r.date AS date, COALESCE(r.title, v.name) AS title, v.name || COALESCE(' ' || s.name, '') || ' ' || r.seat AS detail, NULL AS amount, r.transaction_id AS transaction_id",
+    hay: join("r.title", "r.note", "v.name", "s.name"),
+    select:
+      "r.id AS id, r.date AS date, COALESCE(r.title, v.name) AS title, v.name || COALESCE(' ' || s.name, '') || ' ' || r.seat AS detail, NULL AS amount, r.transaction_id AS transaction_id, NULL AS phone",
     order: "r.date DESC, r.created_at DESC, r.id",
   },
   {
     type: "link",
     date: LINK_DATE,
     from: "FROM links l LEFT JOIN transactions lt ON lt.id = l.transaction_id LEFT JOIN events le ON le.id = l.event_id",
-    term: (t) => like(["l.title", "l.description", "l.url"], t),
-    select: `l.id AS id, ${LINK_DATE} AS date, COALESCE(l.title, l.url) AS title, l.description AS detail, NULL AS amount, l.transaction_id AS transaction_id`,
+    hay: join("l.title", "l.description", "l.url"),
+    select: `l.id AS id, ${LINK_DATE} AS date, COALESCE(l.title, l.url) AS title, l.description AS detail, NULL AS amount, l.transaction_id AS transaction_id, NULL AS phone`,
     order: `${LINK_DATE} DESC, l.created_at DESC, l.id`,
   },
   {
     type: "photo",
     date: PHOTO_DATE,
     from: "FROM attachments a LEFT JOIN transactions pt ON pt.id = a.transaction_id LEFT JOIN events pe ON pe.id = a.event_id",
-    term: (t) => like(["a.caption"], t),
-    select: `a.id AS id, ${PHOTO_DATE} AS date, COALESCE(a.caption, '写真') AS title, NULL AS detail, NULL AS amount, a.transaction_id AS transaction_id`,
+    hay: join("a.caption"),
+    select: `a.id AS id, ${PHOTO_DATE} AS date, COALESCE(a.caption, '写真') AS title, NULL AS detail, NULL AS amount, a.transaction_id AS transaction_id, NULL AS phone`,
     order: `${PHOTO_DATE} DESC, a.created_at DESC, a.id`,
   },
 ];
 
+type Row = SearchHit & { hay: string; phone: string | null };
+
 export async function searchRecords(db: D1Database, input: unknown): Promise<SearchResult> {
   const parsed = searchSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { q, from, to, types, limit } = parsed.data;
+  const { q, from, to, types, limit, offset } = parsed.data;
   if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
-  const terms = q.split(/\s+/).filter(Boolean);
+  const terms = normalizeForSearch(q).split(/\s+/).filter(Boolean);
   if (terms.length > MAX_TERMS) return { ok: false, errors: [{ field: "q", message: `q: 語は${MAX_TERMS}つまでにしてください` }] };
+  // 電話番号らしい語(数字・ハイフン・括弧・プラス・空白だけ)は、数字だけにそろえた比較でも当てる
+  const digitTerms = terms.map((t) => (/^[\d\-()+]+$/.test(t) ? phoneDigits(t) : ""));
 
   const wanted = SOURCES.filter((s) => !types || types.includes(s.type));
   const perSource = await Promise.all(
     wanted.map(async (s) => {
-      const conds = terms.map(s.term);
-      const where = [and(conds).sql, `${s.date} IS NOT NULL`];
-      const params = and(conds).params;
+      const where = [`${s.date} IS NOT NULL`];
+      const params: string[] = [];
       if (from) {
         where.push(`${s.date} >= ?`);
         params.push(from);
@@ -159,32 +171,34 @@ export async function searchRecords(db: D1Database, input: unknown): Promise<Sea
         where.push(`${s.date} <= ?`);
         params.push(to);
       }
-      const base = `${s.from} WHERE ${where.join(" AND ")}`;
-      const [rows, count] = await Promise.all([
-        db
-          .prepare(`SELECT '${s.type}' AS type, ${s.select} ${base} ORDER BY ${s.order} LIMIT ?`)
-          .bind(...params, limit)
-          .all<SearchHit>(),
-        db.prepare(`SELECT COUNT(*) AS n ${base}`).bind(...params).first<{ n: number }>(),
-      ]);
-      return { rows: rows.results, n: count?.n ?? 0 };
+      const { results } = await db
+        .prepare(`SELECT '${s.type}' AS type, ${s.select}, ${s.hay} AS hay ${s.from} WHERE ${where.join(" AND ")} ORDER BY ${s.order}`)
+        .bind(...params)
+        .all<Row>();
+      return results.filter((row) => {
+        const hay = normalizeForSearch(row.hay);
+        const digits = row.phone ? phoneDigits(row.phone) : "";
+        return terms.every((t, i) => hay.includes(t) || (digitTerms[i] !== "" && digits.includes(digitTerms[i]!)));
+      });
     }),
   );
 
-  const total = perSource.reduce((sum, p) => sum + p.n, 0);
-  const hits = perSource
-    .flatMap((p) => p.rows)
-    .map((h) => ({ ...h, detail: h.detail && h.detail.trim() !== "" ? h.detail.trim() : null }))
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    .slice(0, limit);
-  const latest = hits[0]?.date ?? null;
+  // 新しい日付の順(同じ日は、種類ごとの並びのまま)
+  const all = perSource.flat().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const total = all.length;
+  const hits: SearchHit[] = all.slice(offset, offset + limit).map((r) => ({ type: r.type, id: r.id, date: r.date, title: r.title, detail: r.detail && r.detail.trim() !== "" ? r.detail.trim() : null, amount: r.amount, transaction_id: r.transaction_id }));
   return {
     ok: true,
     query: q,
     total,
-    latest_date: latest,
+    latest_date: all[0]?.date ?? null,
     count: hits.length,
+    offset,
+    has_more: offset + hits.length < total,
     hits,
-    message: total === 0 ? `「${q}」に当てはまる記録はありません` : `「${q}」に当てはまる記録が${total}件あります。いちばん新しいのは${latest}です${total > hits.length ? `(新しい順に${hits.length}件を返しました)` : ""}`,
+    message:
+      total === 0
+        ? `「${q}」に当てはまる記録はありません`
+        : `「${q}」に当てはまる記録が${total}件あります。いちばん新しいのは${all[0]!.date}です${total > hits.length ? `(${offset + 1}〜${offset + hits.length}件目を新しい順に返しました${offset + hits.length < total ? "。続きは offset を進めて取得できます" : ""})` : ""}`,
   };
 }

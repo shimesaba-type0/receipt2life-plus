@@ -32,7 +32,7 @@ export function App() {
         {route.name === "accounts" && <Accounts />}
         {route.name === "subscriptions" && <Subscriptions />}
         {route.name === "tax" && <Tax />}
-        {route.name === "search" && <Search q={route.q} type={route.type} />}
+        {route.name === "search" && <Search q={route.q} type={route.type} page={route.page} />}
         {route.name === "notfound" && (
           <section class="page">
             <h1 class="page__title">ページが見つかりません</h1>

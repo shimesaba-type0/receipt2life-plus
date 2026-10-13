@@ -4,12 +4,12 @@ import { searchRecords } from "../api";
 import { formatYen } from "../format";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { TYPE_LABELS, TYPE_OPTIONS, dateHeading, groupHitsByDate, hitHref, searchApiPath, searchPageHref } from "./searchLogic";
+import { TYPE_LABELS, TYPE_OPTIONS, dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageHref } from "./searchLogic";
 import "./Categories.css";
 import "./Search.css";
 
 // 記録の横断検索。「映画に行ったのはいつ?」「皮膚科に最後に行ったのは?」に答える
-export function Search(props: { q: string; type: SearchHitType | null }) {
+export function Search(props: { q: string; type: SearchHitType | null; page: number }) {
   const [text, setText] = useState(props.q);
   const [type, setType] = useState<SearchHitType | "">(props.type ?? "");
   const [data, setData] = useState<SearchData | null>(null);
@@ -29,7 +29,7 @@ export function Search(props: { q: string; type: SearchHitType | null }) {
     }
     const mine = ++seq.current;
     setLoading(true);
-    searchRecords(searchApiPath(props.q, props.type))
+    searchRecords(searchApiPath(props.q, props.type, props.page))
       .then((res) => {
         if (mine !== seq.current) return;
         if (res.ok) {
@@ -47,7 +47,7 @@ export function Search(props: { q: string; type: SearchHitType | null }) {
       .finally(() => {
         if (mine === seq.current) setLoading(false);
       });
-  }, [props.q, props.type]);
+  }, [props.q, props.type, props.page]);
 
   const submit = (e: Event) => {
     e.preventDefault();
@@ -98,13 +98,13 @@ export function Search(props: { q: string; type: SearchHitType | null }) {
       {data && !loading && (
         <div class="search__result" aria-live="polite">
           {data.total === 0 ? (
-            <p class="muted">「{data.query}」に当てはまる記録はありません。別の言葉(ひらがな・カタカナ・短い言葉)でも試してください。</p>
+            <p class="muted">{props.page > 1 ? "このページに記録はありません。" : `「${data.query}」に当てはまる記録はありません。別の言葉(短い言葉・漢字とひらがなの違いなど)でも試してください。`}</p>
           ) : (
             <>
               <p class="search__summary">
                 <strong>{data.total}件</strong>見つかりました。いちばん新しいのは
                 {data.latest_date && <Link href={`/day/${data.latest_date}`}>{dateHeading(data.latest_date)}</Link>}です。
-                {data.total > data.count && <span class="muted">(新しい順に{data.count}件を表示)</span>}
+                {data.total > data.count && <span class="muted">({rangeLabel(data.offset, data.count, data.total)}を新しい順に表示)</span>}
               </p>
               {groups.map((g) => (
                 <div key={g.date} class="search__group">
@@ -125,6 +125,13 @@ export function Search(props: { q: string; type: SearchHitType | null }) {
                   </ul>
                 </div>
               ))}
+              {(props.page > 1 || data.has_more) && (
+                <nav class="search__pager" aria-label="ページ送り">
+                  {props.page > 1 ? <Link href={searchPageHref(props.q, props.type, props.page - 1)} class="btn">← 新しい記録へ</Link> : <span />}
+                  <span class="muted">{props.page}ページ目</span>
+                  {data.has_more ? <Link href={searchPageHref(props.q, props.type, props.page + 1)} class="btn">もっと前の記録へ →</Link> : <span />}
+                </nav>
+              )}
             </>
           )}
         </div>

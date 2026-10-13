@@ -719,7 +719,7 @@ export interface DeletedSubscriptionData {
   message: string;
 }
 
-// GET /api/search?q=&from=&to=&types=&limit=(types はカンマ区切り)。記録の横断検索。新しい日付から
+// GET /api/search?q=&from=&to=&types=&limit=&offset=(types はカンマ区切り)。記録の横断検索。新しい日付から
 export type SearchHitType = "transaction" | "event" | "seat_record" | "link" | "photo";
 export interface SearchHitView {
   type: SearchHitType;
@@ -735,5 +735,7 @@ export interface SearchData {
   total: number;
   latest_date: string | null;
   count: number;
+  offset: number;
+  has_more: boolean;
   hits: SearchHitView[];
 }

@@ -19,20 +19,31 @@ export const TYPE_OPTIONS: { value: SearchHitType | ""; label: string }[] = [
   { value: "photo", label: TYPE_LABELS.photo },
 ];
 
-// 画面の URL(/search?q=…&type=…)。空の言葉は /search だけ
-export function searchPageHref(q: string, type: SearchHitType | null): string {
+// 1ページの件数
+export const PAGE_SIZE = 30;
+
+// 画面の URL(/search?q=…&type=…&page=…)。空の言葉は /search だけ。1ページ目は page を付けない
+export function searchPageHref(q: string, type: SearchHitType | null, page = 1): string {
   const text = q.trim();
   if (text === "") return "/search";
   const params = new URLSearchParams({ q: text });
   if (type) params.set("type", type);
+  if (page > 1) params.set("page", String(page));
   return `/search?${params.toString()}`;
 }
 
-// API のパス
-export function searchApiPath(q: string, type: SearchHitType | null): string {
-  const params = new URLSearchParams({ q: q.trim(), limit: "100" });
+// API のパス(page は1から。offset に直す)
+export function searchApiPath(q: string, type: SearchHitType | null, page = 1): string {
+  const params = new URLSearchParams({ q: q.trim(), limit: String(PAGE_SIZE) });
+  if (page > 1) params.set("offset", String((page - 1) * PAGE_SIZE));
   if (type) params.set("types", type);
   return `/api/search?${params.toString()}`;
+}
+
+// 「31〜60件目(全75件)」のような範囲の表示
+export function rangeLabel(offset: number, count: number, total: number): string {
+  if (count === 0) return `全${total}件`;
+  return `${offset + 1}〜${offset + count}件目(全${total}件)`;
 }
 
 // 開く先。取引は明細ページ、ほかはその日の画面
