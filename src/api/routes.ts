@@ -14,6 +14,7 @@ import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photo
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
+import { compareMonths } from "../core/compare";
 import { searchRecords } from "../core/search";
 import { summarizeTax } from "../core/tax-summary";
 import type { AppEnv } from "../env";
@@ -95,6 +96,15 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     for (const key of ["q", "category"]) if (q[key]) input[key] = q[key];
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listMerchants(c.env.DB, input));
+  });
+
+  // 月の比較。month / base(previous・year_ago・YYYY-MM)/ group_by / until_day
+  app.get("/api/compare", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["month", "base", "group_by"]) if (q[key]) input[key] = q[key];
+    if (q.until_day) input.until_day = Number(q.until_day);
+    return respond(c, await compareMonths(c.env.DB, input));
   });
 
   // 記録の横断検索。q(空白区切りで AND)/ from / to / types(カンマ区切り)/ limit / offset

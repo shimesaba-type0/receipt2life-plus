@@ -20,10 +20,10 @@ const callTool = (name: string, args: unknown) => rpc("tools/call", { name, argu
 const text = (r: Awaited<ReturnType<typeof rpc>>) => JSON.parse(r.body.result.content[0].text);
 
 describe("MCP 会場・スクリーンのツール", () => {
-  it("tools/list は36個で、list_venues / update_venue / update_screen があり、削除のツールはない。説明に使いどころがある", async () => {
+  it("tools/list は37個で、list_venues / update_venue / update_screen があり、削除のツールはない。説明に使いどころがある", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[]; properties: Record<string, unknown> } }[];
-    expect(tools).toHaveLength(36);
+    expect(tools).toHaveLength(37);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(Object.keys(byName("list_venues").inputSchema.properties)).toEqual([]);
     expect(byName("update_venue").inputSchema.required).toEqual(["id", "name"]);

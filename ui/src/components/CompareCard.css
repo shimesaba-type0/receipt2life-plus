@@ -1,0 +1,22 @@
+/* 月の比較カード。見出しは Home.css(home__*)を使う */
+.cmp { border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+.cmp__choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.cmp__chip { min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); font-size: 14px; cursor: pointer; }
+.cmp__chip.is-on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.cmp__custom { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.cmp__custom input { min-height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 16px; background: var(--surface); }
+.cmp__same { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+.cmp__same input { width: 20px; height: 20px; }
+.cmp__result { display: flex; flex-direction: column; gap: 8px; }
+.cmp__summary { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 15px; }
+.cmp__summary strong { font-size: 24px; }
+.cmp__totals { margin: 0; font-size: 13px; }
+/* 支出が増えたのは暖色、減ったのは落ち着いた緑(色だけに頼らず ▲▼ と符号も出す) */
+.is-up { color: #b4532a; }
+.is-down { color: var(--accent); }
+.is-flat { color: var(--muted); }
+.cmp__table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cmp__table th, .cmp__table td { padding: 8px 4px; border-top: 1px solid var(--line-soft); text-align: left; font-weight: 400; overflow-wrap: anywhere; }
+.cmp__table thead th { border-top: 0; font-size: 12px; color: var(--muted); }
+.cmp__table .num { text-align: right; white-space: nowrap; }
+.cmp__pct { display: block; font-size: 12px; color: var(--muted); }

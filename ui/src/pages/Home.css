@@ -92,6 +92,7 @@
   .home__donut-wrap .home__list { align-self: center; flex: 1 1 0; max-width: 420px; }
   .home__h2 { font-size: 17px; }
     .home__row-pct { width: 56px; }
-  .home__recent-section { grid-column: 1 / -1; grid-row: 4; gap: 6px; }
+  .cmp { grid-column: 4 / span 7; grid-row: 4; padding: 24px 28px; }
+  .home__recent-section { grid-column: 1 / -1; grid-row: 5; gap: 6px; }
   .home__section-head--outer { padding-bottom: 4px; }
 }
