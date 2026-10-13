@@ -6,7 +6,8 @@ import { addEvent, deleteEvent, updateEvent } from "../core/events";
 import { summarizeDiscounts } from "../core/discounts";
 import { getHome } from "../core/home";
 import { listMerchants } from "../core/merchants";
-import { addLink, deleteLink, updateLink } from "../core/links";
+import { addLink, deleteLink, refreshLinkTitle, updateLink } from "../core/links";
+import type { TitleFetcher } from "../core/link-titles";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
@@ -47,7 +48,11 @@ async function readJson(c: Ctx): Promise<{ value: Record<string, unknown> } | nu
 const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSONとして読めません。JSONオブジェクトを送ってください" }]);
 
 // Web UI 用のAPI(/api/*)。docs/api.md の契約に沿って、核(core)の関数を呼んで実装する
-export function registerApiRoutes(app: Hono<AppEnv>): void {
+export interface ApiRouteOptions {
+  fetchTitle?: TitleFetcher;
+}
+
+export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
   for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
@@ -187,13 +192,19 @@ export function registerApiRoutes(app: Hono<AppEnv>): void {
   app.post("/api/links", async (c) => {
     const body = await readJson(c);
     if (!body) return badJson(c);
-    return respond(c, await addLink(c.env.DB, body.value));
+    return respond(c, await addLink(c.env.DB, body.value, { fetchTitle: options.fetchTitle }));
   });
 
   app.patch("/api/links/:id", async (c) => {
     const body = await readJson(c);
     if (!body) return badJson(c);
     return respond(c, await updateLink(c.env.DB, { ...body.value, id: c.req.param("id") }));
+  });
+
+  // タイトルが無いリンクのタイトルを、取りに行って付ける(oEmbed)。取得の仕組みが無い環境(テスト)では500
+  app.post("/api/links/:id/title", async (c) => {
+    if (!options.fetchTitle) return fail(c, 500, [{ field: "title", message: "title: タイトルの取得は、この環境では使えません" }]);
+    return respond(c, await refreshLinkTitle(c.env.DB, { id: c.req.param("id") }, options.fetchTitle));
   });
 
   app.delete("/api/links/:id", async (c) => respond(c, await deleteLink(c.env.DB, { id: c.req.param("id") })));

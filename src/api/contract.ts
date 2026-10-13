@@ -127,9 +127,9 @@ export interface PhotoView {
 
 export interface LinkView {
   id: string;
-  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画)。タイトルの取得や埋め込みはしない
+  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画 / Instagramの投稿)。タイトルは登録のときに取得する(YouTube・Xだけ)
   url: string;
-  kind: "x" | "youtube";
+  kind: "x" | "youtube" | "instagram";
   title: string | null;
   date: string | null;
   transaction_id: string | null;

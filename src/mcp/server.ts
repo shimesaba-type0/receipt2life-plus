@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { TitleFetcher } from "../core/link-titles";
 import { registerAccountTools } from "./tools/accounts";
 import { registerCategoryTools } from "./tools/categories";
 import { registerEventTools } from "./tools/events";
@@ -10,7 +11,7 @@ import { registerSubscriptionTools } from "./tools/subscriptions";
 import { registerTransactionTools } from "./tools/transactions";
 
 // origin は MCP リクエストのURLのオリジン(アップロード用リンクの組み立てに使う)
-export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string): McpServer {
+export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string, fetchTitle?: TitleFetcher): McpServer {
   const server = new McpServer({ name: "receipt2life", title: "Receipt to Life +", version: "0.1.0" });
   registerTransactionTools(server, db, bucket, origin);
   registerCategoryTools(server, db);
@@ -18,7 +19,7 @@ export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string
   registerEventTools(server, db);
   registerReportTools(server, db);
   registerPhotoTools(server, db, bucket, origin);
-  registerLinkTools(server, db);
+  registerLinkTools(server, db, fetchTitle);
   registerSeatRecordTools(server, db);
   registerSubscriptionTools(server, db);
   return server;

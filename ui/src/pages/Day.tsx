@@ -3,6 +3,7 @@ import { BrandMark } from "../components/BrandMark";
 import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
   UnauthorizedError,
+  fetchLinkTitle,
   addEvent,
   addLink,
   addSeatRecord,
@@ -233,6 +234,10 @@ export function Day(props: { date: string }) {
     return guarded(async () => failOf(await run(() => updateLink(id, { title }))), "リンクのタイトルを保存しました。");
   }
 
+  async function fetchTitleOfLink(id: string): Promise<boolean> {
+    return guarded(async () => failOf(await run(() => fetchLinkTitle(id))), "タイトルを取得しました。");
+  }
+
   async function removeLink(id: string): Promise<boolean> {
     return guarded(async () => failOf(await run(() => deleteLink(id))), "リンクを削除しました。");
   }
@@ -429,7 +434,7 @@ export function Day(props: { date: string }) {
 
           <SeatRecordsCard records={data.seat_records} venues={venues} busy={busy} onAdd={addSeat} onUpdate={saveSeat} onDelete={removeSeat} />
 
-          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onDelete={removeLink} />
+          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onFetchTitle={fetchTitleOfLink} onDelete={removeLink} />
         </>
       )}
 
@@ -645,12 +650,13 @@ function PhotosCard(props: { date: string; photos: PhotoView[]; disabled: boolea
   );
 }
 
-// リンクエリア(Xの投稿・YouTubeの動画)。追加はこの日の日付に紐づける
+// リンクエリア(Xの投稿・YouTubeの動画・Instagramの投稿)。追加はこの日の日付に紐づける
 function LinksCard(props: {
   links: LinkView[];
   busy: boolean;
   onAdd: (url: string, title: string) => Promise<string | null>;
   onSaveTitle: (id: string, title: string | null) => Promise<boolean>;
+  onFetchTitle: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
   const { links, busy } = props;
@@ -682,7 +688,7 @@ function LinksCard(props: {
     <div class="card">
       <div class="day__row-head day__row-head--sub">
         <h2 class="day__h">リンク</h2>
-        <span class="muted day__sub">Xの投稿・YouTubeの動画</span>
+        <span class="muted day__sub">X・YouTube・Instagram</span>
         {!open && (
           <div class="day__photo-tools">
             <button type="button" class="btn" disabled={busy} onClick={() => setOpen(true)}>
@@ -699,7 +705,7 @@ function LinksCard(props: {
             void submit();
           }}
         >
-          <label for={`${id}-url`}>リンク(XまたはYouTube)</label>
+          <label for={`${id}-url`}>リンク(X・YouTube・Instagram)</label>
           <input
             id={`${id}-url`}
             type="url"
@@ -734,7 +740,7 @@ function LinksCard(props: {
         <ul class="day__list day__links">
           {links.map((l) => (
             <li key={l.id}>
-              <LinkCard link={l} busy={busy} onSaveTitle={props.onSaveTitle} onDelete={props.onDelete} />
+              <LinkCard link={l} busy={busy} onSaveTitle={props.onSaveTitle} onFetchTitle={props.onFetchTitle} onDelete={props.onDelete} />
             </li>
           ))}
         </ul>

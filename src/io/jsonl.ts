@@ -210,7 +210,7 @@ const linkSchema = z
   .strictObject({
     id: idField.optional(),
     url: z.string().max(MAX_URL_LENGTH, `${MAX_URL_LENGTH}文字までにしてください`),
-    kind: z.enum(["x", "youtube"]).optional(),
+    kind: z.enum(["x", "youtube", "instagram"]).optional(),
     title: z.string().trim().min(1).max(200).optional(),
     date: isoDate.optional(),
     transaction_id: z.string().min(1).optional(),

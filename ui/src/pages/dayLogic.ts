@@ -8,10 +8,10 @@ export function categoryChipLabel(category: string | null, cats: CategoriesData)
   return found && found.group_name !== category ? `${found.group_name}・${category}` : category;
 }
 
-// ---- リンク(Xの投稿・YouTubeの動画)の表示用 ----
+// ---- リンク(Xの投稿・YouTubeの動画・Instagramの投稿)の表示用 ----
 
 export function linkKindLabel(kind: LinkView["kind"]): string {
-  return kind === "youtube" ? "YouTube" : "X";
+  return kind === "youtube" ? "YouTube" : kind === "instagram" ? "Instagram" : "X";
 }
 
 // URLをホスト+パスに短くする(https:// と www. は省く)。読めないURLはそのまま。max を超えたら末尾を「…」にする
@@ -30,6 +30,19 @@ export function shortenUrl(url: string, max = 48): string {
 export function linkDisplayText(link: Pick<LinkView, "url" | "title">): string {
   const title = link.title?.trim();
   return title ? title : shortenUrl(link.url);
+}
+
+// Xの投稿のURLから、投稿のID(数字)。投稿のURLでなければ(プロフィールなど)null。埋め込み表示に使う
+export function tweetIdOf(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return null;
+    if (!/^(www\.|mobile\.)?(x|twitter)\.com$/.test(u.hostname)) return null;
+    const m = /^\/[^/]+\/status\/(\d{1,25})\/?$/.exec(u.pathname);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // href に入れてよいのは https だけ(サーバーも保証するが、画面側でも念のため確認する)
