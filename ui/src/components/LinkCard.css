@@ -5,7 +5,12 @@
 .link__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .link__title { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
 .link__kind { font-size: 12px; }
-.link__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.link__actions { display: flex; flex-wrap: wrap; gap: 4px; }
+/* 操作ボタンは控えめに(枠なしの小さな文字ボタン)。タップしやすいよう高さは36px */
+.link__actions .btn { min-height: 36px; padding: 0 10px; border-color: transparent; border-radius: 18px; font-size: 13px; font-weight: 400; color: var(--muted); }
+.link__actions .btn:hover { background: var(--accent-soft); color: var(--accent); }
+.link__actions .day__danger { color: var(--danger); }
+.link__actions .day__danger:hover { background: transparent; text-decoration: underline; }
 .link__form { padding: 0; }
 
 /* Xの埋め込み(押したときだけ読み込む) */

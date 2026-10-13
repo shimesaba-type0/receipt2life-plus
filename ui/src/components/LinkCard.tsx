@@ -140,6 +140,8 @@ export function LinkCard(props: {
         </div>
       )}
 
+      {link.description && mode !== "edit" && <p class="link__desc muted">{link.description}</p>}
+
       {mode === "view" && (
         <div class="link__actions">
           <button
@@ -169,8 +171,6 @@ export function LinkCard(props: {
           </button>
         </div>
       )}
-
-      {link.description && mode !== "edit" && <p class="link__desc muted">{link.description}</p>}
 
       {embedOpen && tweetId && <TweetEmbed id={tweetId} />}
 
