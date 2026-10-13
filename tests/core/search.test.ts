@@ -83,7 +83,7 @@ describe("searchRecords", () => {
   });
 
   it("入力エラー: 空の q・語が多すぎる・from > to・limit", async () => {
-    expect((await search({ q: "  " })).ok).toBe(false);
+    expect((await search({ q: "あ".repeat(201) })).ok).toBe(false);
     expect((await search({ q: "a b c d e f" })).ok).toBe(false);
     expect((await search({ q: "a", from: "2026-10-02", to: "2026-10-01" })).ok).toBe(false);
     expect((await search({ q: "a", limit: 101 })).ok).toBe(false);
@@ -125,6 +125,20 @@ describe("searchRecords", () => {
     const beyond = await search({ q: "ページ検証", limit: 3, offset: 30 });
     expect(beyond).toMatchObject({ ok: true, total: 7, count: 0, has_more: false });
     expect((await search({ q: "a", offset: -1 })).ok).toBe(false);
+  });
+
+  it("q を省略(か空)にすると、絞らずに 種類・期間に当たる記録を新しい順に返す(映画を見た日の一覧)", async () => {
+    await addSeatRecord(db(), { date: "2026-07-01", title: "ダミー作品A", venue: "ダミー劇場", seat: "F-10" }, { now: NOW });
+    await addSeatRecord(db(), { date: "2026-08-15", title: "ダミー作品B", venue: "ダミー劇場", seat: "G-3" }, { now: NOW });
+    const all = await search({ types: ["seat_record"] });
+    expect(all.ok && all.hits.map((h) => h.title)).toEqual(["ダミー作品B", "ダミー作品A"]);
+    expect(all.ok && all.latest_date).toBe("2026-08-15");
+    const blank = await search({ q: "   ", types: ["seat_record"], from: "2026-08-01" });
+    expect(blank.ok && blank.total).toBe(1);
+    expect(blank.ok && blank.message).toContain("条件に当てはまる記録が1件");
+    // 種類も省略すると、全部の種類が新しい順
+    const everything = await search({});
+    expect(everything.ok && everything.total).toBeGreaterThan(5);
   });
 });
 

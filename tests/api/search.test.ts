@@ -10,9 +10,9 @@ const json = async (res: Response) => (await res.json()) as any;
 const enc = encodeURIComponent;
 
 describe("検索のAPI", () => {
-  it("q は必須。空はエラー", async () => {
-    expect((await call("/api/search")).status).toBe(400);
-    expect((await call(`/api/search?q=${enc("  ")}`)).status).toBe(400);
+  it("q は省略できる(絞らず、種類・期間に当たる記録を新しい順に返す)。長すぎる q はエラー", async () => {
+    expect(await json(await call("/api/search"))).toMatchObject({ ok: true, total: 0, hits: [] });
+    expect((await call(`/api/search?q=${enc("あ".repeat(201))}`)).status).toBe(400);
   });
 
   it("出来事を探し、types・limit・不正値を扱う", async () => {

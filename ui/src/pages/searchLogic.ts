@@ -22,11 +22,12 @@ export const TYPE_OPTIONS: { value: SearchHitType | ""; label: string }[] = [
 // 1ページの件数
 export const PAGE_SIZE = 30;
 
-// 画面の URL(/search?q=…&type=…&page=…)。空の言葉は /search だけ。1ページ目は page を付けない
+// 画面の URL(/search?q=…&type=…&page=…)。言葉も種類も空なら /search だけ(言葉が空でも、種類があればその種類の一覧)。1ページ目は page を付けない
 export function searchPageHref(q: string, type: SearchHitType | null, page = 1): string {
   const text = q.trim();
-  if (text === "") return "/search";
-  const params = new URLSearchParams({ q: text });
+  if (text === "" && !type) return "/search";
+  const params = new URLSearchParams();
+  if (text !== "") params.set("q", text);
   if (type) params.set("type", type);
   if (page > 1) params.set("page", String(page));
   return `/search?${params.toString()}`;
@@ -34,7 +35,8 @@ export function searchPageHref(q: string, type: SearchHitType | null, page = 1):
 
 // API のパス(page は1から。offset に直す)
 export function searchApiPath(q: string, type: SearchHitType | null, page = 1): string {
-  const params = new URLSearchParams({ q: q.trim(), limit: String(PAGE_SIZE) });
+  const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+  if (q.trim() !== "") params.set("q", q.trim());
   if (page > 1) params.set("offset", String((page - 1) * PAGE_SIZE));
   if (type) params.set("types", type);
   return `/api/search?${params.toString()}`;
