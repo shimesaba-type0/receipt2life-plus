@@ -45,6 +45,30 @@ export function tweetIdOf(url: string): string | null {
   }
 }
 
+// YouTube の動画のURLから、動画のID(11文字)。再生リストだけのURLなど、動画のIDが無ければ null
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+export function youtubeVideoIdOf(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return null;
+    const host = u.hostname;
+    const path = u.pathname.replace(/\/$/, "");
+    let id: string | null | undefined = null;
+    if (host === "youtu.be") id = /^\/([^/]+)$/.exec(path)?.[1];
+    else if (/^(www\.|m\.|music\.)?youtube\.com$/.test(host)) {
+      id = path === "/watch" ? u.searchParams.get("v") : /^\/(?:shorts|live)\/([^/]+)$/.exec(path)?.[1];
+    }
+    return id && VIDEO_ID.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+// サムネイルの画像のURL(YouTube が公開している、動画のIDから決まるURL。16:9で、黒帯が付かない mqdefault。サーバーは取りに行かない)
+export function youtubeThumbnailUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+}
+
 // href に入れてよいのは https だけ(サーバーも保証するが、画面側でも念のため確認する)
 export function isSafeLinkHref(url: string): boolean {
   try {
