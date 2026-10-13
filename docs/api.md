@@ -163,12 +163,13 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 ## リンク(Xの投稿・YouTubeの動画)
 
-日付・取引・出来事に、外部リンクを付ける。Worker から外のサイトへは取りに行かない(タイトル取得も埋め込みもしない)。URLの検証と正規化は `src/core/links.ts`。
+日付・取引・出来事に、外部リンクを付ける。埋め込みやサムネイルは出さない。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。URLの検証と正規化は `src/core/links.ts`。
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
 | `POST /api/links` | `NewLink`(`url` 必須、`title?`、`date?` / `transaction_id?` / `event_id?` のうち1つ以上) | `link: LinkView`, `duplicate`, `message` |
 | `PATCH /api/links/:id` | `LinkPatch`(`title` のみ。null で消去) | `link`, `duplicate: false`, `message` |
+| `POST /api/links/:id/title` | なし(タイトルが無いリンクのタイトルを、取りに行って付ける) | `link`, `duplicate: false`, `message`。取得できなければ400(`errors` に理由。いまのタイトルは変わらない) |
 | `DELETE /api/links/:id` | なし | `deleted`, `message` |
 
 - `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube`), `title`, `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)

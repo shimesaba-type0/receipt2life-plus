@@ -3,6 +3,7 @@ import { BrandMark } from "../components/BrandMark";
 import type { ApiResult, CategoriesData, DayData, EventColor, EventView, FieldError, LinkView, PhotoView, SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
   UnauthorizedError,
+  fetchLinkTitle,
   addEvent,
   addLink,
   addSeatRecord,
@@ -233,6 +234,10 @@ export function Day(props: { date: string }) {
     return guarded(async () => failOf(await run(() => updateLink(id, { title }))), "リンクのタイトルを保存しました。");
   }
 
+  async function fetchTitleOfLink(id: string): Promise<boolean> {
+    return guarded(async () => failOf(await run(() => fetchLinkTitle(id))), "タイトルを取得しました。");
+  }
+
   async function removeLink(id: string): Promise<boolean> {
     return guarded(async () => failOf(await run(() => deleteLink(id))), "リンクを削除しました。");
   }
@@ -429,7 +434,7 @@ export function Day(props: { date: string }) {
 
           <SeatRecordsCard records={data.seat_records} venues={venues} busy={busy} onAdd={addSeat} onUpdate={saveSeat} onDelete={removeSeat} />
 
-          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onDelete={removeLink} />
+          <LinksCard links={data.links} busy={busy} onAdd={addLinkAction} onSaveTitle={saveLinkTitle} onFetchTitle={fetchTitleOfLink} onDelete={removeLink} />
         </>
       )}
 
@@ -651,6 +656,7 @@ function LinksCard(props: {
   busy: boolean;
   onAdd: (url: string, title: string) => Promise<string | null>;
   onSaveTitle: (id: string, title: string | null) => Promise<boolean>;
+  onFetchTitle: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
   const { links, busy } = props;
@@ -734,7 +740,7 @@ function LinksCard(props: {
         <ul class="day__list day__links">
           {links.map((l) => (
             <li key={l.id}>
-              <LinkCard link={l} busy={busy} onSaveTitle={props.onSaveTitle} onDelete={props.onDelete} />
+              <LinkCard link={l} busy={busy} onSaveTitle={props.onSaveTitle} onFetchTitle={props.onFetchTitle} onDelete={props.onDelete} />
             </li>
           ))}
         </ul>

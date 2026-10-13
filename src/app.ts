@@ -7,11 +7,14 @@ import { registerIoRoutes } from "./api/io";
 import { sameOriginOnly } from "./api/guards";
 import { registerApiRoutes } from "./api/routes";
 import { createMcpServer } from "./mcp/server";
+import type { TitleFetcher } from "./core/link-titles";
 
 // これ以上かかった /api/* は、ログに残す(ダッシュボードの Observability で、どのルートが遅いか見るため)
 const SLOW_API_MS = 300;
 
 export interface AppOptions {
+  // リンクのタイトルを取りに行く関数(本番だけ渡す。省略するとタイトルは取りに行かない。テストで外へ出ないように)
+  fetchTitle?: TitleFetcher;
   // テスト用: JWTの鍵の取得を差し替える
   getKey?: KeyResolver;
 }
@@ -30,7 +33,7 @@ export function createApp(options: AppOptions = {}) {
 
   // MCP(Streamable HTTP、ステートレス): リクエストごとにサーバーとトランスポートを作る
   app.all("/mcp", async (c) => {
-    const server = createMcpServer(c.env.DB, c.env.PHOTOS, new URL(c.req.url).origin);
+    const server = createMcpServer(c.env.DB, c.env.PHOTOS, new URL(c.req.url).origin, options.fetchTitle);
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);
@@ -46,7 +49,7 @@ export function createApp(options: AppOptions = {}) {
     if (ms >= SLOW_API_MS) console.log(`slow api: ${c.req.method} ${routePath(c, -1)} ${c.res.status} ${ms}ms`);
   });
 
-  registerApiRoutes(app);
+  registerApiRoutes(app, { fetchTitle: options.fetchTitle });
   // 未定義の /api/* は、画面(SPA)ではなく404のJSONにする
   app.all("/api/*", (c) => c.json({ ok: false, errors: [{ field: "path", message: "そのAPIはありません" }] }, 404));
 

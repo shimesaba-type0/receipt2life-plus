@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { ApiResult, CategoriesData, FieldError, PhotoView, TransactionDetailData, TransactionView } from "../../../src/api/contract";
-import { UnauthorizedError, deleteLink, deleteTransaction, getCategories, getTransaction, photoUrl, updateLink, updateTransaction } from "../api";
+import { UnauthorizedError, deleteLink, fetchLinkTitle, deleteTransaction, getCategories, getTransaction, photoUrl, updateLink, updateTransaction } from "../api";
 import { CopyValue } from "../components/CopyValue";
 import { CategoryChip } from "../components/CategoryIcon";
 import { DiscountIcon } from "../components/DiscountIcon";
@@ -164,7 +164,7 @@ export function Transaction(props: { id: string }) {
 
       {state.kind === "ready" && mode === "view" && (
         <>
-          <TransactionBody data={state.data} cats={cats} onViewPhoto={setViewPhoto} busy={busy} onSaveLinkTitle={(lid, title) => linkAction(async () => run(() => updateLink(lid, { title })), "リンクのタイトルを保存しました。")} onDeleteLink={(lid) => linkAction(async () => run(() => deleteLink(lid)), "リンクを削除しました。")} />
+          <TransactionBody data={state.data} cats={cats} onViewPhoto={setViewPhoto} busy={busy} onSaveLinkTitle={(lid, title) => linkAction(async () => run(() => updateLink(lid, { title })), "リンクのタイトルを保存しました。")} onFetchLinkTitle={(lid) => linkAction(async () => run(() => fetchLinkTitle(lid)), "タイトルを取得しました。")} onDeleteLink={(lid) => linkAction(async () => run(() => deleteLink(lid)), "リンクを削除しました。")} />
           <DeleteSection data={state.data} />
         </>
       )}
@@ -199,6 +199,7 @@ function TransactionBody(props: {
   busy: boolean;
   onViewPhoto: (p: PhotoView) => void;
   onSaveLinkTitle: (id: string, title: string | null) => Promise<boolean>;
+  onFetchLinkTitle: (id: string) => Promise<boolean>;
   onDeleteLink: (id: string) => Promise<boolean>;
 }) {
   const { transaction: tx, photos, links } = props.data;
@@ -403,7 +404,7 @@ function TransactionBody(props: {
           <ul class="day__list day__links">
             {links.map((l) => (
               <li key={l.id}>
-                <LinkCard link={l} busy={props.busy} onSaveTitle={props.onSaveLinkTitle} onDelete={props.onDeleteLink} />
+                <LinkCard link={l} busy={props.busy} onSaveTitle={props.onSaveLinkTitle} onFetchTitle={props.onFetchLinkTitle} onDelete={props.onDeleteLink} />
               </li>
             ))}
           </ul>

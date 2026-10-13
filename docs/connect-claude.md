@@ -60,7 +60,7 @@ AI(Claude)から、支出を登録・一覧するための接続手順です。�
 | `add_seat_record` / `list_seat_records` / `update_seat_record` / `delete_seat_record` | 映画館などの座席の記録(作品名・公演名・会場・スクリーン/エリア・座席・席種・評価1〜5・一言)の登録・一覧(会場ごと・席ごとの平均評価つき)・修正・削除。会場・スクリーンは名前で指定し、無ければ自動で作る(応答の `created_venue` / `created_screen`)。登録前に `list_venues` で既存の会場・スクリーンを確かめ、同じ名前を使う |
 | `list_venues` / `update_venue` / `update_screen` | 会場とスクリーンは座席の記録とは別のレコード。一覧(会場ごとのスクリーン、記録件数、平均評価、スクリーンの特徴 `note`)、会場名の変更、スクリーン名の変更と特徴 `note`(例「前方は首が疲れる」)の設定・消去。削除のツールはない |
 | `add_subscription` / `list_subscriptions` / `update_subscription` / `delete_subscription` | サブスク・保険・固定費の登録・一覧(契約中の合計つき)・更新(金額の変更、解約)・削除。**支出の記録とは別枠**で、ここに登録しても支出には数えない(下の「サブスク・固定費」) |
-| `add_link` / `list_links` / `delete_link` | Xの投稿・YouTubeの動画のリンクを、日付・取引・出来事に付けて残す・一覧・削除(URLだけ保存。タイトル取得や埋め込みはしない) |
+| `add_link` / `list_links` / `delete_link` | Xの投稿・YouTubeの動画のリンクを、日付・取引・出来事に付けて残す・一覧・削除(`title` を省略すると、YouTube の動画のタイトルや、Xの投稿の投稿者名と本文の先頭を、公式の oEmbed から自動で取得して付ける。取得できなければ表題なし。埋め込みやサムネイルは出さない) |
 
 ## 座席の記録(映画の席を記録して、次の席選びに使う)
 

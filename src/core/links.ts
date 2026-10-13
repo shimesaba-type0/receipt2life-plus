@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { checkRefs, onDay } from "./photos";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
+import type { TitleFetcher } from "./link-titles";
 import type { CoreOptions } from "./transactions";
 
 // 外部リンク(links)。Xの投稿・YouTubeの動画のURLを、日付・取引・出来事に付ける。
@@ -209,7 +210,12 @@ export async function findDuplicateLink(
     .first<LinkView>();
 }
 
-export async function addLink(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<LinkResult> {
+export interface AddLinkOptions extends CoreOptions {
+  // 表題が無いときに、タイトルを取りに行く(oEmbed。src/core/link-titles.ts)。省略すると取りに行かない(テスト・インポート)
+  fetchTitle?: TitleFetcher;
+}
+
+export async function addLink(db: D1Database, input: unknown, options: AddLinkOptions = {}): Promise<LinkResult> {
   const parsed = newLinkSchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
   const m = parsed.data;
@@ -225,11 +231,14 @@ export async function addLink(db: D1Database, input: unknown, options: CoreOptio
     return { ok: true, link: existing, duplicate: true, message: `同じリンクが同じ紐づけ先に既にあるため、登録しませんでした(id: ${existing.id})` };
   }
 
+  // 表題が無ければ取りに行く。取れなければ表題なしで登録する(登録は失敗させない)
+  let title = m.title ?? null;
+  if (title === null && options.fetchTitle) title = await options.fetchTitle(url.kind, url.url).catch(() => null);
   const link: LinkView = {
     id: crypto.randomUUID(),
     url: url.url,
     kind: url.kind,
-    title: m.title ?? null,
+    title,
     ...target,
     created_at: (options.now ?? new Date()).toISOString(),
   };
@@ -249,6 +258,22 @@ export async function updateLink(db: D1Database, input: unknown): Promise<LinkRe
   await db.prepare("UPDATE links SET title = ? WHERE id = ?").bind(title, id).run();
   const link = { ...current, title };
   return { ok: true, link, duplicate: false, message: `リンクの表題を更新しました: ${link.url}` };
+}
+
+// 登録済みのリンクのタイトルを、取りに行って付け直す(タイトルが無いリンク用)。取れなければエラー(いまのタイトルは変えない)
+export async function refreshLinkTitle(db: D1Database, input: unknown, fetchTitle: TitleFetcher): Promise<LinkResult> {
+  const parsed = deleteLinkSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const { id } = parsed.data;
+  const current = await db.prepare(`SELECT ${COLUMNS} FROM links WHERE id = ?`).bind(id).first<LinkView>();
+  if (!current) return notFound(id);
+  const title = await fetchTitle(current.kind, current.url).catch(() => null);
+  if (title === null) {
+    return { ok: false, errors: [{ field: "title", message: "title: タイトルを取得できませんでした(動画や投稿が非公開・削除されているか、通信に失敗しました)。「タイトルを編集」で手入力できます" }] };
+  }
+  await db.prepare("UPDATE links SET title = ? WHERE id = ?").bind(title, id).run();
+  const link = { ...current, title };
+  return { ok: true, link, duplicate: false, message: `タイトルを取得しました: ${title}` };
 }
 
 export async function deleteLink(db: D1Database, input: unknown): Promise<DeleteLinkResult> {

@@ -169,6 +169,8 @@ export const deletePhoto = (id: string) => request<{ deleted: PhotoView }>("DELE
 // リンク(Xの投稿・YouTubeの動画)。duplicate が true のときは登録せず、既存のリンクが返る
 export const addLink = (link: NewLink) => request<{ link: LinkView; duplicate: boolean; message: string }>("POST", "/api/links", link);
 export const updateLink = (id: string, patch: LinkPatch) => request<{ link: LinkView; duplicate: false; message: string }>("PATCH", `/api/links/${encodeURIComponent(id)}`, patch);
+// タイトルが無いリンクのタイトルを、サーバーが取りに行って付ける(YouTube・X の oEmbed)
+export const fetchLinkTitle = (id: string) => request<{ link: LinkView; duplicate: false; message: string }>("POST", `/api/links/${encodeURIComponent(id)}/title`);
 export const deleteLink = (id: string) => request<{ deleted: LinkView; message: string }>("DELETE", `/api/links/${encodeURIComponent(id)}`);
 
 // 座席の記録(映画館などの席の評価)。getSeatRecords は絞り込み(date / venue / limit など)つきの一覧と、会場・スクリーン・座席ごとの集計

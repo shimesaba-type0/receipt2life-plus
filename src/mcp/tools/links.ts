@@ -1,9 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { TitleFetcher } from "../../core/link-titles";
 import { addLink, deleteLink, deleteLinkSchema, linkFieldsSchema, listLinks, listLinksFieldsSchema } from "../../core/links";
 import { toResult } from "../result";
 
 // 外部リンクのツール: add_link / list_links / delete_link
-export function registerLinkTools(server: McpServer, db: D1Database): void {
+export function registerLinkTools(server: McpServer, db: D1Database, fetchTitle?: TitleFetcher): void {
   server.registerTool(
     "add_link",
     {
@@ -12,13 +13,13 @@ export function registerLinkTools(server: McpServer, db: D1Database): void {
         "Xの投稿やYouTubeの動画のリンクを、その日の記録・取引・出来事に付けて残す。例: 旅行の出来事に動画のリンクを付ける、ライブの日に感想の投稿を残す、買い物の取引に紹介動画を付ける。",
         "url は必須。対応しているのは https のURLだけで、Xの投稿(x.com / twitter.com の /<ユーザー名>/status/<数字>。ユーザーのプロフィールも可)と、YouTubeの動画(youtube.com の watch?v=<動画ID>、/shorts/<動画ID>、/live/<動画ID>、/playlist?list=<ID>、youtu.be/<動画ID>)。",
         "許可リスト以外のサイト、http、ポート番号、user:pass@ の付いたURLはエラーになる(errors に対応サイトと直し方が返る)。URLは正規化して保存する(#以降と、utm_* などの追跡用の項目は消える。YouTubeの t=開始秒 は残る)。",
-        "date(YYYY-MM-DD)、transaction_id(取引のid)、event_id(出来事のid)のうち1つ以上が必須。存在しない id はエラーになる。title は任意の表題(200文字まで)。外のサイトには取りに行かないので、タイトルは自動では付かない。",
+        "date(YYYY-MM-DD)、transaction_id(取引のid)、event_id(出来事のid)のうち1つ以上が必須。存在しない id はエラーになる。title は任意の表題(200文字まで)。省略すると、YouTube の動画のタイトルや、Xの投稿の投稿者名と本文の先頭を、公式の oEmbed から自動で取得して付ける(取得できなければ表題なしで登録される。動画や投稿が非公開・削除されているときなど)。作品名などを表題にしたいときは、title に入れる。",
         "同じ紐づけ先に同じURLが既にあれば、登録せずに既存のリンクを返す(duplicate: true)。",
         "成功すると、登録したリンク(id つき)が返る。",
       ].join("\n"),
       inputSchema: linkFieldsSchema.shape,
     },
-    async (args) => toResult(await addLink(db, args)),
+    async (args) => toResult(await addLink(db, args, { fetchTitle })),
   );
 
   server.registerTool(

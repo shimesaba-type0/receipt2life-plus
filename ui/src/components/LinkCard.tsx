@@ -20,11 +20,13 @@ function KindIcon(props: { kind: LinkView["kind"] }) {
   );
 }
 
-// リンク1件のカード。外部サイトの埋め込み・画像・サムネイル取得はしない(リンクを開くだけ)
+// リンク1件のカード。埋め込み・画像・サムネイルは出さない(リンクを開くだけ)。タイトルは、登録のときにサーバーが取りに行く(無ければ「タイトルを取得」で付け直せる)
 export function LinkCard(props: {
   link: LinkView;
   busy: boolean;
   onSaveTitle: (id: string, title: string | null) => Promise<boolean>;
+  // タイトルが無いリンクのタイトルを、取りに行って付ける(省略するとボタンを出さない)
+  onFetchTitle?: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
 }) {
   const { link, busy } = props;
@@ -67,6 +69,11 @@ export function LinkCard(props: {
           >
             タイトルを編集
           </button>
+          {!link.title && props.onFetchTitle && (
+            <button type="button" class="btn" disabled={busy} onClick={() => void props.onFetchTitle?.(link.id)}>
+              タイトルを取得
+            </button>
+          )}
           <button type="button" class="btn day__danger" disabled={busy} onClick={() => setMode("confirm")}>
             削除
           </button>
