@@ -12,7 +12,7 @@ import { registerTransactionTools } from "./tools/transactions";
 // origin は MCP リクエストのURLのオリジン(アップロード用リンクの組み立てに使う)
 export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string): McpServer {
   const server = new McpServer({ name: "receipt2life", title: "Receipt to Life +", version: "0.1.0" });
-  registerTransactionTools(server, db, bucket);
+  registerTransactionTools(server, db, bucket, origin);
   registerCategoryTools(server, db);
   registerAccountTools(server, db);
   registerEventTools(server, db);
