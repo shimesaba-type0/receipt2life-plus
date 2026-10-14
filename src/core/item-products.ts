@@ -32,8 +32,36 @@ export const contentAmountField = z
 
 export const contentUnitField = z.enum(CONTENT_UNITS, { error: `content_unit は ${CONTENT_UNITS.join(" / ")} のいずれかで指定してください` });
 
+// ---- JANコード(商品のバーコード) ----
+// 8桁(JAN-8)か13桁(JAN-13)。全角数字・ハイフン・空白は正規化して、数字だけにする。末尾の1桁はチェックデジット(GS1)で、合わなければ読み間違いとして拒否する
+
+// GS1 のチェックデジット: 右端を除く桁を、右から順に 3・1・3・1…を掛けて足し、10の倍数になるように決めた1桁
+export function janCheckDigitOk(digits: string): boolean {
+  if (!/^\d+$/.test(digits)) return false;
+  const body = digits.slice(0, -1);
+  let sum = 0;
+  for (let i = 0; i < body.length; i++) sum += Number(body[body.length - 1 - i]) * (i % 2 === 0 ? 3 : 1);
+  return (10 - (sum % 10)) % 10 === Number(digits[digits.length - 1]);
+}
+
+export const normalizeJan = (raw: string): string => raw.normalize("NFKC").replace(/[\s-]/g, "");
+
+export const JAN_MESSAGE = "JANコードは、8桁か13桁の数字で、末尾のチェックデジットが合うものを指定してください(読み取れない・自信がないときは省略する)";
+
+export const janField = z
+  .string({ error: JAN_MESSAGE })
+  .max(30, JAN_MESSAGE)
+  .transform(normalizeJan)
+  .refine((v) => (v.length === 8 || v.length === 13) && janCheckDigitOk(v), JAN_MESSAGE);
+
 // 明細の行に足す項目(すべて任意・null可)
 export const itemProductShape = {
+  jan_code: janField
+    .nullable()
+    .optional()
+    .describe(
+      "JANコード(商品のバーコードの数字。8桁か13桁)。レシートに印字されている場合や、商品・バーコードの写真から**読み取れた**場合だけ入れる。商品名から思い出して入れない(記憶は間違えやすい)。読み取れない・自信がないときは省略する。ハイフン・空白・全角は取り除かれ、末尾のチェックデジットが合わないものはエラーになる(読み間違いの検出)。同じJANの明細は、品名の表記が違っても同じ商品として集計される",
+    ),
   product: productField
     .nullable()
     .optional()

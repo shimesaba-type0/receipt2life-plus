@@ -42,6 +42,8 @@ export interface ItemView {
   quantity: number | null;
   content_amount: number | null;
   content_unit: ContentUnit | null;
+  // JANコード(商品のバーコード。8桁か13桁の数字。分かるときだけ。なしは null)
+  jan_code: string | null;
   // 単価(1g・1ml・1個あたりの円)。内容量が無い行・値引きの行は null。保存せず、計算して返す
   unit_price: UnitPrice | null;
 }
@@ -369,6 +371,8 @@ export interface NewItem {
   quantity?: number | null;
   content_amount?: number | null;
   content_unit?: ContentUnit | null;
+  // JANコード(8桁か13桁の数字。末尾のチェックデジットが合わないものはエラー。ハイフン・空白・全角は取り除かれる)
+  jan_code?: string | null;
 }
 
 // POST /api/transactions の入力(add_transactions と同じ規則)
@@ -827,6 +831,7 @@ export interface ProductRowView {
   quantity: number;
   amount: number;
   last_date: string;
+  jan_code: string | null;
   has_unit_price: boolean;
 }
 export interface ProductsData {
@@ -863,6 +868,7 @@ export interface ProductUnitPriceSummary {
 }
 export interface ProductHistoryData {
   product: string;
+  jan_codes: string[];
   lines: number;
   quantity: number;
   amount: number;

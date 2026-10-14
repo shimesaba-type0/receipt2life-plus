@@ -9,10 +9,10 @@ describe("migration 0005_transaction_items", () => {
   it("既存の取引があるDBに当たり、既存の行・集計を変えない(バックフィルしない)", async () => {
     const e = testEnv();
     // 0005 を当てる前の状態に戻す(テーブルとマイグレーションの記録を消す)
-    // 0012(税率・税の内訳)と 0018(商品の情報)は transaction_items に列を足すので、いっしょに当て直す(内訳のテーブルも作り直す)
+    // 0012(税率・税の内訳)・0018(商品の情報)・0019(JANコード)は transaction_items に列を足すので、いっしょに当て直す(内訳のテーブルも作り直す)
     await e.DB.exec("DROP TABLE transaction_tax_lines");
     await e.DB.exec("DROP TABLE transaction_items");
-    for (const name of ["0005_transaction_items.sql", "0012_tax_lines.sql", "0018_item_products.sql"]) await e.DB.prepare("DELETE FROM d1_migrations WHERE name = ?").bind(name).run();
+    for (const name of ["0005_transaction_items.sql", "0012_tax_lines.sql", "0018_item_products.sql", "0019_item_jan.sql"]) await e.DB.prepare("DELETE FROM d1_migrations WHERE name = ?").bind(name).run();
 
     // 0004 までのスキーマで、既存の取引を入れる(明細のテーブルが無いので、直接 INSERT する)
     const insert = (id: string, date: string, amount: number, merchant: string | null, category: string | null, flag: string | null) =>

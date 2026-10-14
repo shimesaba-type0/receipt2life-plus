@@ -66,7 +66,7 @@ const EXPORT_TABLES: TableSpec[] = [
     decorate: withTaxLines,
   },
   {
-    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.product, i.quantity, i.content_amount, i.content_unit, i.created_at
+    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.product, i.quantity, i.content_amount, i.content_unit, i.jan_code, i.created_at
           FROM transaction_items i
           LEFT JOIN categories c ON c.id = i.category_id
           WHERE i.id > ? ORDER BY i.id LIMIT ?`,
@@ -705,10 +705,10 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
         ...v.lines.map((l, position) =>
           db
             .prepare(
-              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label, product, quantity, content_amount, content_unit)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label, product, quantity, content_amount, content_unit, jan_code)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
-            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt, l.data.tax_rate ?? null, l.data.tax_label || null, l.data.product || null, l.data.quantity ?? null, l.data.content_amount ?? null, l.data.content_unit ?? null),
+            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt, l.data.tax_rate ?? null, l.data.tax_label || null, l.data.product || null, l.data.quantity ?? null, l.data.content_amount ?? null, l.data.content_unit ?? null, l.data.jan_code ?? null),
         ),
         // 税の内訳(取引の行の入れ子の tax_lines)。旧形式(項目なし)は内訳なし
         ...insertTaxLineStatements(db, v.id, toStoredTaxLines(v.item.tax_lines ?? []), v.createdAt),

@@ -26,6 +26,8 @@ export interface ItemView {
   quantity: number | null;
   content_amount: number | null;
   content_unit: ContentUnit | null;
+  // JANコード(商品のバーコード。8桁か13桁の数字。分かるときだけ)
+  jan_code: string | null;
   // 単価(1g・1ml・1個あたりの円)。内容量が無い行・値引きの行は null。保存せず、計算して返す
   unit_price: UnitPrice | null;
 }
@@ -33,7 +35,7 @@ export interface ItemView {
 // D1: 1文あたりのバインド変数は100個まで。IN句は余裕をみて90個ずつ
 const IN_CHUNK = 90;
 
-const ITEM_COLUMNS = "i.id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.product, i.quantity, i.content_amount, i.content_unit";
+const ITEM_COLUMNS = "i.id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.product, i.quantity, i.content_amount, i.content_unit, i.jan_code";
 
 // 取引の id ごとの明細(並び順)。明細が無い取引はマップに入らない
 export async function loadItems(db: D1Database, transactionIds: readonly string[]): Promise<Map<string, ItemView[]>> {
@@ -147,6 +149,7 @@ export function toStoredItems(items: readonly ItemInput[], categories: Map<strin
       quantity: item.quantity ?? null,
       content_amount: item.content_amount ?? null,
       content_unit: item.content_unit ?? null,
+      jan_code: item.jan_code ?? null,
       unit_price: computeUnitPrice({ amount: item.amount, quantity: item.quantity, content_amount: item.content_amount, content_unit: item.content_unit }),
     },
     categoryId: item.category ? categories.get(item.category)! : null,
@@ -157,9 +160,9 @@ export function insertItemStatements(db: D1Database, transactionId: string, item
   return items.map(({ view, categoryId }) =>
     db
       .prepare(
-        `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label, product, quantity, content_amount, content_unit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label, product, quantity, content_amount, content_unit, jan_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(view.id, transactionId, view.position, view.name, view.amount, categoryId, view.tax_flag, view.memo, createdAt, view.tax_rate, view.tax_label, view.product, view.quantity, view.content_amount, view.content_unit),
+      .bind(view.id, transactionId, view.position, view.name, view.amount, categoryId, view.tax_flag, view.memo, createdAt, view.tax_rate, view.tax_label, view.product, view.quantity, view.content_amount, view.content_unit, view.jan_code),
   );
 }

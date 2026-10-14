@@ -111,6 +111,8 @@ export interface ItemRow {
   quantity: string;
   content_amount: string;
   content_unit: string;
+  // JANコード(商品のバーコード。8桁か13桁。分かるときだけ)
+  jan_code: string;
 }
 
 export function emptyTxForm(date: string): TxFormValues {
@@ -169,16 +171,17 @@ export function itemRowsFromView(items: ItemView[]): ItemRow[] {
       quantity: it.quantity == null ? "" : String(it.quantity),
       content_amount: it.content_amount == null ? "" : String(it.content_amount),
       content_unit: it.content_unit ?? "",
+      jan_code: it.jan_code ?? "",
     }));
 }
 
 export function emptyItemRow(key: string): ItemRow {
-  return { key, name: "", amount: "", category: "", tax_flag: "", memo: "", rate_choice: "", rate_other: "", tax_label: "", product: "", quantity: "", content_amount: "", content_unit: "" };
+  return { key, name: "", amount: "", category: "", tax_flag: "", memo: "", rate_choice: "", rate_other: "", tax_label: "", product: "", quantity: "", content_amount: "", content_unit: "", jan_code: "" };
 }
 
 // 追加しただけで何も入れていない行(送らない)
 export function isBlankRow(r: ItemRow): boolean {
-  return r.name.trim() === "" && r.amount.trim() === "" && r.memo.trim() === "" && r.rate_choice === "" && r.rate_other.trim() === "" && r.tax_label.trim() === "" && r.product.trim() === "" && r.quantity.trim() === "" && r.content_amount.trim() === "" && r.content_unit === "";
+  return r.name.trim() === "" && r.amount.trim() === "" && r.memo.trim() === "" && r.rate_choice === "" && r.rate_other.trim() === "" && r.tax_label.trim() === "" && r.product.trim() === "" && r.quantity.trim() === "" && r.content_amount.trim() === "" && r.content_unit === "" && r.jan_code.trim() === "";
 }
 
 export interface TotalsCheck {
@@ -384,9 +387,9 @@ function parsePositive(raw: string, label: string, line: number, max: number): B
   return { ok: true, value: n };
 }
 
-type ProductPatch = Pick<NewItem, "product" | "quantity" | "content_amount" | "content_unit">;
+type ProductPatch = Pick<NewItem, "product" | "quantity" | "content_amount" | "content_unit" | "jan_code">;
 
-export function parseProductFields(r: Pick<ItemRow, "product" | "quantity" | "content_amount" | "content_unit">, line: number): BuildResult<ProductPatch> {
+export function parseProductFields(r: Pick<ItemRow, "product" | "quantity" | "content_amount" | "content_unit"> & { jan_code?: string }, line: number): BuildResult<ProductPatch> {
   const product = r.product.trim();
   if (product.length > MAX_PRODUCT_NAME) return { ok: false, error: `${line}行目: 商品名は${MAX_PRODUCT_NAME}文字以内にしてください。` };
   const quantity = parsePositive(r.quantity, "買った数", line, 10_000);
@@ -396,5 +399,28 @@ export function parseProductFields(r: Pick<ItemRow, "product" | "quantity" | "co
   const unit = r.content_unit === "" ? null : (PRODUCT_UNITS as readonly string[]).includes(r.content_unit) ? (r.content_unit as (typeof PRODUCT_UNITS)[number]) : undefined;
   if (unit === undefined) return { ok: false, error: `${line}行目: 単位は g・ml・個から選んでください。` };
   if ((content.value === null) !== (unit === null)) return { ok: false, error: `${line}行目: 内容量と単位は、両方入れるか、両方空にしてください。` };
-  return { ok: true, value: { product: product === "" ? null : product, quantity: quantity.value, content_amount: content.value, content_unit: unit } };
+  const jan = parseJan(r.jan_code ?? "", line);
+  if (!jan.ok) return jan;
+  return { ok: true, value: { product: product === "" ? null : product, quantity: quantity.value, content_amount: content.value, content_unit: unit, jan_code: jan.value } };
+}
+
+// ---- JANコード(規則はサーバーと同じ: 8桁か13桁の数字で、末尾のチェックデジットが合う) ----
+
+// GS1 のチェックデジット(右端を除く桁を、右から 3・1・3・1… を掛けて足す)
+export function janCheckDigitOk(digits: string): boolean {
+  if (!/^\d+$/.test(digits)) return false;
+  const body = digits.slice(0, -1);
+  let sum = 0;
+  for (let i = 0; i < body.length; i++) sum += Number(body[body.length - 1 - i]) * (i % 2 === 0 ? 3 : 1);
+  return (10 - (sum % 10)) % 10 === Number(digits[digits.length - 1]);
+}
+
+export const normalizeJan = (raw: string): string => raw.normalize("NFKC").replace(/[\s-]/g, "");
+
+export function parseJan(raw: string, line: number): BuildResult<string | null> {
+  const text = normalizeJan(raw);
+  if (text === "") return { ok: true, value: null };
+  if (!/^\d+$/.test(text) || (text.length !== 8 && text.length !== 13)) return { ok: false, error: `${line}行目: JANコードは、8桁か13桁の数字で入力してください。` };
+  if (!janCheckDigitOk(text)) return { ok: false, error: `${line}行目: JANコードの末尾の検査桁が合いません(読み間違いの可能性があります)。` };
+  return { ok: true, value: text };
 }

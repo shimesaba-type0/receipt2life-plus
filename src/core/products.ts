@@ -4,7 +4,8 @@ import { computeUnitPrice, type ContentUnit, type UnitPrice } from "./item-produ
 import { normalizeForSearch } from "./search";
 
 // 商品ごとの集計。「今月、牛乳を何本買ったか」「卵の単価の推移」。読み取り専用。
-// 商品のキーは、明細の product(統一した商品名)で、無ければ品名(name)。値引きの行(金額がマイナス)は数えない。
+// 商品のキーは、明細の product(統一した商品名)で、無ければ品名(name)。JANコードがある行は、JANが同じなら表記が違っても同じ商品にまとめる
+// (JANの無い行も、その品名の行に1種類のJANだけが付いていれば、そのJANの商品に入れる)。値引きの行(金額がマイナス)は数えない。
 // 明細のある取引だけが対象(明細のない取引には、商品の名前がない)。件数は個人の記録の規模なので、期間で絞った行を読んで JS でまとめる
 
 export const DEFAULT_PRODUCT_LIMIT = 50;
@@ -18,7 +19,7 @@ const rangeShape = {
 
 export const listProductsSchema = z.strictObject({
   ...rangeShape,
-  q: z.string().trim().max(100).optional().describe("商品名の絞り込み(部分一致。全角半角・かなカナ・大文字小文字は区別しない)"),
+  q: z.string().trim().max(100).optional().describe("商品名の絞り込み(部分一致。全角半角・かなカナ・大文字小文字は区別しない)。JANコード(数字)も当たる"),
   limit: z
     .number({ error: `limit は1〜${MAX_PRODUCT_LIMIT}の整数で指定してください` })
     .int()
@@ -29,7 +30,7 @@ export const listProductsSchema = z.strictObject({
 });
 
 export const productHistorySchema = z.strictObject({
-  product: z.string().trim().min(1, "product は必須です").max(100).describe("商品名(統一した商品名 product か、品名。全角半角・かなカナ・大文字小文字は区別しない)"),
+  product: z.string().trim().min(1, "product は必須です").max(100).describe("商品名(統一した商品名 product か、品名。全角半角・かなカナ・大文字小文字は区別しない)、またはJANコード(8桁か13桁の数字)"),
   ...rangeShape,
 });
 
@@ -44,6 +45,8 @@ export interface ProductRow {
   amount: number;
   // 最後に買った日
   last_date: string;
+  // JANコード(まとめた行のうち、新しいものに付いていたもの。なしは null)
+  jan_code: string | null;
   // 単価がわかる行があるか(内容量が入っている)
   has_unit_price: boolean;
 }
@@ -89,6 +92,8 @@ export type ProductHistoryResult =
   | {
       ok: true;
       product: string;
+      // この商品の明細に付いていたJANコード(なしは空)
+      jan_codes: string[];
       lines: number;
       quantity: number;
       amount: number;
@@ -111,6 +116,7 @@ interface LineRow {
   quantity: number | null;
   content_amount: number | null;
   content_unit: ContentUnit | null;
+  jan_code: string | null;
 }
 
 async function loadLines(db: D1Database, from?: string, to?: string): Promise<LineRow[]> {
@@ -126,7 +132,7 @@ async function loadLines(db: D1Database, from?: string, to?: string): Promise<Li
   }
   const { results } = await db
     .prepare(
-      `SELECT COALESCE(NULLIF(TRIM(i.product), ''), i.name) AS key, t.date, t.id AS transaction_id, t.merchant, i.name, i.amount, i.quantity, i.content_amount, i.content_unit
+      `SELECT COALESCE(NULLIF(TRIM(i.product), ''), i.name) AS key, t.date, t.id AS transaction_id, t.merchant, i.name, i.amount, i.quantity, i.content_amount, i.content_unit, i.jan_code
        FROM transaction_items i JOIN transactions t ON t.id = i.transaction_id
        WHERE ${where.join(" AND ")} ORDER BY t.date DESC, t.created_at DESC, i.position`,
     )
@@ -151,6 +157,40 @@ function weightedUnitPrice(lines: readonly LineRow[]): UnitPrice | null {
   return content > 0 ? { per_unit: amount / content, unit } : null;
 }
 
+interface Group {
+  // 表示する商品名(いちばん新しい行の商品名)
+  product: string;
+  jan: string | null;
+  // 含まれる商品名(正規化したもの)
+  names: Set<string>;
+  lines: LineRow[];
+}
+
+// 行を商品ごとにまとめる。JANがあればJAN、無ければ(その品名にJANが1種類だけなら、そのJAN、それ以外は)正規化した商品名で
+function groupLines(lines: readonly LineRow[]): Group[] {
+  const janByName = new Map<string, Set<string>>();
+  for (const l of lines) {
+    if (l.jan_code) {
+      const k = normalizeForSearch(l.key);
+      janByName.set(k, (janByName.get(k) ?? new Set()).add(l.jan_code));
+    }
+  }
+  const groups = new Map<string, Group>();
+  for (const l of lines) {
+    const name = normalizeForSearch(l.key);
+    const only = janByName.get(name);
+    const jan = l.jan_code ?? (only && only.size === 1 ? [...only][0]! : null);
+    const id = jan ? `jan:${jan}` : `name:${name}`;
+    const g = groups.get(id) ?? { product: l.key, jan, names: new Set<string>(), lines: [] };
+    g.names.add(name);
+    g.lines.push(l);
+    groups.set(id, g);
+  }
+  return [...groups.values()];
+}
+
+const isJanQuery = (s: string) => /^\d{8}$|^\d{13}$/.test(s);
+
 export async function listProducts(db: D1Database, input: unknown): Promise<ListProductsResult> {
   const parsed = listProductsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
@@ -158,23 +198,18 @@ export async function listProducts(db: D1Database, input: unknown): Promise<List
   if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
   const needle = q ? normalizeForSearch(q) : "";
 
-  const groups = new Map<string, { product: string; lines: LineRow[] }>();
-  for (const l of await loadLines(db, from, to)) {
-    const norm = normalizeForSearch(l.key);
-    if (needle !== "" && !norm.includes(needle)) continue;
-    const g = groups.get(norm) ?? { product: l.key, lines: [] };
-    g.lines.push(l);
-    groups.set(norm, g);
-  }
-  const all: ProductRow[] = [...groups.values()].map((g) => ({
-    product: g.product,
-    lines: g.lines.length,
-    quantity: round(g.lines.reduce((s, l) => s + qty(l), 0), 3),
-    amount: g.lines.reduce((s, l) => s + l.amount, 0),
-    // 行は新しい日付順に読んでいるので、先頭が最後に買った日
-    last_date: g.lines[0]!.date,
-    has_unit_price: g.lines.some((l) => computeUnitPrice(l) !== null),
-  }));
+  const all: ProductRow[] = groupLines(await loadLines(db, from, to))
+    .filter((g) => needle === "" || (isJanQuery(needle) ? g.jan === needle : [...g.names].some((n) => n.includes(needle)) || g.jan?.includes(needle)))
+    .map((g) => ({
+      product: g.product,
+      lines: g.lines.length,
+      quantity: round(g.lines.reduce((s, l) => s + qty(l), 0), 3),
+      amount: g.lines.reduce((s, l) => s + l.amount, 0),
+      // 行は新しい日付順に読んでいるので、先頭が最後に買った日
+      last_date: g.lines[0]!.date,
+      jan_code: g.jan,
+      has_unit_price: g.lines.some((l) => computeUnitPrice(l) !== null),
+    }));
   all.sort((a, b) => b.amount - a.amount || (a.product < b.product ? -1 : a.product > b.product ? 1 : 0));
   const products = all.slice(0, limit);
   return {
@@ -192,9 +227,12 @@ export async function productHistory(db: D1Database, input: unknown): Promise<Pr
   const { product, from, to } = parsed.data;
   if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
   const needle = normalizeForSearch(product);
-  const lines = (await loadLines(db, from, to)).filter((l) => normalizeForSearch(l.key) === needle);
+  // 商品名、またはJANコードで当たるグループの行を、1つの商品として扱う(同じ商品名のグループが複数あっても合わせる)
+  const matched = groupLines(await loadLines(db, from, to)).filter((g) => (isJanQuery(needle) ? g.jan === needle : g.names.has(needle)));
+  const lines = matched.flatMap((g) => g.lines).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const janCodes = [...new Set(lines.map((l) => l.jan_code).filter((j): j is string => !!j))];
   if (lines.length === 0) {
-    return { ok: true, product, lines: 0, quantity: 0, amount: 0, months: [], unit_price: null, purchases: [], message: `「${product}」の購入はありません(商品名は、list の結果の名前を使ってください)` };
+    return { ok: true, product, jan_codes: [], lines: 0, quantity: 0, amount: 0, months: [], unit_price: null, purchases: [], message: `「${product}」の購入はありません(商品名は、list の結果の名前を使ってください)` };
   }
 
   const byMonth = new Map<string, LineRow[]>();
@@ -237,6 +275,7 @@ export async function productHistory(db: D1Database, input: unknown): Promise<Pr
   return {
     ok: true,
     product: lines[0]!.key,
+    jan_codes: janCodes,
     lines: lines.length,
     quantity,
     amount,

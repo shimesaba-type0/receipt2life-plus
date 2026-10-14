@@ -66,7 +66,7 @@ Web UI(`ui/`)と、Worker の `/api/*`(`src/api/`)の取り決めです。型は
 
 - `ItemView.tax_rate`: 行の税率(%。0〜100、小数は第3位まで。不明は `null`)。`ItemView.tax_label`: 印字どおりの記号(「※」「軽」など。20文字まで。なしは `null`)
 - `TransactionView.tax_lines`: 税の内訳(`TaxLineView`: `id`, `rate`, `taxable_amount`=対象金額, `tax_amount`=消費税額, `amount_basis`=`included`(税込)/ `excluded`(税抜)/ `null`, `label`)。税率の高い順。なしは `[]`。`items` と同じところに常に含まれる
-- 商品の情報(明細の行の任意の項目。単価と購入数の集計用): `ItemView.product`(統一した商品名。例: 牛乳)、`quantity`(買った数。省略は1として数える)、`content_amount` と `content_unit`(1つあたりの内容量と単位。単位は `g` / `ml` / `個`。**両方セット**で、片方だけは400)、`unit_price`(`{ per_unit, unit }`。1g・1ml・1個あたりの円。**保存せず、金額÷(買った数×内容量)で計算して返す**。内容量が無い行・値引きの行は `null`)。入力は `NewItem.product?` / `quantity?` / `content_amount?` / `content_unit?`。明細は丸ごと置き換えなので、`PATCH` で明細を送るときは、商品の情報も含めて送り直す(含めないと消える)
+- 商品の情報(明細の行の任意の項目。単価と購入数の集計用): `ItemView.product`(統一した商品名。例: 牛乳)、`quantity`(買った数。省略は1として数える)、`content_amount` と `content_unit`(1つあたりの内容量と単位。単位は `g` / `ml` / `個`。**両方セット**で、片方だけは400)、`jan_code`(JANコード。商品のバーコードの8桁か13桁の数字。分かるときだけ。**末尾のチェックデジット(GS1)が合わないものは400**。ハイフン・空白・全角は取り除いて保存)、`unit_price`(`{ per_unit, unit }`。1g・1ml・1個あたりの円。**保存せず、金額÷(買った数×内容量)で計算して返す**。内容量が無い行・値引きの行は `null`)。入力は `NewItem.product?` / `quantity?` / `content_amount?` / `content_unit?` / `jan_code?`。明細は丸ごと置き換えなので、`PATCH` で明細を送るときは、商品の情報も含めて送り直す(含めないと消える)
 - 入力: `NewItem.tax_rate?` / `tax_label?`、`NewTransaction.tax_lines?`(`NewTaxLine[]`。`rate` 必須、ほかは任意。同じ税率は1つだけ、10行まで)。金額は0以上の整数(円)。記号の空文字は値なし
 - `PATCH` の `tax_lines`: 全置換。省略または `null` で変えない、`[]` で全部消す。明細の `tax_rate` / `tax_label` は `items` といっしょに置き換わる
 - 合計の一致は強制しない。全行が税込で対象金額があるときは「対象金額の合計 = 金額」、全行が税抜で対象金額と税額があるときは「対象金額+税額の合計 = 金額」を確かめ、合わなければ `tax_warnings`(`{index?, field, message}[]`)で知らせる(400 にはしない)
@@ -187,8 +187,8 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 明細に商品の情報(`product` など)がある行を、商品ごとに集計する(読み取り専用)。商品のキーは `product`、無ければ品名(`name`)。値引きの行は数えない。全角半角・かなカナ・大文字小文字は区別しない。
 
-- `GET /api/products?from=&to=&q=&limit=` 商品の一覧(金額の大きい順)。各行は `product`, `lines`(買った行数), `quantity`(買った数の合計), `amount`, `last_date`, `has_unit_price`。`total` は該当した商品の数。`q` は商品名の部分一致。`limit` は既定50、最大200
-- `GET /api/products/history?product=&from=&to=` 1つの商品の履歴(`product` 必須)。`months`(データのある月だけ、古い順。`month`, `lines`, `quantity`, `amount`, `unit_price`)、`unit_price`(`unit`, `latest`(最新の買い物), `cheapest`(最安。日付・店つき), `average`)、`purchases`(新しい順、最大100件。日付・店・買った数・金額・単価・`transaction_id`)
+- `GET /api/products?from=&to=&q=&limit=` 商品の一覧(金額の大きい順)。各行は `product`, `lines`(買った行数), `quantity`(買った数の合計), `amount`, `last_date`, `jan_code`(まとめた行のJAN。なしは `null`), `has_unit_price`。**同じJANの明細は、品名の表記が違っても1つの商品にまとめる**(JANの無い同名の行も、その品名のJANが1種類ならそこに入る。JANが複数ある同名の行は別の商品のまま)。`total` は該当した商品の数。`q` は商品名・JANコードの部分一致。`limit` は既定50、最大200
+- `GET /api/products/history?product=&from=&to=` 1つの商品の履歴(`product` 必須。商品名か、JANコード(8桁か13桁の数字)。`jan_codes` に、この商品の明細に付いていたJANを返す)。`months`(データのある月だけ、古い順。`month`, `lines`, `quantity`, `amount`, `unit_price`)、`unit_price`(`unit`, `latest`(最新の買い物), `cheapest`(最安。日付・店つき), `average`)、`purchases`(新しい順、最大100件。日付・店・買った数・金額・単価・`transaction_id`)
 - 単価は 1g・1ml・1個あたりの円。100mlあたり・1Lあたりへの換算は、受け取った側で `per_unit` に掛ける(画面は、100 / 1000 を切り替えられ、選択はこのブラウザに覚える)
 - MCP は `summarize_products`(`product` を省略すると一覧、指定すると履歴)
 

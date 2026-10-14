@@ -32,3 +32,4 @@
 .prod__date { grid-area: date; font-size: 13px; color: var(--muted); }
 .prod__merchant { grid-area: merchant; overflow-wrap: anywhere; }
 .prod__sub { grid-area: sub; font-size: 13px; overflow-wrap: anywhere; }
+.prod__jan { margin: 0; font-size: 13px; }
