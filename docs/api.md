@@ -209,6 +209,8 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 `GET /api/search?q=&from=&to=&types=&limit=&offset=` 記録の横断検索(読み取り専用)。`q` は省略できる(省略か空なら絞り込まず、`types` と期間に当たる記録を新しい順にすべて返す。例: `types=seat_record` だけで、映画を見た日の一覧)。`q` は、空白で区切った語(最大5語)をすべて含むものに絞る。取引(店名・電話・住所・メモ・カテゴリ名・明細の名前とメモ)、出来事(タイトル・メモ)、座席の記録(題名・メモ・会場・スクリーン)、リンク(タイトル・説明・URL)、写真(キャプション)に部分一致する(英字の大文字小文字、全角半角、ひらがなカタカナは区別しない。電話番号はハイフンの有無も問わない。漢字と仮名の違いは区別する)。`types` はカンマ区切り(`transaction` / `event` / `seat_record` / `link` / `photo`)。`limit` は既定30、最大100。`offset` で読み飛ばす(昔までさかのぼるページ送り)。戻りは `query`, `total`(条件に合う全件数), `latest_date`, `count`, `offset`, `has_more`(続きがあるか), `hits`(新しい日付から。`type`, `id`, `date`, `title`, `detail`, `amount`(取引だけ), `transaction_id`)。MCP は `search_records`。
 
+`GET /api/search-chips` 検索の「よく使う検索」チップ(`chips`: `id`, `label`, `q`, `type`)。`POST /api/search-chips`(`{label, q, type}`。`label` は20文字まで・重複は400、`q` と `type` は少なくとも一方が必要、30個まで)で足し、`DELETE /api/search-chips/:id` で消す(無い id は404)。画面専用で、MCP には出していない
+
 ## サブスク・固定費(別枠)
 
 支出の記録とは独立で、二重に数えない。型は `SubscriptionView` / `SubscriptionsData` / `NewSubscription` / `SubscriptionPatch`(src/api/contract.ts)。

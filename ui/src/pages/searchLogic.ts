@@ -81,3 +81,15 @@ export function dateHeading(date: string): string {
   const w = WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()];
   return `${m[1]}年${Number(m[2])}月${Number(m[3])}日(${w})`;
 }
+
+/** 保存したチップと、いまの検索(言葉・対象)が同じか。言葉は前後の空白を無視する */
+export function sameSearch(chip: { q: string; type: SearchHitType | null }, q: string, type: SearchHitType | null): boolean {
+  return chip.q.trim() === q.trim() && (chip.type ?? null) === (type ?? null);
+}
+
+/** チップの名前の候補。言葉があれば言葉、なければ対象の名前(20文字まで) */
+export function chipLabelFor(q: string, type: SearchHitType | null): string {
+  const text = q.trim();
+  const base = text !== "" ? text : type ? (TYPE_LABELS[type] ?? "") : "";
+  return Array.from(base).slice(0, 20).join("");
+}

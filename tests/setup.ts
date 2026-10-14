@@ -19,6 +19,7 @@ beforeEach(async () => {
   await e.DB.exec("DELETE FROM transactions");
   // カテゴリは、テストで増減・改名するので初期データに戻す
   await e.DB.exec("DELETE FROM product_excludes");
+  await e.DB.exec("DELETE FROM search_chips");
   await e.DB.exec("DELETE FROM categories");
   await e.DB.exec(
     "INSERT INTO categories (id, name, group_name, icon) VALUES ('cat_food','食費','食費','food'),('cat_daily','日用品','生活','daily'),('cat_transport','交通・チャージ','交通','transit'),('cat_leisure','娯楽','娯楽','entertainment'),('cat_other','その他','その他','other')",

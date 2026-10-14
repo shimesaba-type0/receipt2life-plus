@@ -835,6 +835,24 @@ export interface ProductRowView {
   has_unit_price: boolean;
   content_total: { amount: number; unit: ContentUnit } | null;
 }
+// GET/POST/DELETE /api/search-chips。検索の「よく使う検索」チップ
+export interface SearchChipView {
+  id: string;
+  label: string;
+  q: string;
+  type: SearchHitType | null;
+}
+export interface SearchChipsData {
+  chips: SearchChipView[];
+}
+export interface SearchChipSaved {
+  chip: SearchChipView;
+  message: string;
+}
+export interface SearchChipDeleted {
+  id: string;
+  message: string;
+}
 // GET/POST/DELETE /api/product-excludes。商品の集計に入れない言葉
 export interface ExcludeWordView {
   id: string;
