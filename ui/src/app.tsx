@@ -8,6 +8,7 @@ import { Categories } from "./pages/Categories";
 import { Day } from "./pages/Day";
 import { Home } from "./pages/Home";
 import { PhotosAdd } from "./pages/PhotosAdd";
+import { Products } from "./pages/Products";
 import { Subscriptions } from "./pages/Subscriptions";
 import { Search } from "./pages/Search";
 import { Tax } from "./pages/Tax";
@@ -34,6 +35,7 @@ export function App() {
         {route.name === "subscriptions" && <Subscriptions />}
         {route.name === "tax" && <Tax />}
         {route.name === "usage" && <Usage />}
+        {route.name === "products" && <Products month={route.month} product={route.product} />}
         {route.name === "search" && <Search q={route.q} type={route.type} page={route.page} />}
         {route.name === "notfound" && (
           <section class="page">

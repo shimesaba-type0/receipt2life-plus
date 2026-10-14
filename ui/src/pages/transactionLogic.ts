@@ -106,6 +106,11 @@ export interface ItemRow {
   rate_choice: string;
   rate_other: string;
   tax_label: string;
+  // 商品の情報(任意。AI が補う。画面で直すときに消えないよう、送り返す)
+  product: string;
+  quantity: string;
+  content_amount: string;
+  content_unit: string;
 }
 
 export function emptyTxForm(date: string): TxFormValues {
@@ -160,16 +165,20 @@ export function itemRowsFromView(items: ItemView[]): ItemRow[] {
       memo: it.memo ?? "",
       ...rateFields(it.tax_rate ?? null),
       tax_label: it.tax_label ?? "",
+      product: it.product ?? "",
+      quantity: it.quantity == null ? "" : String(it.quantity),
+      content_amount: it.content_amount == null ? "" : String(it.content_amount),
+      content_unit: it.content_unit ?? "",
     }));
 }
 
 export function emptyItemRow(key: string): ItemRow {
-  return { key, name: "", amount: "", category: "", tax_flag: "", memo: "", rate_choice: "", rate_other: "", tax_label: "" };
+  return { key, name: "", amount: "", category: "", tax_flag: "", memo: "", rate_choice: "", rate_other: "", tax_label: "", product: "", quantity: "", content_amount: "", content_unit: "" };
 }
 
 // 追加しただけで何も入れていない行(送らない)
 export function isBlankRow(r: ItemRow): boolean {
-  return r.name.trim() === "" && r.amount.trim() === "" && r.memo.trim() === "" && r.rate_choice === "" && r.rate_other.trim() === "" && r.tax_label.trim() === "";
+  return r.name.trim() === "" && r.amount.trim() === "" && r.memo.trim() === "" && r.rate_choice === "" && r.rate_other.trim() === "" && r.tax_label.trim() === "" && r.product.trim() === "" && r.quantity.trim() === "" && r.content_amount.trim() === "" && r.content_unit === "";
 }
 
 export interface TotalsCheck {
@@ -254,7 +263,9 @@ export function buildItems(rows: ItemRow[]): BuildResult<NewItem[]> {
     if (!rate.ok) return { ok: false, error: `${line}行目: ${rate.error}` };
     const label = parseTaxLabel(r.tax_label, line);
     if (!label.ok) return label;
-    out.push({ name, amount, category: nullable(r.category), tax_flag: parseTaxFlagField(r.tax_flag), memo: nullable(r.memo), tax_rate: rate.value, tax_label: label.value });
+    const product = parseProductFields(r, line);
+    if (!product.ok) return product;
+    out.push({ name, amount, category: nullable(r.category), tax_flag: parseTaxFlagField(r.tax_flag), memo: nullable(r.memo), tax_rate: rate.value, tax_label: label.value, ...product.value });
   }
   if (out.length > MAX_ITEMS) return { ok: false, error: `明細は${MAX_ITEMS}行までです。` };
   return { ok: true, value: out };
@@ -354,4 +365,36 @@ export function isNotFoundErrors(errors: FieldError[]): boolean {
 
 export function errorsMessage(errors: FieldError[]): string {
   return errors.map((e) => e.message).join(" / ") || "うまくいきませんでした。";
+}
+
+// ---- 明細の行の、商品の情報(商品名・買った数・内容量・単位。規則はサーバーと同じ) ----
+
+export const MAX_PRODUCT_NAME = 50;
+const PRODUCT_UNITS = ["g", "ml", "個"] as const;
+
+// 全角数字・カンマ・空白をそろえた半角の文字列
+const halfWidth = (raw: string): string => raw.normalize("NFKC").replace(/[,\s]/g, "");
+
+function parsePositive(raw: string, label: string, line: number, max: number): BuildResult<number | null> {
+  const text = halfWidth(raw);
+  if (text === "") return { ok: true, value: null };
+  if (!/^\d+(\.\d{1,3})?$/.test(text)) return { ok: false, error: `${line}行目: ${label}は、小数点以下3桁までの数で入力してください。` };
+  const n = Number(text);
+  if (!(n > 0) || n > max) return { ok: false, error: `${line}行目: ${label}は0より大きく、${max.toLocaleString("ja-JP")}以下にしてください。` };
+  return { ok: true, value: n };
+}
+
+type ProductPatch = Pick<NewItem, "product" | "quantity" | "content_amount" | "content_unit">;
+
+export function parseProductFields(r: Pick<ItemRow, "product" | "quantity" | "content_amount" | "content_unit">, line: number): BuildResult<ProductPatch> {
+  const product = r.product.trim();
+  if (product.length > MAX_PRODUCT_NAME) return { ok: false, error: `${line}行目: 商品名は${MAX_PRODUCT_NAME}文字以内にしてください。` };
+  const quantity = parsePositive(r.quantity, "買った数", line, 10_000);
+  if (!quantity.ok) return quantity;
+  const content = parsePositive(r.content_amount, "内容量", line, 10_000_000);
+  if (!content.ok) return content;
+  const unit = r.content_unit === "" ? null : (PRODUCT_UNITS as readonly string[]).includes(r.content_unit) ? (r.content_unit as (typeof PRODUCT_UNITS)[number]) : undefined;
+  if (unit === undefined) return { ok: false, error: `${line}行目: 単位は g・ml・個から選んでください。` };
+  if ((content.value === null) !== (unit === null)) return { ok: false, error: `${line}行目: 内容量と単位は、両方入れるか、両方空にしてください。` };
+  return { ok: true, value: { product: product === "" ? null : product, quantity: quantity.value, content_amount: content.value, content_unit: unit } };
 }

@@ -17,6 +17,7 @@ import {
   type TransactionInput,
 } from "../core/schema";
 import { categoryNameField } from "../core/categories";
+import { checkItemProducts } from "../core/item-products";
 import { parseLinkUrl, MAX_DESCRIPTION_LENGTH, MAX_URL_LENGTH } from "../core/links";
 import { resolveMoney, subscriptionFieldsSchema, toMinor } from "../core/subscriptions";
 import { parseHttpsUrl } from "../core/urls";
@@ -65,7 +66,7 @@ const EXPORT_TABLES: TableSpec[] = [
     decorate: withTaxLines,
   },
   {
-    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.created_at
+    sql: `SELECT 'item' AS type, i.id, i.transaction_id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.product, i.quantity, i.content_amount, i.content_unit, i.created_at
           FROM transaction_items i
           LEFT JOIN categories c ON c.id = i.category_id
           WHERE i.id > ? ORDER BY i.id LIMIT ?`,
@@ -509,6 +510,11 @@ function groupItemLines(itemEntries: Entry[], report: Report): Map<string, ItemL
       report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
       return;
     }
+    const pairing = checkItemProducts([r.data]);
+    if (pairing.length > 0) {
+      report(entry, { status: "error", message: pairing.map((e) => e.message.replace(/^items\.0\./, "")).join(" / ") });
+      return;
+    }
     const { id, transaction_id: transactionId, position, created_at: createdAt, ...data } = r.data;
     const list = byTx.get(transactionId) ?? [];
     list.push({ entry, id: id ?? crypto.randomUUID(), given: id !== undefined, transactionId, position, order, data, createdAt });
@@ -699,10 +705,10 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
         ...v.lines.map((l, position) =>
           db
             .prepare(
-              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label, product, quantity, content_amount, content_unit)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             )
-            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt, l.data.tax_rate ?? null, l.data.tax_label || null),
+            .bind(l.id, v.id, position, l.data.name, l.data.amount, useCategory(l.data.category), l.data.tax_flag ?? null, l.data.memo ?? null, l.createdAt ?? v.createdAt, l.data.tax_rate ?? null, l.data.tax_label || null, l.data.product || null, l.data.quantity ?? null, l.data.content_amount ?? null, l.data.content_unit ?? null),
         ),
         // 税の内訳(取引の行の入れ子の tax_lines)。旧形式(項目なし)は内訳なし
         ...insertTaxLineStatements(db, v.id, toStoredTaxLines(v.item.tax_lines ?? []), v.createdAt),

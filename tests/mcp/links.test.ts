@@ -23,10 +23,10 @@ const X_POST = "https://x.com/example_user/status/1234567890";
 const YT = "https://youtu.be/dQw4w9WgXcQ";
 
 describe("MCP リンクのツール", () => {
-  it("tools/list は37個で、リンクの3ツールの説明が具体的", async () => {
+  it("tools/list は38個で、リンクの3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
-    expect(tools).toHaveLength(37);
+    expect(tools).toHaveLength(38);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("add_link").description).toContain("Xの投稿");
     expect(byName("add_link").description).toContain("YouTube");
@@ -116,6 +116,21 @@ describe("MCP compare_months", () => {
     expect((await callTool("compare_months", { month: "2026-10", base: "2026-10" })).body.result.isError).toBe(true);
     const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string }[];
     expect(tools.find((t) => t.name === "compare_months")!.description).toContain("until_day");
+  });
+});
+
+describe("MCP summarize_products", () => {
+  it("商品情報つきで登録 → 一覧 → 履歴。説明が使いどころを示す", async () => {
+    await callTool("add_transactions", { transactions: [{ date: "2026-10-05", amount: 396, merchant: "Aストア", items: [{ name: "牛乳 1L", amount: 396, product: "牛乳", quantity: 2, content_amount: 1000, content_unit: "ml" }] }] });
+    const list = text(await callTool("summarize_products", { from: "2026-10-01", to: "2026-10-31" }));
+    expect(list).toMatchObject({ ok: true, total: 1, products: [{ product: "牛乳", quantity: 2 }] });
+    const hist = text(await callTool("summarize_products", { product: "牛乳" }));
+    expect(hist).toMatchObject({ ok: true, product: "牛乳", months: [{ month: "2026-10", quantity: 2 }] });
+    expect((await callTool("summarize_products", { limit: 0 })).body.result.isError).toBe(true);
+    expect((await callTool("add_transactions", { transactions: [{ date: "2026-10-05", amount: 100, items: [{ name: "x", amount: 100, content_unit: "個" }] }] })).body.result.isError).toBe(true);
+    const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string }[];
+    expect(tools.find((t) => t.name === "summarize_products")!.description).toContain("牛乳を何本");
+    expect(tools.find((t) => t.name === "add_transactions")!.description).toContain("content_unit");
   });
 });
 

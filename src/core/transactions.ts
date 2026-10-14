@@ -9,6 +9,7 @@ import {
   type ItemView,
   type StoredItem,
 } from "./items";
+import { checkItemProducts } from "./item-products";
 import type { LinkView } from "./links";
 import { toPhotoView, type PhotoView } from "./photos";
 import { detailsOf, phoneDigits, RECEIPT_DETAIL_KEYS, type ReceiptDetails } from "./receipt-details";
@@ -138,7 +139,7 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
     if (item.account && !accounts.has(item.account)) {
       errors.push({ index, field: "account", message: unknownName("account", "口座", item.account, accounts) });
     }
-    errors.push(...checkItemCategories(item.items ?? [], categories, index));
+    errors.push(...checkItemCategories(item.items ?? [], categories, index), ...checkItemProducts(item.items ?? [], index));
   });
   if (errors.length > 0) return { ok: false, errors: errors.sort((a, b) => (a.index ?? -1) - (b.index ?? -1)) };
   // ここまで来たら全件が正しいので、valid の並びは元の配列と同じ(indexが一致する)
@@ -458,7 +459,7 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
   }
   // items は全置換。null と省略は「変えない」
   const replaceItems: ItemInput[] | null = patch.items ?? null;
-  if (replaceItems) errors.push(...checkItemCategories(replaceItems, categories));
+  if (replaceItems) errors.push(...checkItemCategories(replaceItems, categories), ...checkItemProducts(replaceItems));
   if (errors.length > 0) return { ok: false, errors };
 
   // undefined は「変えない」、null は「空にする」

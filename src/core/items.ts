@@ -1,3 +1,4 @@
+import { computeUnitPrice, type ContentUnit, type UnitPrice } from "./item-products";
 import type { FieldError, ItemInput } from "./schema";
 import type { TaxFlag } from "./tax-flags";
 import { blankToNull, loadTaxLines, type TaxLineView } from "./tax-lines";
@@ -20,12 +21,19 @@ export interface ItemView {
   // 消費税の税率(%。印字どおり。不明は null)と、印字どおりの記号(「※」など。なしは null)。tax_flag とは別物
   tax_rate: number | null;
   tax_label: string | null;
+  // 商品の情報(任意)。product=統一した商品名、quantity=買った数、content_amount / content_unit=1つあたりの内容量(g・ml・個)
+  product: string | null;
+  quantity: number | null;
+  content_amount: number | null;
+  content_unit: ContentUnit | null;
+  // 単価(1g・1ml・1個あたりの円)。内容量が無い行・値引きの行は null。保存せず、計算して返す
+  unit_price: UnitPrice | null;
 }
 
 // D1: 1文あたりのバインド変数は100個まで。IN句は余裕をみて90個ずつ
 const IN_CHUNK = 90;
 
-const ITEM_COLUMNS = "i.id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label";
+const ITEM_COLUMNS = "i.id, i.position, i.name, i.amount, c.name AS category, i.tax_flag, i.memo, i.tax_rate, i.tax_label, i.product, i.quantity, i.content_amount, i.content_unit";
 
 // 取引の id ごとの明細(並び順)。明細が無い取引はマップに入らない
 export async function loadItems(db: D1Database, transactionIds: readonly string[]): Promise<Map<string, ItemView[]>> {
@@ -41,10 +49,10 @@ export async function loadItems(db: D1Database, transactionIds: readonly string[
          ORDER BY i.transaction_id, i.position, i.id`,
       )
       .bind(...part)
-      .all<ItemView & { transaction_id: string }>();
-    for (const { transaction_id: txId, ...item } of results) {
+      .all<Omit<ItemView, "unit_price"> & { transaction_id: string }>();
+    for (const { transaction_id: txId, ...row } of results) {
       const list = out.get(txId) ?? [];
-      list.push(item);
+      list.push({ ...row, unit_price: computeUnitPrice(row) });
       out.set(txId, list);
     }
   }
@@ -135,6 +143,11 @@ export function toStoredItems(items: readonly ItemInput[], categories: Map<strin
       memo: item.memo ?? null,
       tax_rate: item.tax_rate ?? null,
       tax_label: blankToNull(item.tax_label),
+      product: blankToNull(item.product),
+      quantity: item.quantity ?? null,
+      content_amount: item.content_amount ?? null,
+      content_unit: item.content_unit ?? null,
+      unit_price: computeUnitPrice({ amount: item.amount, quantity: item.quantity, content_amount: item.content_amount, content_unit: item.content_unit }),
     },
     categoryId: item.category ? categories.get(item.category)! : null,
   }));
@@ -144,9 +157,9 @@ export function insertItemStatements(db: D1Database, transactionId: string, item
   return items.map(({ view, categoryId }) =>
     db
       .prepare(
-        `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_items (id, transaction_id, position, name, amount, category_id, tax_flag, memo, created_at, tax_rate, tax_label, product, quantity, content_amount, content_unit)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(view.id, transactionId, view.position, view.name, view.amount, categoryId, view.tax_flag, view.memo, createdAt, view.tax_rate, view.tax_label),
+      .bind(view.id, transactionId, view.position, view.name, view.amount, categoryId, view.tax_flag, view.memo, createdAt, view.tax_rate, view.tax_label, view.product, view.quantity, view.content_amount, view.content_unit),
   );
 }

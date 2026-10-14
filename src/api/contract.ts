@@ -37,6 +37,20 @@ export interface ItemView {
   tax_rate: number | null;
   // 印字どおりの税率の記号(「※」「軽」など。20文字まで。なしは null)
   tax_label: string | null;
+  // 商品の情報(任意。AI が補う)。product=統一した商品名、quantity=買った数、content_amount / content_unit=1つあたりの内容量
+  product: string | null;
+  quantity: number | null;
+  content_amount: number | null;
+  content_unit: ContentUnit | null;
+  // 単価(1g・1ml・1個あたりの円)。内容量が無い行・値引きの行は null。保存せず、計算して返す
+  unit_price: UnitPrice | null;
+}
+
+// 内容量の単位。g=重さ、ml=容量、個=個数(枚・本・パックも個)
+export type ContentUnit = "g" | "ml" | "個";
+export interface UnitPrice {
+  per_unit: number;
+  unit: ContentUnit;
 }
 
 // 対象金額が税込(included)か税抜(excluded)か
@@ -350,6 +364,11 @@ export interface NewItem {
   tax_rate?: number | null;
   // 印字の記号(20文字まで)。空文字は値なし
   tax_label?: string | null;
+  // 商品の情報(すべて任意)。content_amount と content_unit はセット(片方だけはエラー)
+  product?: string | null;
+  quantity?: number | null;
+  content_amount?: number | null;
+  content_unit?: ContentUnit | null;
 }
 
 // POST /api/transactions の入力(add_transactions と同じ規則)
@@ -800,4 +819,56 @@ export interface UsageMeterView {
 export type UsageData =
   | { configured: false; missing: string[]; message: string }
   | { configured: true; days: UsageDayView[]; today: UsageDayView; rows_read: UsageMeterView; rows_written: UsageMeterView; level: UsageLevel; fetched_at: string; message: string };
+
+// GET /api/products?from=&to=&q=&limit=。商品ごとの集計(金額の大きい順)。product は統一した商品名(無ければ品名)
+export interface ProductRowView {
+  product: string;
+  lines: number;
+  quantity: number;
+  amount: number;
+  last_date: string;
+  has_unit_price: boolean;
+}
+export interface ProductsData {
+  count: number;
+  total: number;
+  products: ProductRowView[];
+  message: string;
+}
+
+// GET /api/products/history?product=&from=&to=。1つの商品の、月ごとの購入数・単価の推移と、買い物の一覧
+export interface ProductMonthView {
+  month: string;
+  lines: number;
+  quantity: number;
+  amount: number;
+  unit_price: UnitPrice | null;
+}
+export interface ProductPurchaseView {
+  date: string;
+  transaction_id: string;
+  merchant: string | null;
+  name: string;
+  quantity: number;
+  amount: number;
+  content_amount: number | null;
+  content_unit: ContentUnit | null;
+  unit_price: UnitPrice | null;
+}
+export interface ProductUnitPriceSummary {
+  unit: ContentUnit;
+  latest: { per_unit: number; date: string };
+  cheapest: { per_unit: number; date: string; merchant: string | null };
+  average: number;
+}
+export interface ProductHistoryData {
+  product: string;
+  lines: number;
+  quantity: number;
+  amount: number;
+  months: ProductMonthView[];
+  unit_price: ProductUnitPriceSummary | null;
+  purchases: ProductPurchaseView[];
+  message: string;
+}
 

@@ -15,6 +15,7 @@ import { addTransactions, deleteTransaction, getTransaction, updateTransaction }
 import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
 import { getUsage } from "../core/usage";
+import { listProducts, productHistory } from "../core/products";
 import { compareMonths } from "../core/compare";
 import { searchRecords } from "../core/search";
 import { summarizeTax } from "../core/tax-summary";
@@ -98,6 +99,21 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     for (const key of ["q", "category"]) if (q[key]) input[key] = q[key];
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listMerchants(c.env.DB, input));
+  });
+
+  // 商品ごとの集計(買った数・金額・単価の推移)。一覧は from / to / q / limit、履歴は product(必須)/ from / to
+  app.get("/api/products", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["from", "to", "q"]) if (q[key]) input[key] = q[key];
+    if (q.limit) input.limit = Number(q.limit);
+    return respond(c, await listProducts(c.env.DB, input));
+  });
+  app.get("/api/products/history", async (c) => {
+    const q = c.req.query();
+    const input: Record<string, unknown> = {};
+    for (const key of ["product", "from", "to"]) if (q[key]) input[key] = q[key];
+    return respond(c, await productHistory(c.env.DB, input));
   });
 
   // D1 の使用量(Cloudflare の分析 API から取る。設定がなければ configured: false。取得に失敗したら502)
