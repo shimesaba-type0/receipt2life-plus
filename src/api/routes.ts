@@ -16,6 +16,7 @@ import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
 import { getUsage } from "../core/usage";
 import { listProducts, productHistory } from "../core/products";
+import { addExclude, deleteExclude, listExcludes } from "../core/product-excludes";
 import { compareMonths } from "../core/compare";
 import { searchRecords } from "../core/search";
 import { summarizeTax } from "../core/tax-summary";
@@ -60,7 +61,7 @@ export interface ApiRouteOptions {
 export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -109,6 +110,14 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listProducts(c.env.DB, input));
   });
+  // 商品の集計に入れない言葉(消費税・割引など)の管理
+  app.get("/api/product-excludes", async (c) => respond(c, await listExcludes(c.env.DB)));
+  app.post("/api/product-excludes", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addExclude(c.env.DB, body.value));
+  });
+  app.delete("/api/product-excludes/:id", async (c) => respond(c, await deleteExclude(c.env.DB, { id: c.req.param("id") })));
   app.get("/api/products/history", async (c) => {
     const q = c.req.query();
     const input: Record<string, unknown> = {};

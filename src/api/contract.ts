@@ -835,6 +835,22 @@ export interface ProductRowView {
   has_unit_price: boolean;
   content_total: { amount: number; unit: ContentUnit } | null;
 }
+// GET/POST/DELETE /api/product-excludes。商品の集計に入れない言葉
+export interface ExcludeWordView {
+  id: string;
+  word: string;
+}
+export interface ExcludesData {
+  excludes: ExcludeWordView[];
+}
+export interface ExcludeSaved {
+  exclude: ExcludeWordView;
+  message: string;
+}
+export interface ExcludeDeleted {
+  id: string;
+  message: string;
+}
 export interface ProductsData {
   count: number;
   total: number;

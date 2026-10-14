@@ -29,3 +29,17 @@ describe("商品のAPI", () => {
     expect(bad.status).toBe(400);
   });
 });
+
+describe("数えない言葉のAPI", () => {
+  it("追加・一覧・削除。重複と不正は400、存在しないidは404", async () => {
+    await testEnv().DB.exec("DELETE FROM product_excludes");
+    const added = await send("POST", "/api/product-excludes", { word: "レジ袋" });
+    expect(added.status).toBe(200);
+    const id = (await json(added)).exclude.id as string;
+    expect((await send("POST", "/api/product-excludes", { word: "レジ袋" })).status).toBe(400);
+    expect((await send("POST", "/api/product-excludes", { word: "" })).status).toBe(400);
+    expect((await json(await call("/api/product-excludes"))).excludes).toEqual([{ id, word: "レジ袋" }]);
+    expect((await app.request(`http://localhost/api/product-excludes/${id}`, { method: "DELETE" }, local)).status).toBe(200);
+    expect((await app.request("http://localhost/api/product-excludes/none", { method: "DELETE" }, local)).status).toBe(404);
+  });
+});

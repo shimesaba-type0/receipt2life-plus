@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeUnitPrice, janCheckDigitOk, normalizeJan } from "../../src/core/item-products";
 import { listProducts, productHistory } from "../../src/core/products";
+import { addExclude, deleteExclude, listExcludes } from "../../src/core/product-excludes";
 import { addTransactions, getTransaction, updateTransaction } from "../../src/core/transactions";
 import { NOW, testEnv } from "../helpers";
 
@@ -182,21 +183,42 @@ describe("商品の一覧の並び順と、毎回量が違うもの", () => {
   });
 });
 
-describe("商品ではない行(消費税・割引など)", () => {
-  it("消費税・割引・クーポンの行は、商品の一覧にも履歴にも入れない", async () => {
+describe("数えない言葉(消費税・割引など。画面から直せる)", () => {
+  it("言葉を含む行は、商品の一覧にも履歴にも入れない。言葉を戻すと、また数える。全角半角・かなカナは区別しない", async () => {
+    await db().exec("DELETE FROM product_excludes");
     await buy("2026-10-05", "A店", [
       { name: "牛乳", amount: 198, product: "牛乳" },
       { name: "消費税(8%)", amount: 15 },
-      { name: "消費税等", amount: 20 },
-      { name: "内税 10%", amount: 30 },
       { name: "会員割引", amount: 10 },
-      { name: "クーポン", amount: 10 },
       { name: "ｸｰﾎﾟﾝ値引", amount: 10 },
     ]);
-    const r = await listProducts(db(), { from: "2026-10-01", to: "2026-10-31" });
-    expect(r.ok && r.products.map((p) => p.product)).toEqual(["牛乳"]);
+    const range = { from: "2026-10-01", to: "2026-10-31" };
+    const names = async () => {
+      const r = await listProducts(db(), range);
+      return r.ok ? r.products.map((p) => p.product).sort() : [];
+    };
+    expect(await names()).toEqual(["会員割引", "消費税(8%)", "牛乳", "ｸｰﾎﾟﾝ値引"].sort());
+    const a = await addExclude(db(), { word: "消費税" });
+    const b = await addExclude(db(), { word: "割引" });
+    const c = await addExclude(db(), { word: "クーポン" });
+    expect(a.ok && b.ok && c.ok).toBe(true);
+    expect(await names()).toEqual(["牛乳"]);
     const h = await productHistory(db(), { product: "消費税(8%)" });
     expect(h.ok && h.lines).toBe(0);
+    // 戻す
+    if (!a.ok) throw new Error("add failed");
+    expect((await deleteExclude(db(), { id: a.exclude.id })).ok).toBe(true);
+    expect(await names()).toContain("消費税(8%)");
+  });
+
+  it("同じ言葉(全角半角・かなカナ違い)は二重に足せない。空・長すぎ・存在しないidはエラー", async () => {
+    await db().exec("DELETE FROM product_excludes");
+    expect((await addExclude(db(), { word: "クーポン" })).ok).toBe(true);
+    expect((await addExclude(db(), { word: "ｸｰﾎﾟﾝ" })).ok).toBe(false);
+    expect((await addExclude(db(), { word: "  " })).ok).toBe(false);
+    expect((await addExclude(db(), { word: "あ".repeat(31) })).ok).toBe(false);
+    expect((await deleteExclude(db(), { id: "pex_none" })).ok).toBe(false);
+    const l = await listExcludes(db());
+    expect(l.ok && l.excludes.map((e) => e.word)).toEqual(["クーポン"]);
   });
 });
-

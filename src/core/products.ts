@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
 import { computeUnitPrice, type ContentUnit, type UnitPrice } from "./item-products";
+import { isExcluded, loadExcludeNeedles } from "./product-excludes";
 import { normalizeForSearch } from "./search";
 
 // 商品ごとの集計。「今月、牛乳を何本買ったか」「卵の単価の推移」。読み取り専用。
 // 商品のキーは、明細の product(統一した商品名)で、無ければ品名(name)。JANコードがある行は、JANが同じなら表記が違っても同じ商品にまとめる
 // (JANの無い行も、その品名の行に1種類のJANだけが付いていれば、そのJANの商品に入れる)。値引きの行(金額がマイナス)は数えない。
-// 明細のある取引だけが対象(明細のない取引には、商品の名前がない)。件数は個人の記録の規模なので、期間で絞った行を読んで JS でまとめる
+// 商品ではない行(消費税・割引など)は、数えない言葉(product_excludes。画面から直せる)で外す。明細のある取引だけが対象(明細のない取引には、商品の名前がない)。件数は個人の記録の規模なので、期間で絞った行を読んで JS でまとめる
 
 export const DEFAULT_PRODUCT_LIMIT = 50;
 export const MAX_PRODUCT_LIMIT = 200;
@@ -122,11 +123,6 @@ interface LineRow {
   jan_code: string | null;
 }
 
-// 商品ではない行(消費税・割引・クーポンなど)。レシートの明細に入っていても、商品の集計には入れない
-// 全角半角・かなカナをそろえてから見る(クーポン→くーぽん)。金額がマイナスの行は、別に SQL で外している
-const NOT_PRODUCT = /消費税|内税|外税|税等|税額|割引|値引|値下|くーぽん|ぽいんと(利用|値引|割引)/;
-export const isNotProduct = (name: string): boolean => NOT_PRODUCT.test(normalizeForSearch(name));
-
 async function loadLines(db: D1Database, from?: string, to?: string): Promise<LineRow[]> {
   const where = ["i.amount > 0"];
   const params: string[] = [];
@@ -146,7 +142,9 @@ async function loadLines(db: D1Database, from?: string, to?: string): Promise<Li
     )
     .bind(...params)
     .all<LineRow>();
-  return results.filter((l) => !isNotProduct(l.key));
+  // 数えない言葉(消費税・割引など。画面から直せる)を含む行は、商品として数えない
+  const needles = await loadExcludeNeedles(db);
+  return results.filter((l) => !isExcluded(l.key, needles));
 }
 
 const qty = (l: Pick<LineRow, "quantity">) => l.quantity ?? 1;

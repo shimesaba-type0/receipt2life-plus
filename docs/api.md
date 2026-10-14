@@ -190,6 +190,7 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - `GET /api/products?from=&to=&q=&limit=&sort=` 商品の一覧(`sort=amount` 金額の大きい順(既定)、`sort=frequency` 買った回数の多い順。画面は後者)。各行は `product`, `lines`(買った行数), `quantity`(買った数の合計), `amount`, `last_date`, `jan_code`(まとめた行のJAN。なしは `null`), `has_unit_price`, `content_total`(内容量の合計 `{amount, unit}`。ガソリンの給油量の合計など。内容量がなければ `null`)。**同じJANの明細は、品名の表記が違っても1つの商品にまとめる**(JANの無い同名の行も、その品名のJANが1種類ならそこに入る。JANが複数ある同名の行は別の商品のまま)。`total` は該当した商品の数。`q` は商品名・JANコードの部分一致。`limit` は既定50、最大200
 - `GET /api/products/history?product=&from=&to=` 1つの商品の履歴(`product` 必須。商品名か、JANコード(8桁か13桁の数字)。`jan_codes` に、この商品の明細に付いていたJANを返す)。`months`(データのある月だけ、古い順。`month`, `lines`, `quantity`, `amount`, `unit_price`)、`unit_price`(`unit`, `latest`(最新の買い物), `cheapest`(最安。日付・店つき), `average`)、`purchases`(新しい順、最大100件。日付・店・買った数・金額・単価・`transaction_id`)
 - 単価は 1g・1ml・1個あたりの円。100mlあたり・1Lあたりへの換算は、受け取った側で `per_unit` に掛ける(画面は、100 / 1000 を切り替えられ、選択はこのブラウザに覚える)
+- `GET /api/product-excludes` 商品として数えない言葉の一覧(`excludes`: `id`, `word`)。名前(統一名か品名)にこの言葉を含む行は、商品の一覧・履歴から外す(全角半角・かなカナ・大文字小文字は区別しない)。最初は「消費税」「内税」「外税」「税額」「税等」「割引」「値引」「値下」「クーポン」が入っている。`POST /api/product-excludes`(`{word}`。30文字まで、重複は400、200件まで)で足し、`DELETE /api/product-excludes/:id` で戻す(無い id は404)
 - MCP は `summarize_products`(`product` を省略すると一覧、指定すると履歴)
 
 ## 使用量
