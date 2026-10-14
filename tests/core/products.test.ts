@@ -181,3 +181,22 @@ describe("商品の一覧の並び順と、毎回量が違うもの", () => {
     expect(h.ok && h.unit_price?.average).toBeCloseTo(0.1617, 3);
   });
 });
+
+describe("商品ではない行(消費税・割引など)", () => {
+  it("消費税・割引・クーポンの行は、商品の一覧にも履歴にも入れない", async () => {
+    await buy("2026-10-05", "A店", [
+      { name: "牛乳", amount: 198, product: "牛乳" },
+      { name: "消費税(8%)", amount: 15 },
+      { name: "消費税等", amount: 20 },
+      { name: "内税 10%", amount: 30 },
+      { name: "会員割引", amount: 10 },
+      { name: "クーポン", amount: 10 },
+      { name: "ｸｰﾎﾟﾝ値引", amount: 10 },
+    ]);
+    const r = await listProducts(db(), { from: "2026-10-01", to: "2026-10-31" });
+    expect(r.ok && r.products.map((p) => p.product)).toEqual(["牛乳"]);
+    const h = await productHistory(db(), { product: "消費税(8%)" });
+    expect(h.ok && h.lines).toBe(0);
+  });
+});
+

@@ -122,6 +122,11 @@ interface LineRow {
   jan_code: string | null;
 }
 
+// 商品ではない行(消費税・割引・クーポンなど)。レシートの明細に入っていても、商品の集計には入れない
+// 全角半角・かなカナをそろえてから見る(クーポン→くーぽん)。金額がマイナスの行は、別に SQL で外している
+const NOT_PRODUCT = /消費税|内税|外税|税等|税額|割引|値引|値下|くーぽん|ぽいんと(利用|値引|割引)/;
+export const isNotProduct = (name: string): boolean => NOT_PRODUCT.test(normalizeForSearch(name));
+
 async function loadLines(db: D1Database, from?: string, to?: string): Promise<LineRow[]> {
   const where = ["i.amount > 0"];
   const params: string[] = [];
@@ -141,7 +146,7 @@ async function loadLines(db: D1Database, from?: string, to?: string): Promise<Li
     )
     .bind(...params)
     .all<LineRow>();
-  return results;
+  return results.filter((l) => !isNotProduct(l.key));
 }
 
 const qty = (l: Pick<LineRow, "quantity">) => l.quantity ?? 1;
