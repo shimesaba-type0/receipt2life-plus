@@ -29,3 +29,21 @@ describe("検索のAPI", () => {
     expect((await call(`/api/search?q=a&limit=0`)).status).toBe(400);
   });
 });
+
+describe("検索チップのAPI", () => {
+  it("追加・一覧・削除。言葉も対象も空、重複、長すぎは400、存在しないidは404", async () => {
+    const post = (body: unknown) => app.request("http://localhost/api/search-chips", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } }, local);
+    const added = await post({ label: "皮膚科", q: "皮膚科" });
+    expect(added.status).toBe(200);
+    const id = ((await added.json()) as { chip: { id: string } }).chip.id;
+    expect((await post({ label: "映画", q: "", type: "seat_record" })).status).toBe(200);
+    expect((await post({ label: "空", q: "" })).status).toBe(400);
+    expect((await post({ label: "皮膚科", q: "別" })).status).toBe(400);
+    expect((await post({ label: "あ".repeat(21), q: "x" })).status).toBe(400);
+    expect((await post({ label: "型", q: "x", type: "bad" })).status).toBe(400);
+    const list = (await (await app.request("http://localhost/api/search-chips", undefined, local)).json()) as { chips: { label: string; q: string; type: string | null }[] };
+    expect(list.chips.map((c) => [c.label, c.q, c.type])).toEqual([["皮膚科", "皮膚科", null], ["映画", "", "seat_record"]]);
+    expect((await app.request(`http://localhost/api/search-chips/${id}`, { method: "DELETE" }, local)).status).toBe(200);
+    expect((await app.request("http://localhost/api/search-chips/none", { method: "DELETE" }, local)).status).toBe(404);
+  });
+});

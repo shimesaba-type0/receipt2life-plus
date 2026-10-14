@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { SearchData, SearchHitType } from "../../../src/api/contract";
-import { searchRecords } from "../api";
+import type { SearchChipView, SearchData, SearchHitType } from "../../../src/api/contract";
+import { addSearchChip, deleteSearchChip, getSearchChips, searchRecords } from "../api";
 import { formatYen } from "../format";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { TYPE_LABELS, TYPE_OPTIONS, dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageCount, searchPageHref } from "./searchLogic";
+import { TYPE_LABELS, TYPE_OPTIONS, dateHeading, groupHitsByDate, hitHref, rangeLabel, chipLabelFor, searchApiPath, searchPageCount, searchPageHref, sameSearch } from "./searchLogic";
 import "./Categories.css";
 import "./Search.css";
 
@@ -91,6 +91,8 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
         </div>
       </form>
 
+      <SavedChips q={props.q} type={props.type} />
+
       {props.q === "" && props.type === null && (
         <p class="muted search__hint">言葉を入れて「検索」を押すか、上の種類(支出・出来事・映画・座席・リンク・写真)を押すと、その種類の記録が新しい日付順に並びます。</p>
       )}
@@ -148,5 +150,105 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
         </div>
       )}
     </section>
+  );
+}
+
+// 「よく使う検索」。押すとその検索になる。いまの検索を足したり、✕で消したりできる(画面から自由に増やせる)
+function SavedChips(props: { q: string; type: SearchHitType | null }) {
+  const [chips, setChips] = useState<SearchChipView[] | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [label, setLabel] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    getSearchChips()
+      .then((r) => {
+        if (r.ok) setChips(r.chips);
+      })
+      .catch(() => undefined);
+  useEffect(() => {
+    void load();
+  }, []);
+  // 検索が変わったら、ラベルの候補を入れ直す
+  useEffect(() => {
+    setLabel(chipLabelFor(props.q, props.type));
+    setMessage(null);
+  }, [props.q, props.type]);
+
+  const active = props.q.trim() !== "" || props.type !== null;
+  const already = chips?.some((c) => sameSearch(c, props.q, props.type)) ?? false;
+
+  const add = async () => {
+    if (busy || label.trim() === "") return;
+    setBusy(true);
+    try {
+      const r = await addSearchChip({ label: label.trim(), q: props.q.trim(), type: props.type });
+      setMessage(r.ok ? r.message : errorText(r.errors));
+      if (r.ok) await load();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "足せませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (c: SearchChipView) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await deleteSearchChip(c.id);
+      setMessage(r.ok ? r.message : errorText(r.errors));
+      if (r.ok) await load();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "消せませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="search__saved">
+      <div class="search__saved-head">
+        <strong>よく使う検索</strong>
+        {chips && chips.length > 0 && (
+          <button type="button" class="search__edit" aria-pressed={editing} onClick={() => setEditing(!editing)}>
+            {editing ? "完了" : "編集"}
+          </button>
+        )}
+      </div>
+      {chips && chips.length === 0 && !active && <p class="muted search__hint">探したあとに「この検索をよく使う検索に足す」を押すと、ここに並びます。</p>}
+      <div class="search__types">
+        {(chips ?? []).map((c) =>
+          editing ? (
+            <span key={c.id} class="search__chip search__chip--edit">
+              {c.label}
+              <button type="button" class="search__chip-x" aria-label={`「${c.label}」を消す`} disabled={busy} onClick={() => void remove(c)}>
+                ✕
+              </button>
+            </span>
+          ) : (
+            <Link key={c.id} href={searchPageHref(c.q, c.type)} class={`search__chip${sameSearch(c, props.q, props.type) ? " is-on" : ""}`}>
+              {c.label}
+            </Link>
+          ),
+        )}
+      </div>
+      {active && !already && (
+        <div class="search__row">
+          <label class="sr-only" for="search-chip-label">
+            チップの名前
+          </label>
+          <input id="search-chip-label" class="search__input" type="text" maxLength={20} value={label} onInput={(e) => setLabel((e.currentTarget as HTMLInputElement).value)} />
+          <button type="button" class="btn" disabled={busy || label.trim() === ""} onClick={() => void add()}>
+            この検索を足す
+          </button>
+        </div>
+      )}
+      {message && (
+        <p class="muted" role="status">
+          {message}
+        </p>
+      )}
+    </div>
   );
 }

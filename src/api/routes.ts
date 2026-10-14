@@ -16,6 +16,7 @@ import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
 import { getUsage } from "../core/usage";
 import { listProducts, productHistory } from "../core/products";
+import { addChip, deleteChip, listChips } from "../core/search-chips";
 import { addExclude, deleteExclude, listExcludes } from "../core/product-excludes";
 import { compareMonths } from "../core/compare";
 import { searchRecords } from "../core/search";
@@ -61,7 +62,7 @@ export interface ApiRouteOptions {
 export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -150,6 +151,15 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     if (q.offset) input.offset = Number(q.offset);
     return respond(c, await searchRecords(c.env.DB, input));
   });
+
+  // 検索の「よく使う検索」チップ
+  app.get("/api/search-chips", async (c) => respond(c, await listChips(c.env.DB)));
+  app.post("/api/search-chips", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addChip(c.env.DB, body.value));
+  });
+  app.delete("/api/search-chips/:id", async (c) => respond(c, await deleteChip(c.env.DB, { id: c.req.param("id") })));
 
   app.get("/api/categories", async (c) => {
     const { categories, accounts } = await listCategories(c.env.DB);

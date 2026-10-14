@@ -39,6 +39,10 @@ import type {
   SearchData,
   ProductHistoryData,
   ExcludeDeleted,
+  SearchChipDeleted,
+  SearchHitType,
+  SearchChipSaved,
+  SearchChipsData,
   ExcludeSaved,
   ExcludesData,
   ProductsData,
@@ -116,6 +120,9 @@ export const getDeductions = (query: string) => request<DeductionsData>("GET", `
 // サブスク・保険などの固定費(別枠)。query は "active=true" のような絞り込み(省略可)
 // 商品ごとの集計(一覧と、1つの商品の履歴)
 export const getProducts = (query: string) => request<ProductsData>("GET", `/api/products?${query}`);
+export const getSearchChips = () => request<SearchChipsData>("GET", "/api/search-chips");
+export const addSearchChip = (chip: { label: string; q: string; type: SearchHitType | null }) => request<SearchChipSaved>("POST", "/api/search-chips", chip);
+export const deleteSearchChip = (id: string) => request<SearchChipDeleted>("DELETE", `/api/search-chips/${encodeURIComponent(id)}`);
 export const getProductExcludes = () => request<ExcludesData>("GET", "/api/product-excludes");
 export const addProductExclude = (word: string) => request<ExcludeSaved>("POST", "/api/product-excludes", { word });
 export const deleteProductExclude = (id: string) => request<ExcludeDeleted>("DELETE", `/api/product-excludes/${encodeURIComponent(id)}`);

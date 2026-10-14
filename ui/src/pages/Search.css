@@ -20,3 +20,9 @@
 .search__pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .search__pager .btn { text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; }
 .search__hint { margin: 0; font-size: 14px; line-height: 1.7; }
+.search__saved { display: flex; flex-direction: column; gap: 8px; }
+.search__saved-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+.search__edit { min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--accent); font-size: 14px; cursor: pointer; }
+.search__chip { text-decoration: none; display: inline-flex; align-items: center; color: inherit; }
+.search__chip--edit { padding-right: 0; gap: 2px; }
+.search__chip-x { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }

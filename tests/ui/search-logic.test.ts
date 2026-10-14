@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SearchHitView } from "../../src/api/contract";
 import { parseRoute } from "../../ui/src/route";
-import { dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageCount, searchPageHref } from "../../ui/src/pages/searchLogic";
+import { chipLabelFor, dateHeading, groupHitsByDate, hitHref, rangeLabel, sameSearch, searchApiPath, searchPageCount, searchPageHref } from "../../ui/src/pages/searchLogic";
 
 const hit = (over: Partial<SearchHitView>): SearchHitView => ({ type: "event", id: "e1", date: "2026-10-05", title: "t", detail: null, amount: null, transaction_id: null, ...over });
 
@@ -42,5 +42,19 @@ describe("検索のページ数", () => {
     expect(searchPageCount(30)).toBe(1);
     expect(searchPageCount(31)).toBe(2);
     expect(searchPageCount(95)).toBe(4);
+  });
+});
+
+describe("よく使う検索のチップ", () => {
+  it("いまの検索と同じか(言葉の前後の空白は無視、対象は null と省略が同じ)", () => {
+    expect(sameSearch({ q: "映画", type: null }, " 映画 ", null)).toBe(true);
+    expect(sameSearch({ q: "映画", type: "event" }, "映画", null)).toBe(false);
+    expect(sameSearch({ q: "", type: "link" }, "", "link")).toBe(true);
+  });
+  it("名前の候補は、言葉、なければ対象の名前(20文字まで)", () => {
+    expect(chipLabelFor("皮膚科", null)).toBe("皮膚科");
+    expect(chipLabelFor("", "seat_record")).not.toBe("");
+    expect(chipLabelFor("あ".repeat(30), null)).toHaveLength(20);
+    expect(chipLabelFor("", null)).toBe("");
   });
 });
