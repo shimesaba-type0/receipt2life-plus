@@ -11,6 +11,11 @@ export interface Env {
   ACCESS_AUD?: string;
   // ローカル開発専用。"1" かつホストがlocalhostのときだけ認証を素通りにする。本番には置かない
   AUTH_BYPASS?: string;
+  // 使用量のグラフ(任意)。Cloudflare の分析 API を読むためのシークレット。どれかが無ければ、グラフは出さない(docs/setup.md)
+  // CF_API_TOKEN: アカウントの「アカウント分析:読み取り」だけを許可したトークン。CF_ACCOUNT_ID / D1_DATABASE_ID: アカウントとデータベースのID
+  CF_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
+  D1_DATABASE_ID?: string;
 }
 
 export type AppEnv = {

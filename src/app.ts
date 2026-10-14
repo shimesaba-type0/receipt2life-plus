@@ -8,6 +8,7 @@ import { sameOriginOnly } from "./api/guards";
 import { registerApiRoutes } from "./api/routes";
 import { createMcpServer } from "./mcp/server";
 import type { TitleFetcher } from "./core/link-titles";
+import { createWindowLimiter, DEFAULT_API_WRITE_LIMIT, DEFAULT_MCP_LIMIT, writeLimit, type WriteLimitConfig } from "./api/write-limit";
 
 // これ以上かかった /api/* は、ログに残す(ダッシュボードの Observability で、どのルートが遅いか見るため)
 const SLOW_API_MS = 300;
@@ -15,6 +16,10 @@ const SLOW_API_MS = 300;
 export interface AppOptions {
   // リンクのタイトルを取りに行く関数(本番だけ渡す。省略するとタイトルは取りに行かない。テストで外へ出ないように)
   fetchTitle?: TitleFetcher;
+  // 使用量のグラフを取りに行く fetch(本番だけ渡す。省略すると、設定があっても取得しない。テストで外へ出ないように)
+  usageFetch?: typeof fetch;
+  // 書き込み回数の制限(省略すると既定。テストで小さくして試す)
+  writeLimits?: { api?: WriteLimitConfig; mcp?: WriteLimitConfig };
   // テスト用: JWTの鍵の取得を差し替える
   getKey?: KeyResolver;
 }
@@ -26,6 +31,12 @@ export function createApp(options: AppOptions = {}) {
   app.use("*", accessAuth(options.getKey ? { getKey: options.getKey } : {}));
 
   app.get("/healthz", (c) => c.json({ ok: true }));
+
+  // 書き込みの回数の制限(暴走・ループよけ。インスタンスごとの最良努力)。画面・API・インポートは同じ枠、MCP は別の枠
+  const apiLimiter = createWindowLimiter(options.writeLimits?.api ?? DEFAULT_API_WRITE_LIMIT);
+  app.use("/api/*", writeLimit(apiLimiter, "api"));
+  app.use("/import", writeLimit(apiLimiter, "import"));
+  app.use("/mcp", writeLimit(createWindowLimiter(options.writeLimits?.mcp ?? DEFAULT_MCP_LIMIT), "mcp", (m) => m === "POST"));
 
   // 画面からの書き込み(インポート)は、同一オリジンのものだけ受ける
   app.use("/import", sameOriginOnly);
@@ -49,7 +60,7 @@ export function createApp(options: AppOptions = {}) {
     if (ms >= SLOW_API_MS) console.log(`slow api: ${c.req.method} ${routePath(c, -1)} ${c.res.status} ${ms}ms`);
   });
 
-  registerApiRoutes(app, { fetchTitle: options.fetchTitle });
+  registerApiRoutes(app, { fetchTitle: options.fetchTitle, usageFetch: options.usageFetch });
   // 未定義の /api/* は、画面(SPA)ではなく404のJSONにする
   app.all("/api/*", (c) => c.json({ ok: false, errors: [{ field: "path", message: "そのAPIはありません" }] }, 404));
 

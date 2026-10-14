@@ -37,6 +37,7 @@ import type {
   SubscriptionPatch,
   CompareData,
   SearchData,
+  UsageData,
   SubscriptionsData,
   DeductionsData,
   TaxSummaryData,
@@ -108,6 +109,8 @@ export const getCategories = () => request<CategoriesData>("GET", "/api/categori
 export const getDiscounts = (query: string) => request<DiscountsData>("GET", `/api/discounts${query ? `?${query}` : ""}`);
 export const getDeductions = (query: string) => request<DeductionsData>("GET", `/api/deductions${query ? `?${query}` : ""}`);
 // サブスク・保険などの固定費(別枠)。query は "active=true" のような絞り込み(省略可)
+// D1 の使用量(Cloudflare の分析 API から)
+export const getUsage = () => request<UsageData>("GET", "/api/usage");
 // 月の比較。path は compareApiPath() が作る
 export const getCompare = (path: string) => request<CompareData>("GET", path);
 // 記録の横断検索。path は searchPath() が作る
