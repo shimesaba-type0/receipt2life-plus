@@ -37,6 +37,8 @@ import {
   type ItemRow,
   type TxFormValues,
 } from "./transactionLogic";
+import { itemProductLine } from "./productsLogic";
+import { readPer } from "./productsStorage";
 import { basisLabel, formatRate, itemRateLabel, taxLineRowsFromView, type TaxLineRow } from "./taxLogic";
 import "./Transaction.css";
 
@@ -312,6 +314,7 @@ function TransactionBody(props: {
                   const catLabel = categoryChipLabel(cat, props.cats);
                   const flag = taxFlagChipLabel(effectiveTaxFlag(it, tx));
                   const rate = itemRateLabel(it);
+                  const productLine = itemProductLine(it, readPer(it.unit_price?.unit));
                   return (
                     <li key={it.id} class="tx__item">
                       <div class="tx__item-main">
@@ -321,6 +324,13 @@ function TransactionBody(props: {
                           {flag && <span class="chip day__taxflag">{flag}</span>}
                         </span>
                         {rate && <span class="muted tx__rate" aria-label={`税率 ${rate}`}>{rate}</span>}
+                        {(it.product || productLine) && (
+                          <span class="muted tx__product-line">
+                            {it.product && it.product !== it.name && <Link href={`/products?product=${encodeURIComponent(it.product)}`}>{it.product}</Link>}
+                            {it.product && it.product !== it.name && productLine ? " ・ " : ""}
+                            {productLine}
+                          </span>
+                        )}
                         {it.memo && <span class="muted day__memo">{it.memo}</span>}
                       </div>
                       <span class={`num tx__item-amount${it.amount < 0 ? " is-minus" : ""}`}>{formatSignedYen(it.amount)}</span>
@@ -534,6 +544,30 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
               <input id={`${id}-${r.key}-taxlabel`} type="text" maxLength={20} placeholder="例: ※ / 軽" value={r.tax_label} onInput={(e) => setRow(r.key, { tax_label: (e.currentTarget as HTMLInputElement).value })} />
               <label for={`${id}-${r.key}-memo`}>メモ</label>
               <input id={`${id}-${r.key}-memo`} type="text" value={r.memo} onInput={(e) => setRow(r.key, { memo: (e.currentTarget as HTMLInputElement).value })} />
+              <details class="tx__product" open={r.product !== "" || r.quantity !== "" || r.content_amount !== ""}>
+                <summary>商品の情報(任意。単価や毎月の購入数の集計用)</summary>
+                <label for={`${id}-${r.key}-product`}>商品名(「牛乳」「卵」など、同じ商品としてまとめたい名前)</label>
+                <input id={`${id}-${r.key}-product`} type="text" maxLength={50} value={r.product} onInput={(e) => setRow(r.key, { product: (e.currentTarget as HTMLInputElement).value })} />
+                <div class="tx__product-grid">
+                  <div>
+                    <label for={`${id}-${r.key}-qty`}>買った数</label>
+                    <input id={`${id}-${r.key}-qty`} type="text" inputMode="decimal" placeholder="例: 2" value={r.quantity} onInput={(e) => setRow(r.key, { quantity: (e.currentTarget as HTMLInputElement).value })} />
+                  </div>
+                  <div>
+                    <label for={`${id}-${r.key}-content`}>1つの内容量</label>
+                    <input id={`${id}-${r.key}-content`} type="text" inputMode="decimal" placeholder="例: 1000" value={r.content_amount} onInput={(e) => setRow(r.key, { content_amount: (e.currentTarget as HTMLInputElement).value })} />
+                  </div>
+                  <div>
+                    <label for={`${id}-${r.key}-unit`}>単位</label>
+                    <select id={`${id}-${r.key}-unit`} value={r.content_unit} onChange={(e) => setRow(r.key, { content_unit: (e.currentTarget as HTMLSelectElement).value })}>
+                      <option value="">(なし)</option>
+                      <option value="g">g(重さ)</option>
+                      <option value="ml">ml(容量)</option>
+                      <option value="個">個(数)</option>
+                    </select>
+                  </div>
+                </div>
+              </details>
             </li>
           ))}
         </ul>

@@ -27,7 +27,7 @@ describe("MCP のカテゴリ管理", () => {
     const names = tools.map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(["add_category", "update_category", "delete_category", "rename_group", "list_categories"]));
     // 15個 + カテゴリ管理の4つ + 口座管理の3つ
-    expect(tools).toHaveLength(37);
+    expect(tools).toHaveLength(38);
     const get = (n: string) => tools.find((t) => t.name === n)!.description;
     expect(get("add_category")).toContain("大分類");
     expect(get("add_category")).toContain("add_transactions");

@@ -80,3 +80,10 @@
 .tx__tax thead th { font-size: 12px; font-weight: 500; color: var(--muted); }
 .tx__tax tbody th { font-weight: 700; }
 .tx__tax-label, .tx__tax-basis { font-size: 12px; font-weight: 400; }
+
+/* 明細の行の、商品の情報(編集欄と表示) */
+.tx__product { border-top: 1px dashed var(--line); padding-top: 6px; }
+.tx__product summary { cursor: pointer; font-size: 13px; color: var(--muted); min-height: 32px; display: flex; align-items: center; }
+.tx__product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tx__product-grid > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tx__product-line { font-size: 13px; overflow-wrap: anywhere; }

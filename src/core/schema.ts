@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isRealDate } from "./dates";
 import { receiptDetailShape } from "./receipt-details";
 import { TAX_FLAG_DESCRIPTION, TAX_FLAG_FILTER_DESCRIPTION, TAX_FLAG_FILTERS, taxFlagSchema } from "./tax-flags";
+import { itemProductShape } from "./item-products";
 import { itemTaxShape, TAX_LINES_DESCRIPTION, taxLinesSchema } from "./tax-lines";
 
 export const MAX_AMOUNT = 10_000_000;
@@ -46,6 +47,7 @@ export const itemInputSchema = z
       .describe("この行だけの税金の控除用フラグ(medical / self_medication / donation)。省略または null なら取引の tax_flag に従う。消費税の税率(tax_rate)とは別物"),
     memo: z.string().max(500).nullable().optional().describe("行のメモ(任意)"),
     ...itemTaxShape,
+    ...itemProductShape,
   })
   .describe("明細の1行(品名と金額)");
 
