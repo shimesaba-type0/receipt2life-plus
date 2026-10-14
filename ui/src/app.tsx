@@ -11,6 +11,7 @@ import { PhotosAdd } from "./pages/PhotosAdd";
 import { Subscriptions } from "./pages/Subscriptions";
 import { Search } from "./pages/Search";
 import { Tax } from "./pages/Tax";
+import { Usage } from "./pages/Usage";
 import { Transaction } from "./pages/Transaction";
 import { useRoute } from "./router";
 
@@ -32,6 +33,7 @@ export function App() {
         {route.name === "accounts" && <Accounts />}
         {route.name === "subscriptions" && <Subscriptions />}
         {route.name === "tax" && <Tax />}
+        {route.name === "usage" && <Usage />}
         {route.name === "search" && <Search q={route.q} type={route.type} page={route.page} />}
         {route.name === "notfound" && (
           <section class="page">

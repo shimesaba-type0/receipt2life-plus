@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
-import type { CategoriesData, HomeData } from "../../../src/api/contract";
-import { getCategories, getHome } from "../api";
+import type { CategoriesData, HomeData, UsageData } from "../../../src/api/contract";
+import { getCategories, getHome, getUsage } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { DiscountIcon } from "../components/DiscountIcon";
 import { BreakdownCard } from "../components/BreakdownCard";
@@ -9,6 +9,7 @@ import { CompareCard } from "../components/CompareCard";
 import { chipIcon } from "../categoryIcons";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
+import { homeNotice } from "./usageLogic";
 import { discountsView, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
 import "./Home.css";
 
@@ -45,6 +46,20 @@ export function Home() {
       .catch(() => undefined);
   }, []);
 
+  // D1 の使用量が上限に近いときだけ、注意を出す。設定がない・取得できないときは何も出さない
+  const [usage, setUsage] = useState<{ text: string; level: "warn" | "danger" } | null>(null);
+  useEffect(() => {
+    getUsage()
+      .then((res) => {
+        if (!res.ok) return;
+        const u: UsageData = res;
+        if (!u.configured) return;
+        const text = homeNotice(u.level, u.rows_read, u.rows_written);
+        if (text !== null && u.level !== "ok") setUsage({ text, level: u.level });
+      })
+      .catch(() => undefined);
+  }, []);
+
   const today = state.kind === "ready" ? state.data.today.date : todayJst();
 
   return (
@@ -76,6 +91,13 @@ export function Home() {
           </button>
         </div>
       )}
+      {usage && (
+        <Link href="/usage" class={`home__usage is-${usage.level}`}>
+          <span>{usage.text}</span>
+          <span aria-hidden="true">使用量を見る ›</span>
+        </Link>
+      )}
+
       {state.kind === "ready" && <HomeBody data={state.data} cats={cats} />}
     </section>
   );

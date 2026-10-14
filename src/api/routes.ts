@@ -14,6 +14,7 @@ import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photo
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
+import { getUsage } from "../core/usage";
 import { compareMonths } from "../core/compare";
 import { searchRecords } from "../core/search";
 import { summarizeTax } from "../core/tax-summary";
@@ -52,6 +53,7 @@ const badJson = (c: Ctx) => fail(c, 400, [{ field: "body", message: "body: JSON�
 // Web UI 用のAPI(/api/*)。docs/api.md の契約に沿って、核(core)の関数を呼んで実装する
 export interface ApiRouteOptions {
   fetchTitle?: TitleFetcher;
+  usageFetch?: typeof fetch;
 }
 
 export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
@@ -96,6 +98,12 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     for (const key of ["q", "category"]) if (q[key]) input[key] = q[key];
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listMerchants(c.env.DB, input));
+  });
+
+  // D1 の使用量(Cloudflare の分析 API から取る。設定がなければ configured: false。取得に失敗したら502)
+  app.get("/api/usage", async (c) => {
+    const result = await getUsage(c.env, { fetchImpl: options.usageFetch });
+    return result.ok ? c.json(result) : c.json(result, 502);
   });
 
   // 月の比較。month / base(previous・year_ago・YYYY-MM)/ group_by / until_day

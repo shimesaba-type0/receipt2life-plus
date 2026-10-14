@@ -1,0 +1,22 @@
+/* 使用量ページ専用。色・角丸は styles.css のトークンに合わせる */
+.usage__card { border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px; }
+.usage__h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.usage__note { margin: 0; font-size: 13px; line-height: 1.7; }
+.usage__meter { display: flex; flex-direction: column; gap: 6px; }
+.usage__meter-head { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.usage__track { height: 14px; border-radius: 7px; background: var(--line-soft); overflow: hidden; }
+.usage__fill { height: 100%; border-radius: 7px; background: var(--accent); }
+.usage__fill.is-warn { background: #c9892f; }
+.usage__fill.is-danger { background: var(--danger); }
+.usage__level { font-size: 12px; color: var(--muted); }
+.usage__level.is-warn { color: #8a5a14; }
+.usage__level.is-danger { color: var(--danger); font-weight: 600; }
+/* 日ごとの棒グラフ(30本。上限の線つき) */
+.usage__chart { position: relative; display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); align-items: end; gap: 2px; height: 140px; border-bottom: 1px solid var(--line); }
+.usage__col { height: 100%; display: flex; align-items: flex-end; }
+.usage__bar { width: 100%; min-height: 0; background: var(--accent); border-radius: 2px 2px 0 0; opacity: 0.85; }
+.usage__bar.is-over { background: var(--danger); }
+.usage__limit { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--danger); pointer-events: none; }
+.usage__axis { display: flex; justify-content: space-between; font-size: 12px; }
+.home__usage { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 12px 16px; border-radius: 16px; background: #fbf1de; color: #6b4410; text-decoration: none; font-size: 14px; }
+.home__usage.is-danger { background: #fbe4e1; color: #8a2a20; }

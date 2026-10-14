@@ -182,6 +182,14 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 - 紐づけ先の取引・出来事が存在しなければ 400。存在しないリンクの id は 404
 - 取引・出来事を削除すると、紐づくリンクもいっしょに消える(リンクがあっても削除は拒否しない)。MCP には `add_link` / `list_links` / `delete_link`
 
+## 使用量
+
+`GET /api/usage` D1 の使用量(読み取り専用)。Cloudflare の GraphQL 分析 API から取る(ダッシュボードのグラフと同じデータ)。Worker のシークレット `CF_API_TOKEN` / `CF_ACCOUNT_ID` / `D1_DATABASE_ID` が揃っていなければ `{ ok: true, configured: false, missing: [...] }`。揃っていれば `configured: true` と、`days`(直近30日。UTC の日付。古い順。欠けた日は0)、`today`、`rows_read` / `rows_written`(各 `used` / `limit`(無料プランの1日の上限)/ `ratio` / `level`(`ok` / `warn`(70%以上)/ `danger`(90%以上)))、`level`、`fetched_at`、`message`。結果は5分間キャッシュ。取得に失敗したら 502(`errors`。トークン・IDは含めない)。
+
+## 書き込みの回数の制限
+
+`POST` / `PATCH` / `PUT` / `DELETE` の `/api/*` と `/import` は、1分に120回まで(同じ枠)。`/mcp` の POST は1分に240回まで(別の枠)。超えると **429** と `Retry-After`(秒)、`errors[0].field = "rate_limit"` を返し、DB には書かない。Worker のインスタンスごとに数える最良努力で、読み取り(GET)は数えない。
+
 ## 月の比較
 
 `GET /api/compare?month=&base=&group_by=&until_day=` 月の比較(読み取り専用)。`month` は比べる月(YYYY-MM。省略で今月)。`base` は `previous`(先月。既定)・`year_ago`(前年の同じ月)・`YYYY-MM`(好きな月。同じ月は400)。`group_by` は `group`(大分類。既定)か `category`。`until_day`(1〜31)を付けると、どちらの月もその日まで(月末を超える日は月末まで)にそろえる。戻りは `month`, `base_month`, `group_by`, `until_day`, `period`, `base_period`, `total`, `base_total`, `diff`(増えたら正), `diff_percent`(比べる側が0円以下は null), `count`, `base_count`, `rows`(各 `key`, `label`, `total`, `base_total`, `diff`, `diff_percent`。今月の金額の大きい順。片方の月にしかない項目も入る)。集計は `summarize` と同じ(明細の行ごと)。MCP は `compare_months`。

@@ -13,6 +13,7 @@ export type Route =
   | { name: "accounts" }
   | { name: "subscriptions" }
   | { name: "tax" }
+  | { name: "usage" }
   | { name: "connect" }
   | { name: "search"; q: string; type: SearchHitType | null; page: number }
   | { name: "notfound" };
@@ -63,6 +64,7 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/subscriptions") return { name: "subscriptions" };
   // 税率別の税額。API の /api/tax-summary とは衝突しない
   if (path === "/tax") return { name: "tax" };
+  if (path === "/usage") return { name: "usage" };
   // AI(MCP)とつなぐ手順。Worker の /mcp とは別のパス
   if (path === "/connect") return { name: "connect" };
   const day = /^\/day\/(\d{4}-\d{2}-\d{2})$/.exec(path);

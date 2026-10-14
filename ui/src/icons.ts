@@ -5,6 +5,8 @@ export const CATEGORY_ICON = ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M
 export const TAX_ICON = ["M6 3h12v18l-3-2-3 2-3-2-3 2z", "M9.5 9.5h.01", "M14.5 14.5h.01", "M14.5 9.5l-5 5"];
 // 検索(虫めがね)
 export const SEARCH_ICON = ["M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z", "M15.5 15.5L20 20"];
+// 使用量(棒グラフ)
+export const USAGE_ICON = ["M5 20V11", "M12 20V5", "M19 20v-7", "M3 20h18"];
 // エクスポート・バックアップ(下向きの矢印と受け皿)
 export const EXPORT_ICON = ["M12 4v11", "M7 11l5 5 5-5", "M5 20h14"];
 // ホーム

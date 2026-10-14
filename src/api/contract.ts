@@ -781,3 +781,23 @@ export interface SearchData {
   has_more: boolean;
   hits: SearchHitView[];
 }
+
+// GET /api/usage。D1 の使用量(Cloudflare の分析 API から。UTC の日付)。設定がなければ configured: false。取得に失敗したら 502(errors)
+export type UsageLevel = "ok" | "warn" | "danger";
+export interface UsageDayView {
+  date: string;
+  rows_read: number;
+  rows_written: number;
+  read_queries: number;
+  write_queries: number;
+}
+export interface UsageMeterView {
+  used: number;
+  limit: number;
+  ratio: number;
+  level: UsageLevel;
+}
+export type UsageData =
+  | { configured: false; missing: string[]; message: string }
+  | { configured: true; days: UsageDayView[]; today: UsageDayView; rows_read: UsageMeterView; rows_written: UsageMeterView; level: UsageLevel; fetched_at: string; message: string };
+
