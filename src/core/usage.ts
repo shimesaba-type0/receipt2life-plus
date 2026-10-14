@@ -81,12 +81,13 @@ export function buildUsage(rows: readonly UsageDay[], todayUtc: string, days = U
   return { days: out, today: out[out.length - 1]! };
 }
 
-const QUERY = `query D1Usage($accountTag: string!, $start: Date, $end: Date, $databaseId: string) {
+// データベースIDでは絞らず、日付×データベースで取る(IDを間違えて「0のまま」になったとき、別のDBに使用量があるかで気づけるように)
+const QUERY = `query D1Usage($accountTag: string!, $start: Date, $end: Date) {
   viewer {
     accounts(filter: { accountTag: $accountTag }) {
-      d1AnalyticsAdaptiveGroups(limit: 100, filter: { date_geq: $start, date_leq: $end, databaseId: $databaseId }, orderBy: [date_ASC]) {
+      d1AnalyticsAdaptiveGroups(limit: 1000, filter: { date_geq: $start, date_leq: $end }, orderBy: [date_ASC]) {
         sum { readQueries writeQueries rowsRead rowsWritten }
-        dimensions { date }
+        dimensions { date databaseId }
       }
     }
   }
@@ -94,19 +95,23 @@ const QUERY = `query D1Usage($accountTag: string!, $start: Date, $end: Date, $da
 
 interface GraphqlGroup {
   sum?: { readQueries?: number; writeQueries?: number; rowsRead?: number; rowsWritten?: number };
-  dimensions?: { date?: string };
+  dimensions?: { date?: string; databaseId?: string };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // 応答から日ごとの行を取り出す(同じ日が複数あれば足す。形が違えば null)
-export function parseUsageRows(json: unknown): UsageDay[] | null {
+const sameId = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+
+// databaseId を渡すと、そのDBの行だけを数える(省略すると全部)
+export function parseUsageRows(json: unknown, databaseId?: string): UsageDay[] | null {
   const groups = (json as { data?: { viewer?: { accounts?: { d1AnalyticsAdaptiveGroups?: GraphqlGroup[] }[] } } })?.data?.viewer?.accounts?.[0]?.d1AnalyticsAdaptiveGroups;
   if (!Array.isArray(groups)) return null;
   const byDate = new Map<string, UsageDay>();
   for (const g of groups) {
     const date = g.dimensions?.date;
     if (typeof date !== "string" || !DATE.test(date)) continue;
+    if (databaseId && !sameId(g.dimensions?.databaseId, databaseId)) continue;
     const cur = byDate.get(date) ?? { date, rows_read: 0, rows_written: 0, read_queries: 0, write_queries: 0 };
     const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
     cur.rows_read += n(g.sum?.rowsRead);
@@ -116,6 +121,18 @@ export function parseUsageRows(json: unknown): UsageDay[] | null {
     byDate.set(date, cur);
   }
   return [...byDate.values()];
+}
+
+// 設定のIDに合う行が無いのに、同じアカウントの別のDBに使用量がある。IDの取り違えを疑える(全部のIDは出さず、先頭だけ)
+export function otherDatabaseHints(json: unknown, databaseId: string): string[] {
+  const groups = (json as { data?: { viewer?: { accounts?: { d1AnalyticsAdaptiveGroups?: GraphqlGroup[] }[] } } })?.data?.viewer?.accounts?.[0]?.d1AnalyticsAdaptiveGroups;
+  if (!Array.isArray(groups)) return [];
+  const ids = new Set<string>();
+  for (const g of groups) {
+    const id = g.dimensions?.databaseId;
+    if (typeof id === "string" && !sameId(id, databaseId)) ids.add(id.slice(0, 8));
+  }
+  return [...ids];
 }
 
 const fail = (message: string): UsageResult => ({ ok: false, errors: [{ field: "usage", message }] });
@@ -151,7 +168,7 @@ export async function getUsage(env: UsageEnv, options: UsageOptions = {}): Promi
     res = await doFetch(ENDPOINT, {
       method: "POST",
       headers: { authorization: `Bearer ${env.CF_API_TOKEN}`, "content-type": "application/json" },
-      body: JSON.stringify({ query: QUERY, variables: { accountTag: env.CF_ACCOUNT_ID, start, end: todayUtc, databaseId: env.D1_DATABASE_ID } }),
+      body: JSON.stringify({ query: QUERY, variables: { accountTag: env.CF_ACCOUNT_ID, start, end: todayUtc } }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
@@ -171,8 +188,12 @@ export async function getUsage(env: UsageEnv, options: UsageOptions = {}): Promi
   if (Array.isArray(errors) && errors.length > 0) {
     return fail(`Cloudflare の分析 API がエラーを返しました(${String(errors[0]?.message ?? "不明").slice(0, 120)})。アカウントID・データベースID・トークンの権限を確認してください`);
   }
-  const rows = parseUsageRows(json);
+  const rows = parseUsageRows(json, env.D1_DATABASE_ID);
   if (rows === null) return fail("Cloudflare の応答の形が想定と違います");
+  if (rows.length === 0) {
+    const others = otherDatabaseHints(json, env.D1_DATABASE_ID!);
+    if (others.length > 0) return fail(`設定した D1_DATABASE_ID の使用量が見つかりません。同じアカウントの別のデータベース(IDの先頭: ${others.join("、")})には使用量があります。D1_DATABASE_ID の取り違えを確認してください`);
+  }
 
   const { days, today } = buildUsage(rows, todayUtc);
   const reads = meter(today.rows_read, FREE_ROWS_READ_PER_DAY);

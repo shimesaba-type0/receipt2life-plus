@@ -4,7 +4,7 @@ import { buildUsage, clearUsageCache, FREE_ROWS_READ_PER_DAY, getUsage, parseUsa
 const ENV = { CF_API_TOKEN: "dummy-token", CF_ACCOUNT_ID: "dummy-account", D1_DATABASE_ID: "dummy-db" };
 const NOW = new Date("2026-10-14T03:00:00Z");
 
-const group = (date: string, over: Record<string, number> = {}) => ({ sum: { readQueries: 10, writeQueries: 2, rowsRead: 1000, rowsWritten: 20, ...over }, dimensions: { date } });
+const group = (date: string, over: Record<string, number> = {}, databaseId = "dummy-db") => ({ sum: { readQueries: 10, writeQueries: 2, rowsRead: 1000, rowsWritten: 20, ...over }, dimensions: { date, databaseId } });
 const gql = (groups: unknown[]) => ({ data: { viewer: { accounts: [{ d1AnalyticsAdaptiveGroups: groups }] } }, errors: null });
 const reply = (body: unknown, status = 200): typeof fetch => (async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } })) as typeof fetch;
 
@@ -26,6 +26,27 @@ describe("buildUsage / parseUsageRows", () => {
     expect(rows[0]).toMatchObject({ rows_read: 1005 });
     expect(parseUsageRows({ data: null })).toBeNull();
     expect(parseUsageRows(gql([{ sum: { rowsRead: "x" }, dimensions: { date: "2026-10-14" } }]))![0]).toMatchObject({ rows_read: 0 });
+  });
+});
+
+describe("データベースIDの絞り込み", () => {
+  it("設定したIDの行だけを数える(大文字小文字は区別しない)。別のDBの行は足さない", () => {
+    const json = gql([group("2026-10-14", { rowsRead: 100 }, "DUMMY-DB"), group("2026-10-14", { rowsRead: 5000 }, "other-db-1234")]);
+    expect(parseUsageRows(json, "dummy-db")).toEqual([expect.objectContaining({ rows_read: 100 })]);
+  });
+
+  it("IDが合わず、別のDBに使用量があれば、取り違えを知らせる(別DBのIDは先頭8文字だけ)", async () => {
+    const r = await getUsage(ENV, { fetchImpl: reply(gql([group("2026-10-14", {}, "abcdef0123456789")])), now: NOW });
+    expect(r.ok).toBe(false);
+    const text = JSON.stringify(r);
+    expect(text).toContain("abcdef01");
+    expect(text).not.toContain("abcdef0123");
+    expect(text).toContain("D1_DATABASE_ID");
+  });
+
+  it("どのDBにも使用量が無ければ、0のまま返す(エラーにしない)", async () => {
+    const r = await getUsage(ENV, { fetchImpl: reply(gql([])), now: NOW });
+    expect(r).toMatchObject({ ok: true, configured: true });
   });
 });
 
