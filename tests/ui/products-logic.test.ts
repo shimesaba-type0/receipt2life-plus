@@ -9,9 +9,10 @@ const row = (product: string, quantity: number, amount = 100): ProductRowView =>
 
 describe("商品の画面の純粋な部分", () => {
   it("ルート: /products(月・商品名)", () => {
-    expect(parseRoute("/products")).toEqual({ name: "products", month: null, product: null });
-    expect(parseRoute("/products", "?month=2026-09&product=%E7%89%9B%E4%B9%B3")).toEqual({ name: "products", month: "2026-09", product: "牛乳" });
-    expect(parseRoute("/products", "?month=bad&product=%20")).toEqual({ name: "products", month: null, product: null });
+    expect(parseRoute("/products")).toEqual({ name: "products", month: null, product: null, by: null });
+    expect(parseRoute("/products", "?month=2026-09&product=%E7%89%9B%E4%B9%B3")).toEqual({ name: "products", month: "2026-09", product: "牛乳", by: null });
+    expect(parseRoute("/products", "?month=bad&product=%20&by=group")).toEqual({ name: "products", month: null, product: null, by: "group" });
+    expect(parseRoute("/products", "?by=x")).toMatchObject({ by: null });
   });
 
   it("単価の文言: 単位あたり。表示の単位を変えられる(100ml→1L)", () => {

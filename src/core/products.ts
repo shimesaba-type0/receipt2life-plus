@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
 import { computeUnitPrice, type ContentUnit, type UnitPrice } from "./item-products";
+import { buildGroupMatcher, loadGroups } from "./product-groups";
 import { isExcluded, loadExcludeNeedles } from "./product-excludes";
 import { normalizeForSearch } from "./search";
 
@@ -13,6 +14,9 @@ export const DEFAULT_PRODUCT_LIMIT = 50;
 export const MAX_PRODUCT_LIMIT = 200;
 export const MAX_HISTORY_PURCHASES = 100;
 
+export const BY_VALUES = ["product", "group"] as const;
+const byField = z.enum(BY_VALUES, { error: "by は product / group のいずれかで指定してください" }).default("product").describe("product=商品ごと(既定)、group=まとめ名ごと(「まとめ名」で、表記ゆれや似た商品をくくる。商品の画面の「まとめて」)");
+
 const rangeShape = {
   from: isoDate.optional().describe("この日以降(YYYY-MM-DD)。省略すると全期間"),
   to: isoDate.optional().describe("この日まで(YYYY-MM-DD)"),
@@ -20,6 +24,7 @@ const rangeShape = {
 
 export const listProductsSchema = z.strictObject({
   ...rangeShape,
+  by: byField,
   q: z.string().trim().max(100).optional().describe("商品名の絞り込み(部分一致。全角半角・かなカナ・大文字小文字は区別しない)。JANコード(数字)も当たる"),
   limit: z
     .number({ error: `limit は1〜${MAX_PRODUCT_LIMIT}の整数で指定してください` })
@@ -34,6 +39,7 @@ export const listProductsSchema = z.strictObject({
 export const productHistorySchema = z.strictObject({
   product: z.string().trim().min(1, "product は必須です").max(100).describe("商品名(統一した商品名 product か、品名。全角半角・かなカナ・大文字小文字は区別しない)、またはJANコード(8桁か13桁の数字)"),
   ...rangeShape,
+  by: byField,
 });
 
 export interface ProductRow {
@@ -123,7 +129,7 @@ interface LineRow {
   jan_code: string | null;
 }
 
-async function loadLines(db: D1Database, from?: string, to?: string): Promise<LineRow[]> {
+async function loadLines(db: D1Database, from?: string, to?: string, by: "product" | "group" = "product"): Promise<LineRow[]> {
   const where = ["i.amount > 0"];
   const params: string[] = [];
   if (from) {
@@ -144,7 +150,14 @@ async function loadLines(db: D1Database, from?: string, to?: string): Promise<Li
     .all<LineRow>();
   // 数えない言葉(消費税・割引など。画面から直せる)を含む行は、商品として数えない
   const needles = await loadExcludeNeedles(db);
-  return results.filter((l) => !isExcluded(l.key, needles));
+  const lines = results.filter((l) => !isExcluded(l.key, needles));
+  if (by !== "group") return lines;
+  // まとめ名ごと: 言葉に当たる行は、まとめ名を商品名にする(JANでの合流はせず、まとめ名で合わせる)。当たらない行はそのまま
+  const matcher = buildGroupMatcher(await loadGroups(db));
+  return lines.map((l) => {
+    const g = matcher(l.key);
+    return g ? { ...l, key: g, jan_code: null } : l;
+  });
 }
 
 const qty = (l: Pick<LineRow, "quantity">) => l.quantity ?? 1;
@@ -211,11 +224,11 @@ const isJanQuery = (s: string) => /^\d{8}$|^\d{13}$/.test(s);
 export async function listProducts(db: D1Database, input: unknown): Promise<ListProductsResult> {
   const parsed = listProductsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { from, to, q, limit, sort } = parsed.data;
+  const { from, to, q, limit, sort, by } = parsed.data;
   if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
   const needle = q ? normalizeForSearch(q) : "";
 
-  const all: ProductRow[] = groupLines(await loadLines(db, from, to))
+  const all: ProductRow[] = groupLines(await loadLines(db, from, to, by))
     .filter((g) => needle === "" || (isJanQuery(needle) ? g.jan === needle : [...g.names].some((n) => n.includes(needle)) || g.jan?.includes(needle)))
     .map((g) => ({
       product: g.product,
@@ -242,11 +255,11 @@ export async function listProducts(db: D1Database, input: unknown): Promise<List
 export async function productHistory(db: D1Database, input: unknown): Promise<ProductHistoryResult> {
   const parsed = productHistorySchema.safeParse(input);
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { product, from, to } = parsed.data;
+  const { product, from, to, by } = parsed.data;
   if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
   const needle = normalizeForSearch(product);
   // 商品名、またはJANコードで当たるグループの行を、1つの商品として扱う(同じ商品名のグループが複数あっても合わせる)
-  const matched = groupLines(await loadLines(db, from, to)).filter((g) => (isJanQuery(needle) ? g.jan === needle : g.names.has(needle)));
+  const matched = groupLines(await loadLines(db, from, to, by)).filter((g) => (isJanQuery(needle) ? g.jan === needle : g.names.has(needle)));
   const lines = matched.flatMap((g) => g.lines).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const janCodes = [...new Set(lines.map((l) => l.jan_code).filter((j): j is string => !!j))];
   if (lines.length === 0) {

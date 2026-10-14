@@ -43,3 +43,23 @@ describe("数えない言葉のAPI", () => {
     expect((await app.request("http://localhost/api/product-excludes/none", { method: "DELETE" }, local)).status).toBe(404);
   });
 });
+
+describe("まとめ名のAPI", () => {
+  it("作る・一覧・直す・消す。by=group で一覧が変わる。重複は400、無いidは404", async () => {
+    await send("POST", "/api/transactions", { transactions: [{ date: "2026-10-05", amount: 400, items: [{ name: "牛乳", amount: 200 }, { name: "ミルク", amount: 200 }] }] });
+    const created = await send("POST", "/api/product-groups", { name: "牛乳", words: ["ミルク"] });
+    expect(created.status).toBe(200);
+    const id = (await json(created)).group.id as string;
+    expect((await send("POST", "/api/product-groups", { name: "牛乳" })).status).toBe(400);
+    const grouped = await json(await call("/api/products?from=2026-10-01&to=2026-10-31&by=group"));
+    expect(grouped.products).toMatchObject([{ product: "牛乳", lines: 2, amount: 400 }]);
+    expect((await call("/api/products?by=bad")).status).toBe(400);
+    const hist = await json(await call("/api/products/history?product=%E7%89%9B%E4%B9%B3&by=group"));
+    expect(hist.lines).toBe(2);
+    expect((await send("PUT", `/api/product-groups/${id}`, { name: "牛乳", words: [] })).status).toBe(200);
+    expect((await json(await call("/api/product-groups"))).groups).toEqual([{ id, name: "牛乳", words: [] }]);
+    expect((await send("PUT", "/api/product-groups/none", { name: "x" })).status).toBe(404);
+    expect((await app.request(`http://localhost/api/product-groups/${id}`, { method: "DELETE" }, local)).status).toBe(200);
+    expect((await app.request("http://localhost/api/product-groups/none", { method: "DELETE" }, local)).status).toBe(404);
+  });
+});

@@ -21,3 +21,23 @@ export function savePer(unit: ContentUnit, per: number): void {
     // 保存できなくても、表示は変えられる
   }
 }
+
+// 一覧の見方(商品ごと / まとめ名ごと)も、このブラウザに覚える(URLに指定がないときの既定)
+const BY_KEY = "r2l-products-by";
+export type ProductsBy = "product" | "group";
+
+export function readBy(): ProductsBy {
+  try {
+    return localStorage.getItem(BY_KEY) === "group" ? "group" : "product";
+  } catch {
+    return "product";
+  }
+}
+
+export function saveBy(by: ProductsBy): void {
+  try {
+    localStorage.setItem(BY_KEY, by);
+  } catch {
+    // 保存できなくても、表示は変えられる
+  }
+}
