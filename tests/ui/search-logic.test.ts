@@ -13,9 +13,12 @@ describe("検索ページの純粋な部分", () => {
   });
   it("URL とAPIのパスを作る(空の言葉は /search だけ)", () => {
     expect(searchPageHref("  ", null)).toBe("/search");
+    // 言葉が空でも、種類があればその種類の一覧
+    expect(searchPageHref("", "seat_record")).toBe("/search?type=seat_record");
+    expect(searchApiPath("", "seat_record")).toBe("/api/search?limit=30&types=seat_record");
     expect(searchPageHref("映画 TOHO", "link")).toBe("/search?q=%E6%98%A0%E7%94%BB+TOHO&type=link");
-    expect(searchApiPath("皮膚科", null)).toBe("/api/search?q=%E7%9A%AE%E8%86%9A%E7%A7%91&limit=30");
-    expect(searchApiPath("a", null, 3)).toBe("/api/search?q=a&limit=30&offset=60");
+    expect(searchApiPath("皮膚科", null)).toBe("/api/search?limit=30&q=%E7%9A%AE%E8%86%9A%E7%A7%91");
+    expect(searchApiPath("a", null, 3)).toBe("/api/search?limit=30&q=a&offset=60");
     expect(searchPageHref("a", null, 2)).toBe("/search?q=a&page=2");
     expect(searchPageHref("a", null, 1)).toBe("/search?q=a");
     expect(rangeLabel(30, 30, 75)).toBe("31〜60件目(全75件)");

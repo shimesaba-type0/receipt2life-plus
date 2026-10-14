@@ -22,7 +22,8 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
   useEffect(() => {
     setText(props.q);
     setType(props.type ?? "");
-    if (props.q === "") {
+    // 言葉も種類も空のときは、検索しない(種類だけなら、その種類の記録を新しい順に並べる)
+    if (props.q === "" && props.type === null) {
       setData(null);
       setError(null);
       return;
@@ -54,10 +55,10 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
     navigate(searchPageHref(text, type === "" ? null : type));
   };
 
-  // 対象のチップは、押したらすぐ検索し直す(言葉が空のときは、選ぶだけ)
+  // 対象のチップは、押したらすぐ検索し直す(言葉が空なら、その種類の記録を新しい順に並べる)
   const pickType = (value: SearchHitType | "") => {
     setType(value);
-    if (text.trim() !== "") navigate(searchPageHref(text, value === "" ? null : value));
+    navigate(searchPageHref(text, value === "" ? null : value));
   };
 
   const groups = data ? groupHitsByDate(data.hits) : [];
@@ -77,7 +78,7 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
         </label>
         <div class="search__row">
           <input id={inputId} class="search__input" type="search" maxLength={200} value={text} onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} />
-          <button type="submit" class="btn btn--primary" disabled={text.trim() === ""}>
+          <button type="submit" class="btn btn--primary" disabled={text.trim() === "" && type === ""}>
             検索
           </button>
         </div>
@@ -89,6 +90,10 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
           ))}
         </div>
       </form>
+
+      {props.q === "" && props.type === null && (
+        <p class="muted search__hint">言葉を入れて「検索」を押すか、上の種類(支出・出来事・映画・座席・リンク・写真)を押すと、その種類の記録が新しい日付順に並びます。</p>
+      )}
 
       {loading && (
         <p class="muted cat__status" role="status">
@@ -104,7 +109,7 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
       {data && !loading && (
         <div class="search__result" aria-live="polite">
           {data.total === 0 ? (
-            <p class="muted">{props.page > 1 ? "このページに記録はありません。" : `「${data.query}」に当てはまる記録はありません。別の言葉(短い言葉・漢字とひらがなの違いなど)でも試してください。`}</p>
+            <p class="muted">{props.page > 1 ? "このページに記録はありません。" : data.query === "" ? "この種類の記録は、まだありません。" : `「${data.query}」に当てはまる記録はありません。別の言葉(短い言葉・漢字とひらがなの違いなど)でも試してください。`}</p>
           ) : (
             <>
               <p class="search__summary">

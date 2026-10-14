@@ -102,7 +102,8 @@ describe("MCP search_records", () => {
     await callTool("add_link", { url: "https://example.com/m", title: "映画の公式ページ", date: "2026-10-10" });
     const r = text(await callTool("search_records", { q: "映画" }));
     expect(r).toMatchObject({ ok: true, total: 1, latest_date: "2026-10-10", hits: [{ type: "link" }] });
-    expect((await callTool("search_records", { q: "" })).body.result.isError).toBe(true);
+    expect(text(await callTool("search_records", { q: "", types: ["link"] }))).toMatchObject({ ok: true, total: 1 });
+    expect((await callTool("search_records", { q: "あ".repeat(201) })).body.result.isError).toBe(true);
     const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string }[];
     expect(tools.find((t) => t.name === "search_records")!.description).toContain("最後に行ったのは");
   });

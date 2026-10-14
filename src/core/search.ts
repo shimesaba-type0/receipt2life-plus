@@ -20,9 +20,9 @@ export const searchSchema = z.strictObject({
   q: z
     .string()
     .trim()
-    .min(1, "q: 探す言葉を入れてください")
     .max(MAX_QUERY, `q は${MAX_QUERY}文字以内にしてください`)
-    .describe(`探す言葉。空白で区切ると、すべてを含むものに絞る(最大${MAX_TERMS}語)。店名・メモ・カテゴリ名・明細の名前・出来事のタイトル・映画の題名・会場名・リンクのタイトルや説明・写真のキャプションに部分一致`),
+    .default("")
+    .describe(`探す言葉。空白で区切ると、すべてを含むものに絞る(最大${MAX_TERMS}語)。店名・メモ・カテゴリ名・明細の名前・出来事のタイトル・映画の題名・会場名・リンクのタイトルや説明・写真のキャプションに部分一致。省略か空なら絞り込まず、types と期間(from / to)に当たる記録を新しい順にすべて返す(例: types に seat_record だけを指定して、映画を見た日の一覧)`),
   from: isoDate.optional().describe("この日以降(YYYY-MM-DD)"),
   to: isoDate.optional().describe("この日まで(YYYY-MM-DD)"),
   types: z.array(z.enum(SEARCH_TYPES)).min(1).optional().describe("探す対象。省略すると全部(transaction=取引、event=出来事、seat_record=座席の記録、link=リンク、photo=写真)"),
@@ -158,6 +158,7 @@ export async function searchRecords(db: D1Database, input: unknown): Promise<Sea
   // 電話番号らしい語(数字・ハイフン・括弧・プラス・空白だけ)は、数字だけにそろえた比較でも当てる
   const digitTerms = terms.map((t) => (/^[\d\-()+]+$/.test(t) ? phoneDigits(t) : ""));
 
+  const label = q === "" ? "条件" : `「${q}」`;
   const wanted = SOURCES.filter((s) => !types || types.includes(s.type));
   const perSource = await Promise.all(
     wanted.map(async (s) => {
@@ -198,7 +199,7 @@ export async function searchRecords(db: D1Database, input: unknown): Promise<Sea
     hits,
     message:
       total === 0
-        ? `「${q}」に当てはまる記録はありません`
-        : `「${q}」に当てはまる記録が${total}件あります。いちばん新しいのは${all[0]!.date}です${total > hits.length ? `(${offset + 1}〜${offset + hits.length}件目を新しい順に返しました${offset + hits.length < total ? "。続きは offset を進めて取得できます" : ""})` : ""}`,
+        ? `${label}に当てはまる記録はありません`
+        : `${label}に当てはまる記録が${total}件あります。いちばん新しいのは${all[0]!.date}です${total > hits.length ? `(${offset + 1}〜${offset + hits.length}件目を新しい順に返しました${offset + hits.length < total ? "。続きは offset を進めて取得できます" : ""})` : ""}`,
   };
 }
