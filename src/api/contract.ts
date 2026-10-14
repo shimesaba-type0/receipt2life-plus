@@ -835,6 +835,23 @@ export interface ProductRowView {
   has_unit_price: boolean;
   content_total: { amount: number; unit: ContentUnit } | null;
 }
+// GET/POST/PUT/DELETE /api/product-groups。商品の「まとめ名」(表記ゆれ・似た商品を1つにくくる)
+export interface ProductGroupView {
+  id: string;
+  name: string;
+  words: string[];
+}
+export interface ProductGroupsData {
+  groups: ProductGroupView[];
+}
+export interface ProductGroupSaved {
+  group: ProductGroupView;
+  message: string;
+}
+export interface ProductGroupDeleted {
+  id: string;
+  message: string;
+}
 // GET/POST/DELETE /api/search-chips。検索の「よく使う検索」チップ
 export interface SearchChipView {
   id: string;

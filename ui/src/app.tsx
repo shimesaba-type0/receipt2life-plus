@@ -35,7 +35,7 @@ export function App() {
         {route.name === "subscriptions" && <Subscriptions />}
         {route.name === "tax" && <Tax />}
         {route.name === "usage" && <Usage />}
-        {route.name === "products" && <Products month={route.month} product={route.product} />}
+        {route.name === "products" && <Products month={route.month} product={route.product} by={route.by} />}
         {route.name === "search" && <Search q={route.q} type={route.type} page={route.page} />}
         {route.name === "notfound" && (
           <section class="page">

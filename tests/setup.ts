@@ -18,6 +18,8 @@ beforeEach(async () => {
   await e.DB.exec("DELETE FROM events");
   await e.DB.exec("DELETE FROM transactions");
   // カテゴリは、テストで増減・改名するので初期データに戻す
+  await e.DB.exec("DELETE FROM product_group_words");
+  await e.DB.exec("DELETE FROM product_groups");
   await e.DB.exec("DELETE FROM product_excludes");
   await e.DB.exec("DELETE FROM search_chips");
   await e.DB.exec("DELETE FROM categories");

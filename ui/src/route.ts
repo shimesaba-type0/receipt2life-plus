@@ -14,7 +14,7 @@ export type Route =
   | { name: "subscriptions" }
   | { name: "tax" }
   | { name: "usage" }
-  | { name: "products"; month: string | null; product: string | null }
+  | { name: "products"; month: string | null; product: string | null; by: "product" | "group" | null }
   | { name: "connect" }
   | { name: "search"; q: string; type: SearchHitType | null; page: number }
   | { name: "notfound" };
@@ -70,7 +70,8 @@ export function parseRoute(pathname: string, search = ""): Route {
     const params = new URLSearchParams(search);
     const month = params.get("month");
     const product = (params.get("product") ?? "").trim().slice(0, 100);
-    return { name: "products", month: month && MONTH.test(month) ? month : null, product: product === "" ? null : product };
+    const by = params.get("by");
+    return { name: "products", month: month && MONTH.test(month) ? month : null, product: product === "" ? null : product, by: by === "group" || by === "product" ? by : null };
   }
   // AI(MCP)とつなぐ手順。Worker の /mcp とは別のパス
   if (path === "/connect") return { name: "connect" };

@@ -1,23 +1,27 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ExcludeWordView, ProductHistoryData, ProductRowView, ProductsData } from "../../../src/api/contract";
-import { addProductExclude, deleteProductExclude, getProductExcludes, getProductHistory, getProducts } from "../api";
+import type { ExcludeWordView, ProductGroupView, ProductHistoryData, ProductRowView, ProductsData } from "../../../src/api/contract";
+import { addProductExclude, createProductGroup, deleteProductExclude, deleteProductGroup, getProductExcludes, getProductGroups, getProductHistory, getProducts, updateProductGroup } from "../api";
 import { addMonths, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
 import { DEFAULT_PER, PER_OPTIONS, contentTotalText, diffText, pageOf, monthlyCells, perLabel, quantityBar, quantityText, unitPriceLabel, withPrevious } from "./productsLogic";
-import { readPer, savePer } from "./productsStorage";
+import { readBy, readPer, savePer, saveBy, type ProductsBy } from "./productsStorage";
 import "./Categories.css";
 import "./Products.css";
 
 // 商品ごとの購入数・単価。「今月、牛乳を何本買ったか」「卵の値段の推移」。明細に商品の情報がある行が対象
-export function Products(props: { month: string | null; product: string | null }) {
-  return props.product ? <Detail product={props.product} /> : <List month={props.month ?? monthOf(todayJst())} />;
+// 見方は2つ: 商品ごと(細かく) / まとめ名ごと(まとめて。牛乳・ミルク・低脂肪乳を「牛乳」に、など。まとめ名は画面で決める)
+export function Products(props: { month: string | null; product: string | null; by: ProductsBy | null }) {
+  const by = props.by ?? readBy();
+  return props.product ? <Detail product={props.product} by={by} /> : <List month={props.month ?? monthOf(todayJst())} by={by} />;
 }
+
+const byQuery = (by: ProductsBy) => (by === "group" ? "&by=group" : "");
 
 type ListState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; current: ProductsData; previous: ProductsData };
 
-function List(props: { month: string }) {
-  const { month } = props;
+function List(props: { month: string; by: ProductsBy }) {
+  const { month, by } = props;
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -30,7 +34,7 @@ function List(props: { month: string }) {
     setPage(1);
     const query = (m: string) => {
       const r = monthRange(m);
-      return `from=${r.from}&to=${r.to}&limit=200&sort=frequency`;
+      return `from=${r.from}&to=${r.to}&limit=200&sort=frequency${byQuery(by)}`;
     };
     Promise.all([getProducts(query(month)), getProducts(query(addMonths(month, -1)))])
       .then(([cur, prev]) => {
@@ -44,9 +48,13 @@ function List(props: { month: string }) {
     return () => {
       cancelled = true;
     };
-  }, [month, version]);
+  }, [month, version, by]);
 
-  const go = (m: string) => navigate(`/products?month=${m}`);
+  const go = (m: string) => navigate(`/products?month=${m}${byQuery(by)}`);
+  const pickBy = (next: ProductsBy) => {
+    saveBy(next);
+    navigate(`/products?month=${month}${byQuery(next)}`);
+  };
   const rows: (ProductRowView & { previous: number; diff: number })[] =
     state.kind === "ready" ? withPrevious(state.current.products, state.previous.products).filter((p) => filter.trim() === "" || p.product.includes(filter.trim())) : [];
   const shown = pageOf(rows, page);
@@ -59,6 +67,16 @@ function List(props: { month: string }) {
         </h1>
         <p class="cat__lead">明細の商品ごとに、買った数と金額を月ごとに見ます。商品を押すと、単価の推移が見られます。</p>
       </header>
+
+      <div class="prod__chips" role="group" aria-label="一覧の見方">
+        <button type="button" class={`prod__chip${by === "product" ? " is-on" : ""}`} aria-pressed={by === "product"} onClick={() => pickBy("product")}>
+          細かく
+        </button>
+        <button type="button" class={`prod__chip${by === "group" ? " is-on" : ""}`} aria-pressed={by === "group"} onClick={() => pickBy("group")}>
+          まとめて
+        </button>
+      </div>
+      {by === "group" && <p class="muted">「まとめ名」に当たる商品を1つにくくって数えます。まとめ名は、下の「まとめ名」で決めます(当たらない商品は、そのまま並びます)。</p>}
 
       <div class="prod__month">
         <button type="button" class="btn prod__nav" aria-label="前の月" onClick={() => go(addMonths(month, -1))}>
@@ -100,7 +118,7 @@ function List(props: { month: string }) {
             <ul class="prod__list">
               {shown.rows.map((p) => (
                 <li key={p.product} class="prod__item">
-                  <Link href={`/products?product=${encodeURIComponent(p.product)}`} class="prod__link">
+                  <Link href={`/products?product=${encodeURIComponent(p.product)}${byQuery(by)}`} class="prod__link">
                     <span class="prod__name">{p.product}</span>
                     <span class="prod__qty num">{quantityText(p.quantity)}</span>
                     <span class="prod__amount num muted">{formatYen(p.amount)}</span>
@@ -125,8 +143,129 @@ function List(props: { month: string }) {
           )}
         </>
       )}
+      <GroupManager onChange={() => setVersion((n) => n + 1)} />
       <ExcludeManager onChange={() => setVersion((n) => n + 1)} />
     </section>
+  );
+}
+
+// 商品の「まとめ名」。名前にまとめ名・言葉を含む商品を、1つにくくる(表記ゆれ・似た商品)。作る・直す・消すは、ここから
+// 1つの商品が複数のまとめに当たるときは、いちばん長い言葉のまとめに入る(二重には数えない)
+const splitWords = (text: string): string[] => text.split(/[、,，\s]+/).map((w) => w.trim()).filter((w) => w !== "");
+
+function GroupManager(props: { onChange: () => void }) {
+  const [groups, setGroups] = useState<ProductGroupView[] | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [words, setWords] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    getProductGroups()
+      .then((r) => {
+        if (r.ok) setGroups(r.groups);
+      })
+      .catch(() => undefined);
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const reset = () => {
+    setEditId(null);
+    setName("");
+    setWords("");
+  };
+  const startEdit = (g: ProductGroupView) => {
+    setEditId(g.id);
+    setName(g.name);
+    setWords(g.words.join("、"));
+    setMessage(null);
+  };
+  const save = async () => {
+    if (busy || name.trim() === "") return;
+    setBusy(true);
+    try {
+      const body = { name: name.trim(), words: splitWords(words) };
+      const r = editId ? await updateProductGroup(editId, body) : await createProductGroup(body);
+      setMessage(r.ok ? r.message : errorText(r.errors));
+      if (r.ok) {
+        reset();
+        await load();
+        props.onChange();
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "保存できませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (g: ProductGroupView) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await deleteProductGroup(g.id);
+      setMessage(r.ok ? r.message : errorText(r.errors));
+      if (r.ok) {
+        if (editId === g.id) reset();
+        await load();
+        props.onChange();
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "消せませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <details class="prod__excl">
+      <summary>まとめ名{groups ? `(${groups.length})` : ""}</summary>
+      <p class="muted">
+        表記ゆれや、似た商品を1つにくくります(例: まとめ名「牛乳」に、言葉「ミルク、低脂肪乳」)。商品の名前にまとめ名か言葉が含まれていれば、そのまとめに入ります。複数に当たるときは、いちばん長い言葉のまとめになります(例:「酢味噌」と「味噌」があれば、酢味噌は「酢味噌」)。元の明細は変わりません。上の「まとめて」で見られます。
+      </p>
+      <ul class="prod__group-list">
+        {(groups ?? []).map((g) => (
+          <li key={g.id} class="prod__group">
+            <strong>{g.name}</strong>
+            <span class="muted">{g.words.length > 0 ? g.words.join("、") : "(まとめ名だけ)"}</span>
+            <span class="prod__group-actions">
+              <button type="button" class="btn" disabled={busy} onClick={() => startEdit(g)}>
+                直す
+              </button>
+              <button type="button" class="btn" disabled={busy} aria-label={`まとめ「${g.name}」を消す`} onClick={() => void remove(g)}>
+                消す
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div class="prod__group-form">
+        <label class="sr-only" for="prod-group-name">
+          まとめ名
+        </label>
+        <input id="prod-group-name" class="prod__filter" type="text" maxLength={30} placeholder="まとめ名(例: 牛乳)" value={name} onInput={(e) => setName((e.currentTarget as HTMLInputElement).value)} />
+        <label class="sr-only" for="prod-group-words">
+          含める言葉
+        </label>
+        <input id="prod-group-words" class="prod__filter" type="text" placeholder="含める言葉(、で区切る。例: ミルク、低脂肪乳)" value={words} onInput={(e) => setWords((e.currentTarget as HTMLInputElement).value)} />
+        <div class="prod__group-actions">
+          <button type="button" class="btn btn--primary" disabled={busy || name.trim() === ""} onClick={() => void save()}>
+            {editId ? "直して保存" : "まとめを作る"}
+          </button>
+          {editId && (
+            <button type="button" class="btn" onClick={reset}>
+              やめる
+            </button>
+          )}
+        </div>
+      </div>
+      {message && (
+        <p class="muted" role="status">
+          {message}
+        </p>
+      )}
+    </details>
   );
 }
 
@@ -216,14 +355,14 @@ function ExcludeManager(props: { onChange: () => void; initialWord?: string }) {
 
 type DetailState = { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: ProductHistoryData };
 
-function Detail(props: { product: string }) {
+function Detail(props: { product: string; by: ProductsBy }) {
   const [state, setState] = useState<DetailState>({ kind: "loading" });
   const [perVersion, setPerVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setState({ kind: "loading" });
-    getProductHistory(props.product)
+    getProductHistory(props.product, props.by)
       .then((res) => {
         if (cancelled) return;
         if (res.ok) setState({ kind: "ready", data: res });
@@ -235,12 +374,12 @@ function Detail(props: { product: string }) {
     return () => {
       cancelled = true;
     };
-  }, [props.product]);
+  }, [props.product, props.by]);
 
   return (
     <section class="page cat prod" aria-labelledby="prod-title">
       <header class="cat__header">
-        <Link href="/products" class="prod__back">
+        <Link href={`/products?${props.by === "group" ? "by=group" : "by=product"}`} class="prod__back">
           ‹ 商品の一覧
         </Link>
         <h1 id="prod-title" class="cat__title">
@@ -259,7 +398,7 @@ function Detail(props: { product: string }) {
         </p>
       )}
       {state.kind === "ready" && state.data.lines === 0 && <p class="muted">この商品の購入はありません。</p>}
-      {state.kind === "ready" && <DetailExclude product={props.product} />}
+      {state.kind === "ready" && props.by === "product" && <DetailExclude product={props.product} />}
       {state.kind === "ready" && state.data.lines > 0 && <DetailBody data={state.data} perVersion={perVersion} onPer={() => setPerVersion((n) => n + 1)} />}
     </section>
   );

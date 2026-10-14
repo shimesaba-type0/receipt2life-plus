@@ -18,13 +18,14 @@ export function registerProductTools(server: McpServer, db: D1Database): void {
         "product を指定すると、その商品の履歴: months(月ごとの lines・quantity・amount・unit_price)、unit_price(latest=最新、cheapest=最安(日付と店)、average=平均)、purchases(新しい順。日付・店・買った数・金額・単価)。月の購入数は months[].quantity。",
         "単価(unit_price)は { per_unit, unit }(1g・1ml・1個あたりの円)。100mlあたりなどは per_unit に掛けて伝える(例: 牛乳 0.198円/ml は 19.8円/100ml、1Lなら 198円)。単価は、明細に内容量(content_amount と content_unit)が入っている行だけ出る。入っていない過去の行は、add の明細を update_transaction で直すと出る。",
         "商品名は、一覧(product を省略した結果)の名前を使う。JANコード(8桁か13桁の数字)でも指定できる。同じJANの明細は、品名の表記が違っても1つの商品にまとめて集計される。新しくレシートを登録するときは、明細に product(統一した商品名。例: 「牛乳」)・quantity(買った数)・content_amount と content_unit(1つあたりの内容量)を付けると、ここで集計できる。",
+        "by=group にすると、利用者が画面で決めた「まとめ名」(牛乳・ミルク・低脂肪乳を「牛乳」に、など)ごとの集計になる(まとめの言葉に当たる商品だけがくくられる。元の明細は変わらない)。",
         "毎回量や中身が違うもの(ガソリン・映画・外食・理美容など)は、product に同じ名前(例: 「ガソリン(レギュラー)」「映画」)を付けてまとめる。ガソリンは quantity=1(給油1回)、content_amount=給油量(L)×1000、content_unit=ml にすると、回数・合計の量・1Lあたりの単価が出る。映画のように量が無いものは product だけ。既に登録済みの行は update_transaction の明細で直せる。",
       ].join("\n"),
       inputSchema: inputSchema.shape,
     },
     async (args) => {
       const { product, ...rest } = z.object(inputSchema.shape).parse(args);
-      if (product !== undefined) return toResult(await productHistory(db, { product, from: rest.from, to: rest.to }));
+      if (product !== undefined) return toResult(await productHistory(db, { product, from: rest.from, to: rest.to, by: rest.by }));
       return toResult(await listProducts(db, rest));
     },
   );

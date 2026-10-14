@@ -43,3 +43,8 @@
 .prod__excl-add { display: flex; gap: 8px; align-items: center; }
 .prod__excl-add .btn { min-height: 44px; }
 .prod__detail-excl { display: flex; flex-direction: column; gap: 8px; }
+.prod__group-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.prod__group { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; overflow-wrap: anywhere; }
+.prod__group-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.prod__group-actions .btn { min-height: 44px; }
+.prod__group-form { display: flex; flex-direction: column; gap: 8px; }

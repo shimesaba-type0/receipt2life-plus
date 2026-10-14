@@ -16,6 +16,7 @@ import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
 import { getUsage } from "../core/usage";
 import { listProducts, productHistory } from "../core/products";
+import { createGroup, deleteGroup, listGroups, updateGroup } from "../core/product-groups";
 import { addChip, deleteChip, listChips } from "../core/search-chips";
 import { addExclude, deleteExclude, listExcludes } from "../core/product-excludes";
 import { compareMonths } from "../core/compare";
@@ -62,7 +63,7 @@ export interface ApiRouteOptions {
 export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id", "/api/product-groups", "/api/product-groups/:id"]) app.use(path, requireJson);
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 
@@ -107,7 +108,7 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.get("/api/products", async (c) => {
     const q = c.req.query();
     const input: Record<string, unknown> = {};
-    for (const key of ["from", "to", "q", "sort"]) if (q[key]) input[key] = q[key];
+    for (const key of ["from", "to", "q", "sort", "by"]) if (q[key]) input[key] = q[key];
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listProducts(c.env.DB, input));
   });
@@ -122,7 +123,7 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.get("/api/products/history", async (c) => {
     const q = c.req.query();
     const input: Record<string, unknown> = {};
-    for (const key of ["product", "from", "to"]) if (q[key]) input[key] = q[key];
+    for (const key of ["product", "from", "to", "by"]) if (q[key]) input[key] = q[key];
     return respond(c, await productHistory(c.env.DB, input));
   });
 
@@ -151,6 +152,20 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     if (q.offset) input.offset = Number(q.offset);
     return respond(c, await searchRecords(c.env.DB, input));
   });
+
+  // 商品の「まとめ名」(表記ゆれ・似た商品をくくる)の管理
+  app.get("/api/product-groups", async (c) => respond(c, await listGroups(c.env.DB)));
+  app.post("/api/product-groups", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await createGroup(c.env.DB, body.value));
+  });
+  app.put("/api/product-groups/:id", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateGroup(c.env.DB, c.req.param("id"), body.value));
+  });
+  app.delete("/api/product-groups/:id", async (c) => respond(c, await deleteGroup(c.env.DB, c.req.param("id"))));
 
   // 検索の「よく使う検索」チップ
   app.get("/api/search-chips", async (c) => respond(c, await listChips(c.env.DB)));

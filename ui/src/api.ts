@@ -39,6 +39,9 @@ import type {
   SearchData,
   ProductHistoryData,
   ExcludeDeleted,
+  ProductGroupDeleted,
+  ProductGroupSaved,
+  ProductGroupsData,
   SearchChipDeleted,
   SearchHitType,
   SearchChipSaved,
@@ -126,7 +129,12 @@ export const deleteSearchChip = (id: string) => request<SearchChipDeleted>("DELE
 export const getProductExcludes = () => request<ExcludesData>("GET", "/api/product-excludes");
 export const addProductExclude = (word: string) => request<ExcludeSaved>("POST", "/api/product-excludes", { word });
 export const deleteProductExclude = (id: string) => request<ExcludeDeleted>("DELETE", `/api/product-excludes/${encodeURIComponent(id)}`);
-export const getProductHistory = (product: string) => request<ProductHistoryData>("GET", `/api/products/history?product=${encodeURIComponent(product)}`);
+export const getProductHistory = (product: string, by: "product" | "group" = "product") =>
+  request<ProductHistoryData>("GET", `/api/products/history?product=${encodeURIComponent(product)}${by === "group" ? "&by=group" : ""}`);
+export const getProductGroups = () => request<ProductGroupsData>("GET", "/api/product-groups");
+export const createProductGroup = (g: { name: string; words: string[] }) => request<ProductGroupSaved>("POST", "/api/product-groups", g);
+export const updateProductGroup = (id: string, g: { name: string; words: string[] }) => request<ProductGroupSaved>("PUT", `/api/product-groups/${encodeURIComponent(id)}`, g);
+export const deleteProductGroup = (id: string) => request<ProductGroupDeleted>("DELETE", `/api/product-groups/${encodeURIComponent(id)}`);
 // D1 の使用量(Cloudflare の分析 API から)
 export const getUsage = () => request<UsageData>("GET", "/api/usage");
 // 月の比較。path は compareApiPath() が作る
