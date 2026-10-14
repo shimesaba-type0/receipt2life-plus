@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeUnitPrice } from "../../src/core/item-products";
+import { computeUnitPrice, janCheckDigitOk, normalizeJan } from "../../src/core/item-products";
 import { listProducts, productHistory } from "../../src/core/products";
 import { addTransactions, getTransaction, updateTransaction } from "../../src/core/transactions";
 import { NOW, testEnv } from "../helpers";
 
 const db = () => testEnv().DB;
 
-type Item = { name: string; amount: number; product?: string; quantity?: number; content_amount?: number; content_unit?: "g" | "ml" | "個" };
+type Item = { name: string; amount: number; product?: string; quantity?: number; content_amount?: number; content_unit?: "g" | "ml" | "個"; jan_code?: string };
 async function buy(date: string, merchant: string, items: Item[], extra: Record<string, unknown> = {}) {
   const amount = items.reduce((s, i) => s + i.amount, 0);
   const r = await addTransactions(db(), { transactions: [{ date, amount, merchant, category: "食費", items, allow_duplicate: true, ...extra }] }, { now: NOW });
@@ -57,8 +57,8 @@ describe("listProducts / productHistory", () => {
     await buy("2026-09-20", "A店", [{ name: "牛乳", amount: 190, product: "牛乳" }]);
     const r = await listProducts(db(), { from: "2026-10-01", to: "2026-10-31" });
     expect(r.ok && r.products).toEqual([
-      { product: "牛乳", lines: 2, quantity: 3, amount: 594, last_date: "2026-10-09", has_unit_price: true },
-      { product: "食パン", lines: 1, quantity: 1, amount: 150, last_date: "2026-10-05", has_unit_price: false },
+      { product: "牛乳", lines: 2, quantity: 3, amount: 594, last_date: "2026-10-09", jan_code: null, has_unit_price: true },
+      { product: "食パン", lines: 1, quantity: 1, amount: 150, last_date: "2026-10-05", jan_code: null, has_unit_price: false },
     ]);
     const filtered = await listProducts(db(), { q: "ぎゅうにゅう" });
     expect(filtered.ok && filtered.total).toBe(0);
@@ -98,3 +98,59 @@ describe("listProducts / productHistory", () => {
     expect((await productHistory(db(), { product: "" })).ok).toBe(false);
   });
 });
+
+// ダミーの例(桁の規則を満たす汎用の例。実在の商品とは関係ない)
+const JAN13 = "4901234567894";
+const JAN8 = "49123456";
+
+describe("JANコード", () => {
+  it("チェックデジットの検証と正規化(全角・ハイフン・空白を取り除く)", () => {
+    expect(janCheckDigitOk(JAN13)).toBe(true);
+    expect(janCheckDigitOk(JAN8)).toBe(true);
+    expect(janCheckDigitOk("4901234567895")).toBe(false);
+    expect(janCheckDigitOk("49123457")).toBe(false);
+    expect(normalizeJan("４９０１-２３４５ 678　94")).toBe(JAN13);
+  });
+
+  it("登録・返却: 正規化して保存する。桁数・検査桁・文字の不正はエラー", async () => {
+    const id = await buy("2026-10-05", "A店", [{ name: "牛乳", amount: 198, jan_code: "4901-2345-67894" as string }]);
+    const t = await getTransaction(db(), id);
+    expect(t.ok && t.transaction.items[0]!.jan_code).toBe(JAN13);
+    const bad = async (jan: string) => (await addTransactions(db(), { transactions: [{ date: "2026-10-05", amount: 100, items: [{ name: "x", amount: 100, jan_code: jan }] }] }, { now: NOW })).ok;
+    expect(await bad(JAN8)).toBe(true);
+    for (const jan of ["4901234567895", "490123456789", "49012345678945", "abc", "49012345678 9X", ""]) expect(await bad(jan), jan).toBe(false);
+  });
+
+  it("同じJANは、品名の表記が違っても1つの商品にまとめる。JANの無い同名の行も、JANが1種類ならそこに入る", async () => {
+    await buy("2026-10-02", "A店", [{ name: "雪印牛乳 1L", amount: 198, product: "牛乳", jan_code: JAN13 }]);
+    await buy("2026-10-05", "B店", [{ name: "MILK 1000ml", amount: 190, jan_code: JAN13 }]);
+    await buy("2026-10-08", "A店", [{ name: "牛乳", amount: 200, product: "牛乳" }]);
+    await buy("2026-10-09", "A店", [{ name: "バナナ", amount: 100 }]);
+    const list = await listProducts(db(), {});
+    expect(list.ok && list.products.map((p) => [p.product, p.lines, p.amount, p.jan_code])).toEqual([
+      ["牛乳", 3, 588, JAN13],
+      ["バナナ", 1, 100, null],
+    ]);
+    // JAN でも、商品名でも、同じ履歴になる
+    const byJan = await productHistory(db(), { product: JAN13 });
+    const byName = await productHistory(db(), { product: "牛乳" });
+    expect(byJan.ok && byJan.lines).toBe(3);
+    expect(byName.ok && byName.lines).toBe(3);
+    expect(byJan.ok && byJan.jan_codes).toEqual([JAN13]);
+    // 一覧の絞り込みも JAN で当たる
+    expect((await listProducts(db(), { q: JAN13 })).ok && (await listProducts(db(), { q: JAN13 }) as { total: number }).total).toBe(1);
+    expect((await listProducts(db(), { q: "4901234" })).ok && (await listProducts(db(), { q: "4901234" }) as { total: number }).total).toBe(1);
+  });
+
+  it("同じ品名に別々のJANが付いていれば、品名だけの行はどちらにも入れない(別の商品のまま)", async () => {
+    await buy("2026-10-02", "A店", [{ name: "牛乳", amount: 198, jan_code: JAN13 }]);
+    await buy("2026-10-03", "A店", [{ name: "牛乳", amount: 150, jan_code: JAN8 }]);
+    await buy("2026-10-04", "A店", [{ name: "牛乳", amount: 100 }]);
+    const list = await listProducts(db(), {});
+    expect(list.ok && list.products.map((p) => [p.lines, p.jan_code]).sort()).toEqual([[1, JAN13], [1, JAN8], [1, null]].sort());
+    // 品名で引くと、3つとも同じ「牛乳」として合わせて返る
+    const h = await productHistory(db(), { product: "牛乳" });
+    expect(h.ok && h.lines).toBe(3);
+  });
+});
+

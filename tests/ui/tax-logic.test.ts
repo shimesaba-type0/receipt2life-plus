@@ -63,9 +63,9 @@ describe("税率の入力", () => {
 
 describe("明細の行の税率", () => {
   it("行の税率・記号をフォームにし、API の入力に戻す", () => {
-    const rows = itemRowsFromView([{ id: "a", position: 0, name: "牛乳", amount: 250, category: null, tax_flag: null, memo: null, tax_rate: 1, tax_label: "★", product: null, quantity: null, content_amount: null, content_unit: null, unit_price: null }]);
+    const rows = itemRowsFromView([{ id: "a", position: 0, name: "牛乳", amount: 250, category: null, tax_flag: null, memo: null, tax_rate: 1, tax_label: "★", product: null, quantity: null, content_amount: null, content_unit: null, jan_code: null, unit_price: null }]);
     expect(rows[0]).toMatchObject({ rate_choice: RATE_OTHER, rate_other: "1", tax_label: "★" });
-    expect(buildItems(rows)).toEqual({ ok: true, value: [{ name: "牛乳", amount: 250, category: null, tax_flag: null, memo: null, tax_rate: 1, tax_label: "★", product: null, quantity: null, content_amount: null, content_unit: null }] });
+    expect(buildItems(rows)).toEqual({ ok: true, value: [{ name: "牛乳", amount: 250, category: null, tax_flag: null, memo: null, tax_rate: 1, tax_label: "★", product: null, quantity: null, content_amount: null, content_unit: null, jan_code: null }] });
   });
   it("税率だけ入れた行は空行ではない(品名が要る)。不正な税率・長い記号はエラー", () => {
     expect(isBlankRow({ ...emptyItemRow("x"), rate_choice: "8" })).toBe(false);

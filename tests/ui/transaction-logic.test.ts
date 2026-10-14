@@ -27,7 +27,7 @@ import {
   type TxFormValues,
 } from "../../ui/src/pages/transactionLogic";
 
-const item = (p: Partial<ItemView> & { amount: number }): ItemView => ({ id: "i", position: 0, name: "品", category: null, tax_flag: null, memo: null, tax_rate: null, tax_label: null, product: null, quantity: null, content_amount: null, content_unit: null, unit_price: null, ...p });
+const item = (p: Partial<ItemView> & { amount: number }): ItemView => ({ id: "i", position: 0, name: "品", category: null, tax_flag: null, memo: null, tax_rate: null, tax_label: null, product: null, quantity: null, content_amount: null, content_unit: null, jan_code: null, unit_price: null, ...p });
 const tx = (p: Partial<TransactionView> = {}): TransactionView => ({
   id: "t1",
   date: "2026-10-11",
@@ -173,8 +173,8 @@ describe("buildItems / buildPatch", () => {
     expect(r).toEqual({
       ok: true,
       value: [
-        { name: "牛乳", amount: 200, category: "食費", tax_flag: null, memo: null, tax_rate: null, tax_label: null, product: null, quantity: null, content_amount: null, content_unit: null },
-        { name: "値引き", amount: -50, category: null, tax_flag: "medical", memo: "割", tax_rate: null, tax_label: null, product: null, quantity: null, content_amount: null, content_unit: null },
+        { name: "牛乳", amount: 200, category: "食費", tax_flag: null, memo: null, tax_rate: null, tax_label: null, product: null, quantity: null, content_amount: null, content_unit: null, jan_code: null },
+        { name: "値引き", amount: -50, category: null, tax_flag: "medical", memo: "割", tax_rate: null, tax_label: null, product: null, quantity: null, content_amount: null, content_unit: null, jan_code: null },
       ],
     });
   });

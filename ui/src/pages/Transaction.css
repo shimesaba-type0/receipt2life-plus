@@ -87,3 +87,4 @@
 .tx__product-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tx__product-grid > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .tx__product-line { font-size: 13px; overflow-wrap: anywhere; }
+.tx__jan { font-size: 12px; letter-spacing: 0.02em; }

@@ -139,6 +139,7 @@ function Detail(props: { product: string }) {
         <h1 id="prod-title" class="cat__title">
           {props.product}
         </h1>
+        {state.kind === "ready" && state.data.jan_codes.length > 0 && <p class="muted prod__jan num">JAN {state.data.jan_codes.join("、")}</p>}
       </header>
       {state.kind === "loading" && (
         <p class="muted cat__status" role="status">

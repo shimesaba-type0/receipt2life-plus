@@ -331,6 +331,7 @@ function TransactionBody(props: {
                             {productLine}
                           </span>
                         )}
+                        {it.jan_code && <span class="muted tx__jan num">JAN {it.jan_code}</span>}
                         {it.memo && <span class="muted day__memo">{it.memo}</span>}
                       </div>
                       <span class={`num tx__item-amount${it.amount < 0 ? " is-minus" : ""}`}>{formatSignedYen(it.amount)}</span>
@@ -544,7 +545,7 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
               <input id={`${id}-${r.key}-taxlabel`} type="text" maxLength={20} placeholder="例: ※ / 軽" value={r.tax_label} onInput={(e) => setRow(r.key, { tax_label: (e.currentTarget as HTMLInputElement).value })} />
               <label for={`${id}-${r.key}-memo`}>メモ</label>
               <input id={`${id}-${r.key}-memo`} type="text" value={r.memo} onInput={(e) => setRow(r.key, { memo: (e.currentTarget as HTMLInputElement).value })} />
-              <details class="tx__product" open={r.product !== "" || r.quantity !== "" || r.content_amount !== ""}>
+              <details class="tx__product" open={r.product !== "" || r.quantity !== "" || r.content_amount !== "" || r.jan_code !== ""}>
                 <summary>商品の情報(任意。単価や毎月の購入数の集計用)</summary>
                 <label for={`${id}-${r.key}-product`}>商品名(「牛乳」「卵」など、同じ商品としてまとめたい名前)</label>
                 <input id={`${id}-${r.key}-product`} type="text" maxLength={50} value={r.product} onInput={(e) => setRow(r.key, { product: (e.currentTarget as HTMLInputElement).value })} />
@@ -567,6 +568,8 @@ function EditForm(props: { tx: TransactionView; cats: CategoriesData; onCancel: 
                     </select>
                   </div>
                 </div>
+                <label for={`${id}-${r.key}-jan`}>JANコード(バーコードの数字。8桁か13桁。分かるときだけ)</label>
+                <input id={`${id}-${r.key}-jan`} type="text" inputMode="numeric" autoComplete="off" placeholder="例: 4901234567894" value={r.jan_code} onInput={(e) => setRow(r.key, { jan_code: (e.currentTarget as HTMLInputElement).value })} />
               </details>
             </li>
           ))}
