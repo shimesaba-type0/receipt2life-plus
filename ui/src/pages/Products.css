@@ -35,3 +35,11 @@
 .prod__jan { margin: 0; font-size: 13px; }
 .prod__pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
 .prod__pager .btn { min-height: 44px; }
+.prod__excl { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 4px 16px 12px; }
+.prod__excl summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 14px; }
+.prod__excl-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.prod__excl-item { display: inline-flex; align-items: center; gap: 4px; padding: 0 4px 0 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 22px; font-size: 14px; }
+.prod__excl-x { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; }
+.prod__excl-add { display: flex; gap: 8px; align-items: center; }
+.prod__excl-add .btn { min-height: 44px; }
+.prod__detail-excl { display: flex; flex-direction: column; gap: 8px; }

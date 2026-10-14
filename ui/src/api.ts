@@ -38,6 +38,9 @@ import type {
   CompareData,
   SearchData,
   ProductHistoryData,
+  ExcludeDeleted,
+  ExcludeSaved,
+  ExcludesData,
   ProductsData,
   UsageData,
   SubscriptionsData,
@@ -113,6 +116,9 @@ export const getDeductions = (query: string) => request<DeductionsData>("GET", `
 // サブスク・保険などの固定費(別枠)。query は "active=true" のような絞り込み(省略可)
 // 商品ごとの集計(一覧と、1つの商品の履歴)
 export const getProducts = (query: string) => request<ProductsData>("GET", `/api/products?${query}`);
+export const getProductExcludes = () => request<ExcludesData>("GET", "/api/product-excludes");
+export const addProductExclude = (word: string) => request<ExcludeSaved>("POST", "/api/product-excludes", { word });
+export const deleteProductExclude = (id: string) => request<ExcludeDeleted>("DELETE", `/api/product-excludes/${encodeURIComponent(id)}`);
 export const getProductHistory = (product: string) => request<ProductHistoryData>("GET", `/api/products/history?product=${encodeURIComponent(product)}`);
 // D1 の使用量(Cloudflare の分析 API から)
 export const getUsage = () => request<UsageData>("GET", "/api/usage");

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ProductHistoryData, ProductRowView, ProductsData } from "../../../src/api/contract";
-import { getProductHistory, getProducts } from "../api";
+import type { ExcludeWordView, ProductHistoryData, ProductRowView, ProductsData } from "../../../src/api/contract";
+import { addProductExclude, deleteProductExclude, getProductExcludes, getProductHistory, getProducts } from "../api";
 import { addMonths, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
@@ -21,6 +21,8 @@ function List(props: { month: string }) {
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
+  // 数えない言葉を変えたら、一覧を取り直す
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +44,7 @@ function List(props: { month: string }) {
     return () => {
       cancelled = true;
     };
-  }, [month]);
+  }, [month, version]);
 
   const go = (m: string) => navigate(`/products?month=${m}`);
   const rows: (ProductRowView & { previous: number; diff: number })[] =
@@ -123,7 +125,92 @@ function List(props: { month: string }) {
           )}
         </>
       )}
+      <ExcludeManager onChange={() => setVersion((n) => n + 1)} />
     </section>
+  );
+}
+
+// 商品として数えない言葉(消費税・割引など)。名前にこの言葉を含む行を、一覧・履歴から外す。ここで足したり戻したりできる
+function ExcludeManager(props: { onChange: () => void; initialWord?: string }) {
+  const [words, setWords] = useState<ExcludeWordView[] | null>(null);
+  const [text, setText] = useState(props.initialWord ?? "");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () =>
+    getProductExcludes()
+      .then((r) => {
+        if (r.ok) setWords(r.excludes);
+      })
+      .catch(() => undefined);
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const add = async () => {
+    const word = text.trim();
+    if (word === "" || busy) return;
+    setBusy(true);
+    try {
+      const r = await addProductExclude(word);
+      setMessage(r.ok ? r.message : errorText(r.errors));
+      if (r.ok) {
+        setText("");
+        await load();
+        props.onChange();
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "追加できませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (w: ExcludeWordView) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await deleteProductExclude(w.id);
+      setMessage(r.ok ? r.message : errorText(r.errors));
+      if (r.ok) {
+        await load();
+        props.onChange();
+      }
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "戻せませんでした。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <details class="prod__excl">
+      <summary>数えない言葉{words ? `(${words.length})` : ""}</summary>
+      <p class="muted">名前にこの言葉を含む行は、商品として数えません(消費税・割引・クーポンなど)。✕で、数えるように戻せます。</p>
+      <ul class="prod__excl-list">
+        {(words ?? []).map((w) => (
+          <li key={w.id} class="prod__excl-item">
+            {w.word}
+            <button type="button" class="prod__excl-x" aria-label={`「${w.word}」を数えるように戻す`} disabled={busy} onClick={() => void remove(w)}>
+              ✕
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div class="prod__excl-add">
+        <label class="sr-only" for="prod-excl-input">
+          数えない言葉を足す
+        </label>
+        <input id="prod-excl-input" class="prod__filter" type="text" maxLength={30} placeholder="例: レジ袋" value={text} onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} />
+        <button type="button" class="btn" disabled={busy || text.trim() === ""} onClick={() => void add()}>
+          足す
+        </button>
+      </div>
+      {message && (
+        <p class="muted" role="status">
+          {message}
+        </p>
+      )}
+    </details>
   );
 }
 
@@ -172,8 +259,33 @@ function Detail(props: { product: string }) {
         </p>
       )}
       {state.kind === "ready" && state.data.lines === 0 && <p class="muted">この商品の購入はありません。</p>}
+      {state.kind === "ready" && <DetailExclude product={props.product} />}
       {state.kind === "ready" && state.data.lines > 0 && <DetailBody data={state.data} perVersion={perVersion} onPer={() => setPerVersion((n) => n + 1)} />}
     </section>
+  );
+}
+
+// この商品を数えない(名前を「数えない言葉」に足す)。足すと、一覧・履歴から消える
+function DetailExclude(props: { product: string }) {
+  const [message, setMessage] = useState<string | null>(null);
+  return (
+    <div class="prod__detail-excl">
+      <button
+        type="button"
+        class="btn"
+        onClick={() => {
+          addProductExclude(props.product)
+            .then((r) => {
+              if (r.ok) navigate("/products");
+              else setMessage(errorText(r.errors));
+            })
+            .catch((e: unknown) => setMessage(e instanceof Error ? e.message : "追加できませんでした。"));
+        }}
+      >
+        この商品は数えない
+      </button>
+      {message && <p class="error">{message}</p>}
+    </div>
   );
 }
 
