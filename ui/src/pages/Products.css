@@ -33,3 +33,5 @@
 .prod__merchant { grid-area: merchant; overflow-wrap: anywhere; }
 .prod__sub { grid-area: sub; font-size: 13px; overflow-wrap: anywhere; }
 .prod__jan { margin: 0; font-size: 13px; }
+.prod__pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.prod__pager .btn { min-height: 44px; }
