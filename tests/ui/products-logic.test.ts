@@ -3,9 +3,9 @@ import type { ProductRowView } from "../../src/api/contract";
 import { addMonths } from "../../ui/src/format";
 import { parseRoute } from "../../ui/src/route";
 import { parseProductFields, emptyItemRow, buildItems, itemRowsFromView, janCheckDigitOk, normalizeJan, parseJan } from "../../ui/src/pages/transactionLogic";
-import { diffText, formatUnitYen, itemProductLine, monthlyCells, normalizePer, perLabel, quantityBar, quantityText, unitPriceLabel, withPrevious } from "../../ui/src/pages/productsLogic";
+import { contentTotalText, pageOf, diffText, formatUnitYen, itemProductLine, monthlyCells, normalizePer, perLabel, quantityBar, quantityText, unitPriceLabel, withPrevious } from "../../ui/src/pages/productsLogic";
 
-const row = (product: string, quantity: number, amount = 100): ProductRowView => ({ product, lines: 1, quantity, amount, last_date: "2026-10-05", jan_code: null, has_unit_price: false });
+const row = (product: string, quantity: number, amount = 100): ProductRowView => ({ product, lines: 1, quantity, amount, last_date: "2026-10-05", jan_code: null, has_unit_price: false, content_total: null });
 
 describe("商品の画面の純粋な部分", () => {
   it("ルート: /products(月・商品名)", () => {
@@ -106,6 +106,26 @@ describe("JANコード(画面の入力)", () => {
     expect(buildItems(rows)).toMatchObject({ ok: true, value: [{ name: "牛乳", jan_code: "4901234567894" }] });
     expect(buildItems([{ ...emptyItemRow("z"), jan_code: "4901234567894" }])).toMatchObject({ ok: false });
     expect(buildItems([{ ...emptyItemRow("z"), name: "a", amount: "1", jan_code: "4901234567895" }])).toMatchObject({ ok: false });
+  });
+});
+
+describe("商品の一覧のページ分けと、内容量の合計", () => {
+  it("1ページ20件。範囲外は端に丸める。0件でも1ページ", () => {
+    const rows = Array.from({ length: 45 }, (_, i) => i);
+    expect(pageOf(rows, 1)).toMatchObject({ page: 1, pages: 3 });
+    expect(pageOf(rows, 1).rows).toHaveLength(20);
+    expect(pageOf(rows, 3).rows).toEqual([40, 41, 42, 43, 44]);
+    expect(pageOf(rows, 9).page).toBe(3);
+    expect(pageOf(rows, 0).page).toBe(1);
+    expect(pageOf([], 1)).toEqual({ rows: [], page: 1, pages: 1 });
+  });
+
+  it("内容量の合計: 1000以上は L・kg にする。個はそのまま。無ければ null", () => {
+    expect(contentTotalText({ amount: 58150, unit: "ml" })).toBe("合計 58.15L");
+    expect(contentTotalText({ amount: 500, unit: "ml" })).toBe("合計 500ml");
+    expect(contentTotalText({ amount: 1200, unit: "g" })).toBe("合計 1.2kg");
+    expect(contentTotalText({ amount: 30, unit: "個" })).toBe("合計 30個");
+    expect(contentTotalText(null)).toBeNull();
   });
 });
 

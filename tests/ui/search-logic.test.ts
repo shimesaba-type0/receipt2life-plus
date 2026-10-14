@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SearchHitView } from "../../src/api/contract";
 import { parseRoute } from "../../ui/src/route";
-import { dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageHref } from "../../ui/src/pages/searchLogic";
+import { dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageCount, searchPageHref } from "../../ui/src/pages/searchLogic";
 
 const hit = (over: Partial<SearchHitView>): SearchHitView => ({ type: "event", id: "e1", date: "2026-10-05", title: "t", detail: null, amount: null, transaction_id: null, ...over });
 
@@ -33,5 +33,14 @@ describe("検索ページの純粋な部分", () => {
     expect(groups.map((g) => [g.date, g.hits.length])).toEqual([["2026-10-05", 2], ["2026-09-01", 1]]);
     expect(dateHeading("2026-10-05")).toBe("2026年10月5日(月)");
     expect(dateHeading("bad")).toBe("bad");
+  });
+});
+
+describe("検索のページ数", () => {
+  it("30件ごと。0件でも1ページ", () => {
+    expect(searchPageCount(0)).toBe(1);
+    expect(searchPageCount(30)).toBe(1);
+    expect(searchPageCount(31)).toBe(2);
+    expect(searchPageCount(95)).toBe(4);
   });
 });

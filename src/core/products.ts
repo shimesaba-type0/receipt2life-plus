@@ -26,7 +26,8 @@ export const listProductsSchema = z.strictObject({
     .min(1, `limit は1〜${MAX_PRODUCT_LIMIT}の整数で指定してください`)
     .max(MAX_PRODUCT_LIMIT, `limit は${MAX_PRODUCT_LIMIT}以下にしてください`)
     .default(DEFAULT_PRODUCT_LIMIT)
-    .describe(`最大件数(既定${DEFAULT_PRODUCT_LIMIT}、最大${MAX_PRODUCT_LIMIT})。金額の大きい順`),
+    .describe(`最大件数(既定${DEFAULT_PRODUCT_LIMIT}、最大${MAX_PRODUCT_LIMIT})`),
+  sort: z.enum(["amount", "frequency"]).default("amount").describe("並び順。amount=金額の大きい順(既定)、frequency=買った回数(行数)の多い順(同じ回数なら金額の大きい順)"),
 });
 
 export const productHistorySchema = z.strictObject({
@@ -49,6 +50,8 @@ export interface ProductRow {
   jan_code: string | null;
   // 単価がわかる行があるか(内容量が入っている)
   has_unit_price: boolean;
+  // 内容量の合計(買った数×内容量。いちばん多い単位にそろえる。ガソリンの給油量の合計など。内容量がなければ null)
+  content_total: { amount: number; unit: ContentUnit } | null;
 }
 
 export type ListProductsResult =
@@ -157,6 +160,17 @@ function weightedUnitPrice(lines: readonly LineRow[]): UnitPrice | null {
   return content > 0 ? { per_unit: amount / content, unit } : null;
 }
 
+// 内容量の合計(買った数×内容量)。いちばん多い単位の行だけ足す
+function contentTotal(lines: readonly LineRow[]): { amount: number; unit: ContentUnit } | null {
+  const withContent = lines.filter((l) => l.content_amount !== null && l.content_unit !== null);
+  if (withContent.length === 0) return null;
+  const counts = new Map<ContentUnit, number>();
+  for (const l of withContent) counts.set(l.content_unit!, (counts.get(l.content_unit!) ?? 0) + 1);
+  const unit = [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]![0];
+  const amount = withContent.filter((l) => l.content_unit === unit).reduce((s, l) => s + qty(l) * l.content_amount!, 0);
+  return { amount: round(amount, 3), unit };
+}
+
 interface Group {
   // 表示する商品名(いちばん新しい行の商品名)
   product: string;
@@ -194,7 +208,7 @@ const isJanQuery = (s: string) => /^\d{8}$|^\d{13}$/.test(s);
 export async function listProducts(db: D1Database, input: unknown): Promise<ListProductsResult> {
   const parsed = listProductsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { from, to, q, limit } = parsed.data;
+  const { from, to, q, limit, sort } = parsed.data;
   if (from && to && from > to) return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
   const needle = q ? normalizeForSearch(q) : "";
 
@@ -209,15 +223,16 @@ export async function listProducts(db: D1Database, input: unknown): Promise<List
       last_date: g.lines[0]!.date,
       jan_code: g.jan,
       has_unit_price: g.lines.some((l) => computeUnitPrice(l) !== null),
+      content_total: contentTotal(g.lines),
     }));
-  all.sort((a, b) => b.amount - a.amount || (a.product < b.product ? -1 : a.product > b.product ? 1 : 0));
+  all.sort((a, b) => (sort === "frequency" ? b.lines - a.lines : 0) || b.amount - a.amount || (a.product < b.product ? -1 : a.product > b.product ? 1 : 0));
   const products = all.slice(0, limit);
   return {
     ok: true,
     count: products.length,
     total: all.length,
     products,
-    message: all.length === 0 ? "該当する商品はありません(明細のある取引が対象です)" : `${all.length}商品${all.length > products.length ? `(金額の大きい${products.length}件を返しました)` : ""}`,
+    message: all.length === 0 ? "該当する商品はありません(明細のある取引が対象です)" : `${all.length}商品${all.length > products.length ? `(${sort === "frequency" ? "買った回数の多い" : "金額の大きい"}${products.length}件を返しました)` : ""}`,
   };
 }
 

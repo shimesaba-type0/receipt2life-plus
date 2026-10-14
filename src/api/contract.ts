@@ -833,6 +833,7 @@ export interface ProductRowView {
   last_date: string;
   jan_code: string | null;
   has_unit_price: boolean;
+  content_total: { amount: number; unit: ContentUnit } | null;
 }
 export interface ProductsData {
   count: number;

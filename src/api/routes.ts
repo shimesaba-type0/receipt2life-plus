@@ -105,7 +105,7 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.get("/api/products", async (c) => {
     const q = c.req.query();
     const input: Record<string, unknown> = {};
-    for (const key of ["from", "to", "q"]) if (q[key]) input[key] = q[key];
+    for (const key of ["from", "to", "q", "sort"]) if (q[key]) input[key] = q[key];
     if (q.limit) input.limit = Number(q.limit);
     return respond(c, await listProducts(c.env.DB, input));
   });

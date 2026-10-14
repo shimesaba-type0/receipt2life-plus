@@ -4,7 +4,7 @@ import { searchRecords } from "../api";
 import { formatYen } from "../format";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { TYPE_LABELS, TYPE_OPTIONS, dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageHref } from "./searchLogic";
+import { TYPE_LABELS, TYPE_OPTIONS, dateHeading, groupHitsByDate, hitHref, rangeLabel, searchApiPath, searchPageCount, searchPageHref } from "./searchLogic";
 import "./Categories.css";
 import "./Search.css";
 
@@ -138,9 +138,9 @@ export function Search(props: { q: string; type: SearchHitType | null; page: num
               ))}
               {(props.page > 1 || data.has_more) && (
                 <nav class="search__pager" aria-label="ページ送り">
-                  {props.page > 1 ? <Link href={searchPageHref(props.q, props.type, props.page - 1)} class="btn">← 新しい記録へ</Link> : <span />}
-                  <span class="muted">{props.page}ページ目</span>
-                  {data.has_more ? <Link href={searchPageHref(props.q, props.type, props.page + 1)} class="btn">もっと前の記録へ →</Link> : <span />}
+                  {props.page > 1 ? <Link href={searchPageHref(props.q, props.type, props.page - 1)} class="btn">‹ 前へ(新しい記録)</Link> : <span />}
+                  <span class="muted">{props.page} / {searchPageCount(data.total)}ページ</span>
+                  {data.has_more ? <Link href={searchPageHref(props.q, props.type, props.page + 1)} class="btn">次へ(古い記録) ›</Link> : <span />}
                 </nav>
               )}
             </>

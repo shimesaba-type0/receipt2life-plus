@@ -57,8 +57,8 @@ describe("listProducts / productHistory", () => {
     await buy("2026-09-20", "A店", [{ name: "牛乳", amount: 190, product: "牛乳" }]);
     const r = await listProducts(db(), { from: "2026-10-01", to: "2026-10-31" });
     expect(r.ok && r.products).toEqual([
-      { product: "牛乳", lines: 2, quantity: 3, amount: 594, last_date: "2026-10-09", jan_code: null, has_unit_price: true },
-      { product: "食パン", lines: 1, quantity: 1, amount: 150, last_date: "2026-10-05", jan_code: null, has_unit_price: false },
+      { product: "牛乳", lines: 2, quantity: 3, amount: 594, last_date: "2026-10-09", jan_code: null, has_unit_price: true, content_total: { amount: 3000, unit: "ml" } },
+      { product: "食パン", lines: 1, quantity: 1, amount: 150, last_date: "2026-10-05", jan_code: null, has_unit_price: false, content_total: null },
     ]);
     const filtered = await listProducts(db(), { q: "ぎゅうにゅう" });
     expect(filtered.ok && filtered.total).toBe(0);
@@ -154,3 +154,30 @@ describe("JANコード", () => {
   });
 });
 
+describe("商品の一覧の並び順と、毎回量が違うもの", () => {
+  it("sort=frequency は買った回数の多い順(同数は金額順)。既定は金額順", async () => {
+    await buy("2026-10-01", "A店", [{ name: "高い物", amount: 5000 }, { name: "卵", amount: 250 }]);
+    await buy("2026-10-03", "A店", [{ name: "卵", amount: 260 }]);
+    await buy("2026-10-05", "A店", [{ name: "卵", amount: 240 }, { name: "パン", amount: 150 }]);
+    const range = { from: "2026-10-01", to: "2026-10-31" };
+    const byAmount = await listProducts(db(), range);
+    expect(byAmount.ok && byAmount.products.map((p) => p.product)).toEqual(["高い物", "卵", "パン"]);
+    const byFreq = await listProducts(db(), { ...range, sort: "frequency" });
+    expect(byFreq.ok && byFreq.products.map((p) => [p.product, p.lines])).toEqual([["卵", 3], ["高い物", 1], ["パン", 1]]);
+    expect((await listProducts(db(), { ...range, sort: "bad" })).ok).toBe(false);
+  });
+
+  it("ガソリンは product でまとめ、回数・合計の量(L)・1Lあたりの単価が出る。映画は product だけでまとまる", async () => {
+    await buy("2026-10-02", "Gスタンド", [{ name: "レギュラー 38.15L @161.0", amount: 6142, product: "ガソリン(レギュラー)", quantity: 1, content_amount: 38150, content_unit: "ml" }]);
+    await buy("2026-10-08", "Gスタンド", [{ name: "レギュラー 20.00L @163.0", amount: 3260, product: "ガソリン(レギュラー)", quantity: 1, content_amount: 20000, content_unit: "ml" }]);
+    await buy("2026-10-04", "映画館", [{ name: "JRジョジョショーツ", amount: 1080, product: "映画" }]);
+    await buy("2026-10-06", "映画館", [{ name: "大人 ディスクロージャー・デイ(字幕)", amount: 1500, product: "映画" }]);
+    const r = await listProducts(db(), { from: "2026-10-01", to: "2026-10-31", sort: "frequency" });
+    expect(r.ok && r.products.map((p) => [p.product, p.lines, p.quantity, p.amount, p.content_total])).toEqual([
+      ["ガソリン(レギュラー)", 2, 2, 9402, { amount: 58150, unit: "ml" }],
+      ["映画", 2, 2, 2580, null],
+    ]);
+    const h = await productHistory(db(), { product: "ガソリン(レギュラー)" });
+    expect(h.ok && h.unit_price?.average).toBeCloseTo(0.1617, 3);
+  });
+});

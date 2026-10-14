@@ -4,7 +4,7 @@ import { getProductHistory, getProducts } from "../api";
 import { addMonths, formatMonthJa, formatYen, monthOf, monthRange, todayJst } from "../format";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { DEFAULT_PER, PER_OPTIONS, diffText, monthlyCells, perLabel, quantityBar, quantityText, unitPriceLabel, withPrevious } from "./productsLogic";
+import { DEFAULT_PER, PER_OPTIONS, contentTotalText, diffText, pageOf, monthlyCells, perLabel, quantityBar, quantityText, unitPriceLabel, withPrevious } from "./productsLogic";
 import { readPer, savePer } from "./productsStorage";
 import "./Categories.css";
 import "./Products.css";
@@ -20,13 +20,15 @@ function List(props: { month: string }) {
   const { month } = props;
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [filter, setFilter] = useState("");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
     setState({ kind: "loading" });
+    setPage(1);
     const query = (m: string) => {
       const r = monthRange(m);
-      return `from=${r.from}&to=${r.to}&limit=200`;
+      return `from=${r.from}&to=${r.to}&limit=200&sort=frequency`;
     };
     Promise.all([getProducts(query(month)), getProducts(query(addMonths(month, -1)))])
       .then(([cur, prev]) => {
@@ -45,6 +47,7 @@ function List(props: { month: string }) {
   const go = (m: string) => navigate(`/products?month=${m}`);
   const rows: (ProductRowView & { previous: number; diff: number })[] =
     state.kind === "ready" ? withPrevious(state.current.products, state.previous.products).filter((p) => filter.trim() === "" || p.product.includes(filter.trim())) : [];
+  const shown = pageOf(rows, page);
 
   return (
     <section class="page cat prod" aria-labelledby="prod-title">
@@ -80,7 +83,11 @@ function List(props: { month: string }) {
           <label class="sr-only" for="prod-filter">
             商品名で絞り込む
           </label>
-          <input id="prod-filter" class="prod__filter" type="search" placeholder="商品名で絞り込む" value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
+          <input id="prod-filter" class="prod__filter" type="search" placeholder="商品名で絞り込む" value={filter} onInput={(e) => {
+              setFilter((e.currentTarget as HTMLInputElement).value);
+              setPage(1);
+            }}
+          />
           {rows.length === 0 ? (
             <p class="muted">
               {state.current.total === 0
@@ -89,17 +96,30 @@ function List(props: { month: string }) {
             </p>
           ) : (
             <ul class="prod__list">
-              {rows.map((p) => (
+              {shown.rows.map((p) => (
                 <li key={p.product} class="prod__item">
                   <Link href={`/products?product=${encodeURIComponent(p.product)}`} class="prod__link">
                     <span class="prod__name">{p.product}</span>
                     <span class="prod__qty num">{quantityText(p.quantity)}</span>
                     <span class="prod__amount num muted">{formatYen(p.amount)}</span>
-                    <span class="prod__diff muted">{diffText(p)}</span>
+                    <span class="prod__diff muted">{[contentTotalText(p.content_total), diffText(p)].filter(Boolean).join(" ・ ")}</span>
                   </Link>
                 </li>
               ))}
             </ul>
+          )}
+          {shown.pages > 1 && (
+            <nav class="prod__pager" aria-label="ページ">
+              <button type="button" class="btn" disabled={shown.page <= 1} onClick={() => setPage(shown.page - 1)}>
+                ‹ 前へ
+              </button>
+              <span class="muted">
+                {shown.page} / {shown.pages}(全{rows.length}商品)
+              </span>
+              <button type="button" class="btn" disabled={shown.page >= shown.pages} onClick={() => setPage(shown.page + 1)}>
+                次へ ›
+              </button>
+            </nav>
           )}
         </>
       )}

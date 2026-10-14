@@ -98,3 +98,26 @@ export function quantityBar(quantity: number, max: number): number {
   if (!(quantity > 0) || !(max > 0)) return 0;
   return Math.max(3, Math.min(100, (quantity / max) * 100));
 }
+
+// 一覧は、買った回数の多い順(当月内)。1ページの件数
+export const PAGE_SIZE = 20;
+
+export function pageCount(total: number, size = PAGE_SIZE): number {
+  return Math.max(1, Math.ceil(total / size));
+}
+
+/** page(1始まり)の行。範囲外は端に丸める */
+export function pageOf<T>(rows: readonly T[], page: number, size = PAGE_SIZE): { rows: T[]; page: number; pages: number } {
+  const pages = pageCount(rows.length, size);
+  const p = Math.min(Math.max(1, Math.floor(page) || 1), pages);
+  return { rows: rows.slice((p - 1) * size, p * size), page: p, pages };
+}
+
+/** 内容量の合計の文言(「合計 78.5L」「合計 1.2kg」「合計 30個」)。無ければ null */
+export function contentTotalText(t: { amount: number; unit: ContentUnit } | null): string | null {
+  if (!t || !(t.amount > 0)) return null;
+  const big = t.unit !== "個" && t.amount >= 1000;
+  const n = big ? t.amount / 1000 : t.amount;
+  const unit = t.unit === "個" ? "個" : t.unit === "g" ? (big ? "kg" : "g") : big ? "L" : "ml";
+  return `合計 ${n.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}${unit}`;
+}

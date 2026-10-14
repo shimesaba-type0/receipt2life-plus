@@ -22,6 +22,9 @@ export const TYPE_OPTIONS: { value: SearchHitType | ""; label: string }[] = [
 // 1ページの件数
 export const PAGE_SIZE = 30;
 
+/** 全件数からのページ数(0件でも1) */
+export const searchPageCount = (total: number): number => Math.max(1, Math.ceil(total / PAGE_SIZE));
+
 // 画面の URL(/search?q=…&type=…&page=…)。言葉も種類も空なら /search だけ(言葉が空でも、種類があればその種類の一覧)。1ページ目は page を付けない
 export function searchPageHref(q: string, type: SearchHitType | null, page = 1): string {
   const text = q.trim();
