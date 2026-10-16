@@ -650,6 +650,17 @@ export interface MerchantView {
   phone: string | null;
   address: string | null;
   invoice_number: string | null;
+  // この店で使った支払方法(口座名)・カテゴリ・印字されたレジ番号・店番号(店舗コード)の件数(多い順。最大5個)
+  accounts: CountView[];
+  categories: CountView[];
+  register_nos: CountView[];
+  store_codes: CountView[];
+}
+
+export interface CountView {
+  value: string;
+  count: number;
+  last_date: string;
 }
 
 export interface MerchantsData {

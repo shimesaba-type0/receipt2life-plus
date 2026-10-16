@@ -21,6 +21,10 @@ const merchant = (over: Partial<MerchantView> = {}): MerchantView => ({
   phone: "03-0000-1111",
   address: "東京都〇〇区1-2-3",
   invoice_number: "T0000000000000",
+  accounts: [],
+  categories: [],
+  register_nos: [],
+  store_codes: [],
   ...over,
 });
 
