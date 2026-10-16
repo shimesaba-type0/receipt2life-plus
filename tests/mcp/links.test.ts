@@ -23,10 +23,10 @@ const X_POST = "https://x.com/example_user/status/1234567890";
 const YT = "https://youtu.be/dQw4w9WgXcQ";
 
 describe("MCP リンクのツール", () => {
-  it("tools/list は38個で、リンクの3ツールの説明が具体的", async () => {
+  it("tools/list は39個で、リンクの3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
-    expect(tools).toHaveLength(38);
+    expect(tools).toHaveLength(39);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("add_link").description).toContain("Xの投稿");
     expect(byName("add_link").description).toContain("YouTube");
@@ -134,3 +134,22 @@ describe("MCP summarize_products", () => {
   });
 });
 
+
+describe("MCP list_merchants", () => {
+  it("過去の取引から、店の支払方法・レジ番号を引ける(読み取り専用)。説明が使いどころと注意を示す", async () => {
+    await callTool("add_transactions", {
+      transactions: [
+        { date: "2026-10-05", amount: 1200, merchant: "ダミータクシー", account: "現金", register_no: "0005" },
+        { date: "2026-10-06", amount: 1500, merchant: "ダミータクシー", account: "カード", register_no: "0005" },
+      ],
+    });
+    const r = text(await callTool("list_merchants", { q: "タクシー" }));
+    expect(r).toMatchObject({ ok: true, merchants: [{ merchant: "ダミータクシー", count: 2, register_nos: [{ value: "0005", count: 2 }] }] });
+    expect(r.merchants[0].accounts.map((a: { value: string }) => a.value).sort()).toEqual(["カード", "現金"]);
+    expect((await callTool("list_merchants", { limit: 0 })).body.result.isError).toBe(true);
+    const tools = (await rpc("tools/list")).body.result.tools as { name: string; description: string }[];
+    const d = tools.find((t) => t.name === "list_merchants")!.description;
+    expect(d).toContain("レジ番号");
+    expect(d).toContain("読めないものを過去の値で埋めて登録しない");
+  });
+});

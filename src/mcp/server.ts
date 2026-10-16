@@ -5,6 +5,7 @@ import { registerCategoryTools } from "./tools/categories";
 import { registerCompareTools } from "./tools/compare";
 import { registerEventTools } from "./tools/events";
 import { registerLinkTools } from "./tools/links";
+import { registerMerchantTools } from "./tools/merchants";
 import { registerPhotoTools } from "./tools/photos";
 import { registerProductTools } from "./tools/products";
 import { registerReportTools } from "./tools/reports";
@@ -28,5 +29,6 @@ export function createMcpServer(db: D1Database, bucket: R2Bucket, origin: string
   registerSearchTools(server, db);
   registerCompareTools(server, db);
   registerProductTools(server, db);
+  registerMerchantTools(server, db);
   return server;
 }

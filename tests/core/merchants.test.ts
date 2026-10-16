@@ -45,7 +45,7 @@ describe("listMerchants", () => {
     // 画面や AI からは空の店名は入らないが、念のため DB に直接空白だけの店名があっても除く
     await db().exec("UPDATE transactions SET merchant = '  ' WHERE date = '2026-10-09'");
     const m = await list();
-    expect(m).toEqual([
+    expect(m).toMatchObject([
       {
         merchant: "Aストア",
         count: 3,
@@ -161,5 +161,40 @@ describe("listMerchants", () => {
     expect(await list({ q: "   " })).toHaveLength(2);
     expect((await listMerchants(db(), { q: "a".repeat(101) })).ok).toBe(false);
     expect((await listMerchants(db(), { foo: 1 })).ok).toBe(false);
+  });
+});
+
+describe("店の情報(支払方法・レジ番号・店番号)", () => {
+  it("店ごとに、使った支払方法・カテゴリ・印字されたレジ番号と店番号を、件数の多い順で返す", async () => {
+    await seed([
+      { date: "2026-10-01", merchant: "ダミータクシー", account: "現金", register_no: "0005", store_code: "A01" },
+      { date: "2026-10-03", merchant: "ダミータクシー", account: "現金", register_no: "0005", store_code: "A01" },
+      { date: "2026-10-05", merchant: "ダミータクシー", account: "カード", register_no: "0007" },
+      { date: "2026-10-06", merchant: "ダミータクシー", account: "Suica" },
+      { date: "2026-10-02", merchant: "別の店", account: "カード" },
+    ]);
+    const m = (await list({ q: "タクシー" }))[0]!;
+    expect(m.merchant).toBe("ダミータクシー");
+    expect(m.accounts.map((a) => [a.value, a.count])).toEqual([["現金", 2], ["Suica", 1], ["カード", 1]].sort((a, b) => (b[1] as number) - (a[1] as number) || (a[0] === "Suica" ? -1 : 1)));
+    expect(m.register_nos).toEqual([
+      { value: "0005", count: 2, last_date: "2026-10-03" },
+      { value: "0007", count: 1, last_date: "2026-10-05" },
+    ]);
+    expect(m.store_codes).toEqual([{ value: "A01", count: 2, last_date: "2026-10-03" }]);
+    expect(m.categories).toEqual([]);
+    // 印字がない店は、空の配列
+    const other = (await list({ q: "別の店" }))[0]!;
+    expect(other.register_nos).toEqual([]);
+    expect(other.store_codes).toEqual([]);
+  });
+
+  it("表記ゆれのある店名は、1つにまとめて数える", async () => {
+    await seed([
+      { date: "2026-10-01", merchant: "ダミー商店", register_no: "0001" },
+      { date: "2026-10-02", merchant: "ﾀﾞﾐｰ商店", register_no: "0001" },
+    ]);
+    const all = await list({ q: "商店" });
+    expect(all).toHaveLength(1);
+    expect(all[0]!.register_nos[0]).toMatchObject({ value: "0001", count: 2 });
   });
 });
