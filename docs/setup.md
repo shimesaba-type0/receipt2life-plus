@@ -40,7 +40,7 @@ Workers & Pages → 新規作成 → **Continue with GitHub** → このリポ�
 
 - D1 は、`wrangler.toml` に `database_id` を書かなくても、**初回のデプロイで自動作成される**(確認済み)。テーブルは、デプロイコマンドの `d1 migrations apply` が作る
 - `workers_dev = false` / `preview_urls = false` にしてあるので、`workers.dev` の URL は無い。次のカスタムドメインで公開する
-- main にマージすると、Cloudflare が自動でビルドとデプロイを行う。GitHub Actions 側のデプロイは止めたまま(`CLOUDFLARE_DEPLOY_ENABLED` を設定しない)
+- main にマージすると、Cloudflare が自動でビルドとデプロイを行う。GitHub Actions 側の本番デプロイは止めたまま(`CLOUDFLARE_DEPLOY_ENABLED` を設定しない。ステージングは別の変数 `CLOUDFLARE_STAGING_DEPLOY_ENABLED`)
 
 ### 2. カスタムドメインを付ける
 
@@ -120,4 +120,4 @@ D1 の無料プランには、**1日あたり**の上限(読んだ行 500万、�
 ### まだ手を付けていないこと
 
 - ステージングの実環境: `wrangler.toml` の `[env.staging]` は定義済みだが、実環境(`receipt2life-staging` の Worker、D1、R2、サービストークン、Access のアプリ)は未作成
-- GitHub Actions からのデプロイ(`CLOUDFLARE_DEPLOY_ENABLED`)。未設定のまま。ステージングを作るときに使う予定(有効にする前の確認事項は [ci-cd.md](ci-cd.md))
+- GitHub Actions からのデプロイ。ステージング(`CLOUDFLARE_STAGING_DEPLOY_ENABLED`)は、実環境を作るときに有効にする。本番(`CLOUDFLARE_DEPLOY_ENABLED`)は、Cloudflare 側の自動デプロイが行うので、未設定のまま(有効にする前の確認事項は [ci-cd.md](ci-cd.md))
