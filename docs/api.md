@@ -267,6 +267,7 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 | --- | --- |
 | `POST /api/photos` | `multipart/form-data`。`file`(必須)と、`date` / `transaction_id` / `event_id` / `caption`(`date`・`transaction_id`・`event_id` のうち1つ以上が必要)。戻り: `photo: PhotoView` |
 | `GET /api/photos/:id` | R2 から読んで返す。`Content-Type` は保存時に検証した値。ヘッダー: `Content-Disposition: inline`、`X-Content-Type-Options: nosniff`、`Cross-Origin-Resource-Policy: same-origin`、`Content-Security-Policy: default-src 'none'; sandbox`、`Cache-Control: private, max-age=31536000, immutable`(画像は更新しない) |
+| `PUT /api/photos/:id/restore` | バックアップの ZIP から画像を戻す。本文は画像のバイト列(`Content-Length` 必須、5MB まで、jpeg/png/webp)。先に JSONL の読み込みで attachments の行があることが必要(無ければ 404)。R2 に同じキーが既にあれば何もしない。戻り: `{ok, status: "restored"｜"exists", id, message}` |
 | `DELETE /api/photos/:id` | R2 のオブジェクトと、attachments の行を消す。複数削除の API は無く、画面は1枚ずつ DELETE を呼ぶ |
 
 - 受け付ける画像: JPEG / PNG / WebP。**拡張子や申告の Content-Type を信用せず、先頭のバイト列(マジックナンバー)で判定する**

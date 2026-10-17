@@ -1,6 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
-import { importBackup } from "../api";
+import { fetchExportText, fetchPhotoBytes, importBackup, putPhotoBytes } from "../api";
+import { buildPhotoZips, parsePhotoRecords, readZips, restorePhotos, type BuildSummary, type RestoreSummary } from "../photoBackup";
 import {
   errorLines,
   formatFileSize,
@@ -74,6 +75,7 @@ export function Backup() {
       </div>
 
       <ImportCard />
+      <PhotoBackupCard />
     </section>
   );
 }
@@ -291,5 +293,163 @@ function ImportResult(props: { rows: ImportRow[] }) {
         </>
       )}
     </div>
+  );
+}
+
+const ymd = () => new Date().toISOString().slice(0, 10).replaceAll("-", "");
+
+function saveBlob(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+type PhotoState =
+  | { kind: "idle" }
+  | { kind: "working"; label: string; done: number; total: number }
+  | { kind: "saved"; summary: BuildSummary }
+  | { kind: "restored"; summary: RestoreSummary; zipErrors: string[] }
+  | { kind: "error"; message: string };
+
+// 写真のバックアップ(ZIP)。写真は、書き出し(JSONL)には入らないので、別に ZIP で保存する。パソコンでの利用を想定(大きなファイルが何個かできる)
+function PhotoBackupCard() {
+  const [state, setState] = useState<PhotoState>({ kind: "idle" });
+  const [files, setFiles] = useState<File[]>([]);
+  const busyRef = useRef(false);
+  const working = state.kind === "working";
+
+  async function onDownload() {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setState({ kind: "working", label: "写真の一覧を読み込み中…", done: 0, total: 0 });
+    try {
+      const records = parsePhotoRecords(await fetchExportText());
+      if (records.length === 0) {
+        setState({ kind: "error", message: "写真はまだありません。" });
+        return;
+      }
+      const base = `receipt2life-photos-${ymd()}`;
+      const summary = await buildPhotoZips(records, fetchPhotoBytes, {
+        onProgress: (done, total) => setState({ kind: "working", label: "写真を取り出し中…", done, total }),
+        // できた部品を、そのつど保存する(メモリに溜めない)。ブラウザが「複数のダウンロード」の許可を求めたら、許可してください
+        onPart: (part) => saveBlob(part.blob, `${base}-part${part.index}.zip`),
+      });
+      setState({ kind: "saved", summary });
+    } catch (err) {
+      setState({ kind: "error", message: err instanceof Error ? err.message : "写真を保存できませんでした。" });
+    } finally {
+      busyRef.current = false;
+    }
+  }
+
+  async function onRestore(e: Event) {
+    e.preventDefault();
+    if (busyRef.current || files.length === 0) return;
+    busyRef.current = true;
+    setState({ kind: "working", label: "ZIP を読み込み中…", done: 0, total: 0 });
+    try {
+      const { entries, errors } = await readZips(files, files.map((f) => f.name));
+      const summary = await restorePhotos(entries, putPhotoBytes, { onProgress: (done, total) => setState({ kind: "working", label: "写真を戻し中…", done, total }) });
+      setState({ kind: "restored", summary, zipErrors: errors });
+    } catch (err) {
+      setState({ kind: "error", message: err instanceof Error ? err.message : "写真を戻せませんでした。" });
+    } finally {
+      busyRef.current = false;
+    }
+  }
+
+  return (
+    <section class="backup__card" aria-labelledby="backup-photo-h">
+      <div class="backup__card-head">
+        <h2 id="backup-photo-h" class="backup__h2">
+          写真のバックアップ(ZIP)
+        </h2>
+        <p class="backup__desc">写真は、上のバックアップ(JSONL)には入りません。ここで、ZIP に保存します(100MBか500枚ごとに、複数のファイルになります)。パソコンでの利用を想定しています。</p>
+      </div>
+      <button type="button" class="backup__btn backup__btn--primary" disabled={working} aria-busy={working} onClick={() => void onDownload()}>
+        <Icon d={DOWNLOAD_ICON} />
+        写真をダウンロード(ZIP)
+      </button>
+
+      <form class="backup__import" onSubmit={onRestore}>
+        <label class={`backup__pick${working ? " is-disabled" : ""}`}>
+          <Icon d={UPLOAD_ICON} />
+          ZIP を選ぶ(複数可)
+          <input class="backup__file" type="file" multiple accept=".zip,application/zip" disabled={working} onChange={(e) => setFiles(Array.from((e.currentTarget as HTMLInputElement).files ?? []))} />
+        </label>
+        <span class="backup__filename" aria-live="polite">
+          {files.length === 0 ? "ファイルはまだ選ばれていません" : `${files.length}個(${formatFileSize(files.reduce((s, f) => s + f.size, 0))})`}
+        </span>
+        <button type="submit" class="backup__btn backup__btn--primary backup__submit" disabled={working || files.length === 0}>
+          写真を戻す
+        </button>
+      </form>
+      <p class="backup__desc">写真を戻す前に、上の「バックアップを読み込む」で、バックアップ(JSONL)を読み込んでください(写真の日付・キャプション・紐づけ先は、そちらから戻ります)。すでにある写真は、上書きしません。</p>
+
+      {state.kind === "working" && (
+        <p class="backup__desc" role="status">
+          {state.label}
+          {state.total > 0 ? ` ${state.done} / ${state.total}` : ""}
+        </p>
+      )}
+      {state.kind === "error" && (
+        <p class="backup__error" role="alert">
+          {state.message}
+        </p>
+      )}
+      {state.kind === "saved" && (
+        <div class="backup__result" role="status" aria-label="写真の保存結果">
+          <span class="backup__result-title">
+            {state.summary.saved}枚を、{state.summary.parts}個の ZIP に保存しました(全{state.summary.total}枚)
+          </span>
+          {state.summary.failed.length > 0 && (
+            <ul class="backup__errors">
+              {state.summary.failed.slice(0, 50).map((f) => (
+                <li key={f.id}>
+                  {f.id}: {f.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {state.kind === "restored" && (
+        <div class="backup__result" role="status" aria-label="写真を戻した結果">
+          <span class="backup__result-title">写真を戻した結果({state.summary.total}枚)</span>
+          <div class="backup__counts">
+            <div class="backup__count">
+              <span>戻した</span>
+              <b class="num">{state.summary.restored}</b>
+            </div>
+            <div class="backup__count">
+              <span>すでにある</span>
+              <b class="num">{state.summary.exists}</b>
+            </div>
+            <div class={`backup__count${state.summary.noRecord > 0 ? " backup__count--warn" : ""}`}>
+              <span>情報がない</span>
+              <b class="num">{state.summary.noRecord}</b>
+            </div>
+            <div class={`backup__count${state.summary.failed.length > 0 ? " backup__count--warn" : ""}`}>
+              <span>戻せなかった</span>
+              <b class="num">{state.summary.failed.length}</b>
+            </div>
+          </div>
+          {state.summary.noRecord > 0 && <p class="backup__more">「情報がない」は、バックアップ(JSONL)を、まだ読み込んでいない写真です。JSONL を読み込んでから、もう一度戻してください。</p>}
+          {state.summary.stoppedBy && <p class="backup__error">途中で止まりました(通信の失敗など: {state.summary.stoppedBy})。もう一度戻すと、続きから戻せます(すでにある写真は上書きしません)。</p>}
+          {[...state.zipErrors, ...state.summary.failed.slice(0, 50).map((f) => `${f.name}: ${f.reason}`)].length > 0 && (
+            <ul class="backup__errors">
+              {[...state.zipErrors, ...state.summary.failed.slice(0, 50).map((f) => `${f.name}: ${f.reason}`)].map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

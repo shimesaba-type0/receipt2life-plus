@@ -10,7 +10,7 @@ import { addLink, deleteLink, refreshLinkTitle, updateLink } from "../core/links
 import type { TitleFetcher } from "../core/link-titles";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
-import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../core/photos";
+import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
 import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
@@ -407,6 +407,21 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
         "content-security-policy": "default-src 'none'; sandbox",
       },
     });
+  });
+
+  // バックアップの写真(ZIP)から、写真の実体だけを戻す。本文は画像そのもの(Content-Length が必要)。メタ情報は、先に読み込んだバックアップ(JSONL)の行から
+  app.put("/api/photos/:id/restore", async (c) => {
+    const rawLength = c.req.header("content-length");
+    if (rawLength === undefined) return c.json({ ok: false as const, errors: [{ field: "body", message: "body: Content-Length が必要です" }] }, 411);
+    const length = Number(rawLength);
+    if (!Number.isFinite(length) || length > MAX_PHOTO_BYTES) return fail(c, 413, [{ field: "file", message: "file: 写真が大きすぎます(上限は5MB)" }]);
+    try {
+      const result = await restorePhoto(c.env.DB, c.env.PHOTOS, c.req.param("id"), await c.req.arrayBuffer());
+      if (!result.ok) return fail(c, result.status, result.errors);
+      return c.json({ ok: true as const, status: result.status, id: result.id, message: result.message });
+    } catch {
+      return fail(c, 500, [{ field: "file", message: "file: 写真を戻せませんでした。しばらくしてからもう一度試してください" }]);
+    }
   });
 
   app.delete("/api/photos/:id", async (c) => {

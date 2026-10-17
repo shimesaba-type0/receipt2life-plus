@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addEvent, deleteEvent } from "../../src/core/events";
-import { deletePhoto, detectImageType, getPhoto, MAX_PHOTO_BYTES, savePhoto } from "../../src/core/photos";
+import { deletePhoto, detectImageType, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../../src/core/photos";
 import { addTransactions } from "../../src/core/transactions";
 import { NOW, testEnv } from "../helpers";
 
@@ -141,3 +141,45 @@ describe("deleteEvent", () => {
     expect(saved.ok).toBe(true);
   });
 });
+
+describe("restorePhoto(バックアップから、写真の実体だけを戻す)", () => {
+  async function savedThenLost() {
+    const res = await savePhoto(env().DB, env().PHOTOS, buf(JPEG), { date: "2026-10-10", caption: "朝食" }, { now: NOW });
+    if (!res.ok) throw new Error("save failed");
+    const row = await env().DB.prepare("SELECT r2_key FROM attachments WHERE id = ?").bind(res.photo.id).first<{ r2_key: string }>();
+    // R2 の実体だけを失う(DBの行は、バックアップ(JSONL)から戻した状態)
+    await env().PHOTOS.delete(row!.r2_key);
+    return { id: res.photo.id, key: row!.r2_key };
+  }
+
+  it("行はあるが実体がないとき、DBの行のキーに実体を戻す。もう一度戻しても上書きしない", async () => {
+    const { id, key } = await savedThenLost();
+    expect(await getPhoto(env().DB, env().PHOTOS, id)).toMatchObject({ ok: false, status: 404 });
+    const r1 = await restorePhoto(env().DB, env().PHOTOS, id, buf(PNG));
+    expect(r1).toMatchObject({ ok: true, status: "restored", id });
+    const obj = await env().PHOTOS.get(key);
+    expect(obj?.httpMetadata?.contentType).toBe("image/png");
+    const back = await getPhoto(env().DB, env().PHOTOS, id);
+    expect(back.ok).toBe(true);
+    // 2回目は、すでにあるので上書きしない(JPEGを送っても、PNGのまま)
+    const r2 = await restorePhoto(env().DB, env().PHOTOS, id, buf(JPEG));
+    expect(r2).toMatchObject({ ok: true, status: "exists" });
+    expect((await env().PHOTOS.get(key))?.httpMetadata?.contentType).toBe("image/png");
+  });
+
+  it("DBに行(バックアップのJSONL)が無い id は断る。保存先のキーは、送り手に決めさせない", async () => {
+    const r = await restorePhoto(env().DB, env().PHOTOS, "no-such-id", buf(JPEG));
+    expect(r).toMatchObject({ ok: false, status: 404 });
+    if (!r.ok) expect(r.errors[0]!.message).toContain("JSONL");
+    expect(await listKeys()).toEqual([]);
+  });
+
+  it("画像でないもの・空・大きすぎるものは断り、実体を作らない", async () => {
+    const { id } = await savedThenLost();
+    expect(await restorePhoto(env().DB, env().PHOTOS, id, new TextEncoder().encode("<html>").buffer as ArrayBuffer)).toMatchObject({ ok: false, status: 400 });
+    expect(await restorePhoto(env().DB, env().PHOTOS, id, new ArrayBuffer(0))).toMatchObject({ ok: false, status: 400 });
+    expect(await restorePhoto(env().DB, env().PHOTOS, id, new ArrayBuffer(MAX_PHOTO_BYTES + 1))).toMatchObject({ ok: false, status: 413 });
+    expect(await listKeys()).toEqual([]);
+  });
+});
+

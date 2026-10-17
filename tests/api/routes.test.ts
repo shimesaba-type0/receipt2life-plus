@@ -287,3 +287,26 @@ describe("書き込みの保護(CSRF・Content-Type)", () => {
     expect((await call("/api/photos/missing")).headers.get("cache-control")).toBe("private, no-store");
   });
 });
+
+describe("写真の実体を戻す(PUT /api/photos/:id/restore)", () => {
+  it("実体を失った写真に、画像を戻せる。行が無い id は404、画像でないものは400、Content-Length なしは411", async () => {
+    const { photo } = await json(await upload(JPEG, { date: "2026-10-10", caption: "朝" }));
+    // 実体だけを失う
+    const row = await testEnv().DB.prepare("SELECT r2_key FROM attachments WHERE id = ?").bind(photo.id).first<{ r2_key: string }>();
+    await testEnv().PHOTOS.delete(row!.r2_key);
+    expect((await call(photo.url)).status).toBe(404);
+
+    const put = (id: string, body: Uint8Array) => call(`/api/photos/${id}/restore`, { method: "PUT", body: body.slice().buffer as ArrayBuffer, headers: { "content-length": String(body.byteLength) } });
+    const ok = await put(photo.id, PNG);
+    expect(ok.status).toBe(200);
+    expect(await json(ok)).toMatchObject({ ok: true, status: "restored", id: photo.id });
+    expect((await call(photo.url)).headers.get("content-type")).toBe("image/png");
+    expect(await json(await put(photo.id, JPEG))).toMatchObject({ status: "exists" });
+
+    expect((await put("no-such-id", JPEG)).status).toBe(404);
+    expect((await put(photo.id, new TextEncoder().encode("<html>"))).status).toBe(400);
+    // Content-Length なし(チャンク転送)は断る
+    const noLength = await call(`/api/photos/${photo.id}/restore`, { method: "PUT", body: new ReadableStream({ start(c) { c.enqueue(JPEG); c.close(); } }), headers: {}, duplex: "half" } as RequestInit);
+    expect([411, 400, 404]).toContain(noLength.status);
+  });
+});
