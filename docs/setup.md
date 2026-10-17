@@ -105,6 +105,21 @@ D1 の無料プランには、**1日あたり**の上限(読んだ行 500万、�
 - 取得は5分ごと(同じ結果をキャッシュ)。Cloudflare の分析 API の呼び出しは無料
 - 使用量が上限の70%を超えると、ホームに「注意」が出る(90%を超えると「上限に近い」)。問題があるときだけ、Cloudflare のダッシュボードを開けばよい
 
+### 8. ステージング環境を作る(人間が行う。最初の1回)
+
+PR を出すと自動で載る、練習用の別環境。本番とは、Worker・D1・R2・Access のアプリ・アドレスがすべて別(`wrangler.toml` の `[env.staging]`)。AI(MCP)のつなぎ込みは、ステージングでは確かめない。
+
+1. GitHub: Settings → Environments に `staging` を作る(承認者は付けない。ブランチの制限もしない)
+2. Cloudflare: API トークンを作る(権限: Workers Scripts 編集、D1 編集、Workers R2 Storage 編集、Account Settings 読み取り)。1つの Worker だけには絞れないので、本番にも触れる権限になる。だから、次の `staging` 環境のシークレットにだけ入れる
+3. GitHub: `staging` 環境の Environment secrets に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` を登録する。リポジトリの Variables(環境ではなく、リポジトリ全体)に `CLOUDFLARE_STAGING_DEPLOY_ENABLED=true` を登録する。本番用の `CLOUDFLARE_DEPLOY_ENABLED` は作らない
+4. PR を出す。`deploy-staging` が動くと、Cloudflare に Worker `receipt2life-staging`・D1・R2 が自動で作られる
+5. Cloudflare: Worker `receipt2life-staging` に、本番と同じドメインの別のサブドメインを、カスタムドメインとして付ける
+6. Zero Trust: Access のアプリを、ステージングの Worker 用に作る(種類は Workers。ポリシーは本番と同じ)。「追加設定」の AUD タグをコピーする(本番とは別の値)
+7. Worker `receipt2life-staging` の「ランタイム変数とシークレット」(プロダクション)に、シークレット `ACCESS_TEAM_DOMAIN`(本番と同じ)と `ACCESS_AUD`(手順6の値)を入れて、「デプロイ」まで押す
+8. ステージングのアドレスの `/healthz` を開き、ログインして `{"ok":true}` が出れば完成
+
+初回のデプロイで D1 が見つからないと出たときは、D1 の ID を GitHub のシークレットから渡す形に、エージェントが CI を直す(ID はリポジトリには書かない)。
+
 ### 書き込みの回数の制限
 
 暴走・無限ループよけに、アプリ側で書き込みの回数を数えて、短時間に多すぎたら止める(429)。画面・API・インポートの書き込みは **1分に120回まで**、MCP は **1分に240回まで**(超えると、待つ秒数つきのエラーを返し、DB には書かない)。数えるのは Worker のインスタンスごとの最良努力で、制限のための書き込みはしない(D1 の書き込みを増やさない)。確実な上限が必要になったら、Cloudflare の Rate Limiting(設定が必要)を足す。
