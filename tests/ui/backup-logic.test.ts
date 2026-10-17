@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  IMPORT_FILE_MAX_BYTES,
+  IMPORT_FILE_MAX_LINES,
   IMPORT_MAX_BYTES,
   IMPORT_MAX_LINES,
   errorLines,
   formatErrorLine,
   formatFileSize,
   importHttpError,
+  importInChunks,
+  planImportChunks,
   reportHref,
   reportQuery,
   summarizeImport,
   validateImportFile,
   validateImportText,
+  type ImportResponse,
   type ImportRow,
 } from "../../ui/src/pages/backupLogic";
 
@@ -20,6 +25,10 @@ describe("上限", () => {
   it("サーバーと同じ値", () => {
     expect(IMPORT_MAX_BYTES).toBe(5 * 1024 * 1024);
     expect(IMPORT_MAX_LINES).toBe(5000);
+  });
+  it("画面で選べるファイルは、サーバーの1回の上限より大きい(小分けして送るため)", () => {
+    expect(IMPORT_FILE_MAX_BYTES).toBeGreaterThan(IMPORT_MAX_BYTES);
+    expect(IMPORT_FILE_MAX_LINES).toBeGreaterThan(IMPORT_MAX_LINES);
   });
 });
 
@@ -42,10 +51,11 @@ describe("validateImportFile(読む前に、サイズと空を見る)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("空");
   });
-  it("5MB超", () => {
-    const r = validateImportFile(IMPORT_MAX_BYTES + 1);
+  it("50MB超", () => {
+    expect(validateImportFile(IMPORT_MAX_BYTES + 1)).toEqual({ ok: true });
+    const r = validateImportFile(IMPORT_FILE_MAX_BYTES + 1);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("5MB");
+    if (!r.ok) expect(r.error).toContain("50MB");
   });
 });
 
@@ -56,17 +66,17 @@ describe("validateImportText(行数)", () => {
   it("空白だけは断る", () => {
     expect(validateImportText("  \n\n").ok).toBe(false);
   });
-  it("5000行ちょうどは通り、超えると断る", () => {
+  it("サーバーの1回の上限(5000行)を超えても通る。画面の上限(10万行)を超えると断る", () => {
     const line = '{"type":"event"}';
-    expect(validateImportText(Array(IMPORT_MAX_LINES).fill(line).join("\n"))).toEqual({ ok: true, count: IMPORT_MAX_LINES });
-    const r = validateImportText(Array(IMPORT_MAX_LINES + 1).fill(line).join("\n"));
+    expect(validateImportText(Array(IMPORT_MAX_LINES + 1).fill(line).join("\n"))).toEqual({ ok: true, count: IMPORT_MAX_LINES + 1 });
+    const r = validateImportText(Array(IMPORT_FILE_MAX_LINES + 1).fill(line).join("\n"));
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("5,000行");
+    if (!r.ok) expect(r.error).toContain("100,000行");
   });
   it("JSON配列は件数で数える", () => {
     expect(validateImportText('[{"a":1},{"a":2}]')).toEqual({ ok: true, count: 2 });
-    const r = validateImportText(JSON.stringify(Array(IMPORT_MAX_LINES + 1).fill({})));
-    expect(r.ok).toBe(false);
+    expect(validateImportText(JSON.stringify(Array(IMPORT_MAX_LINES + 1).fill({}))).ok).toBe(true);
+    expect(validateImportText(JSON.stringify(Array(IMPORT_FILE_MAX_LINES + 1).fill({}))).ok).toBe(false);
   });
   it("壊れた配列は、サーバーに判断を任せる", () => {
     expect(validateImportText("[{").ok).toBe(true);
@@ -138,3 +148,126 @@ describe("reportQuery(Markdown / HTML の期間)", () => {
     expect(reportHref("html", "year=2026")).toBe("/export/html?year=2026");
   });
 });
+
+const jl = (...rows: object[]) => rows.map((r) => JSON.stringify(r)).join("\n");
+const ev = (id: string) => ({ type: "event", id });
+const tx = (id: string) => ({ type: "transaction", id });
+const item = (id: string, transaction_id: string) => ({ type: "item", id, transaction_id });
+
+describe("planImportChunks(大きなファイルを小分けにする)", () => {
+  it("小さなファイルは1つの塊。行番号は元のまま", () => {
+    const chunks = planImportChunks(jl(ev("e1"), tx("t1"), item("i1", "t1")));
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.origLines).toEqual([1, 2, 3]);
+  });
+
+  it("取引と明細は、必ず同じ塊に入れる(明細が別の塊の取引を指さない)。取引の直後に、その明細が並ぶ", () => {
+    // 書き出しの順: 取引が先に並び、明細は後ろにまとまっている
+    const lines = jl(tx("t1"), tx("t2"), tx("t3"), item("i1", "t1"), item("i2", "t2"), item("i3", "t3"), item("i4", "t1"));
+    const chunks = planImportChunks(lines, 4); // 1塊は4行まで
+    const types = chunks.map((c) => c.text.trim().split("\n").map((l) => JSON.parse(l) as { type: string; id: string; transaction_id?: string }));
+    for (const rows of types) {
+      for (const r of rows) {
+        if (r.type === "item") expect(rows.some((x) => x.type === "transaction" && x.id === r.transaction_id)).toBe(true);
+      }
+    }
+    // 全部の行が、1回ずつ入っている
+    expect(chunks.flatMap((c) => c.origLines).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    // t1 とその明細(2つ)は一体(3行)
+    const first = types[0]!;
+    expect(first.filter((r) => r.type === "item").map((r) => r.id)).toEqual(["i1", "i4"]);
+  });
+
+  it("取引のない明細の行や、そのほかの種類の行は、元の順のまま", () => {
+    const chunks = planImportChunks(jl(ev("e1"), ev("e2"), item("i9", "no-such-tx"), { type: "link", id: "l1" }), 2);
+    expect(chunks.map((c) => c.origLines)).toEqual([[1, 2], [3, 4]]);
+  });
+
+  it("空行は飛ばし、行番号は元のファイルの行(空行を含めた番号)に合わせる", () => {
+    const chunks = planImportChunks(`${JSON.stringify(ev("e1"))}\n\n${JSON.stringify(ev("e2"))}\n`);
+    expect(chunks[0]!.origLines).toEqual([1, 3]);
+  });
+
+  it("壊れた行も、そのまま送る(判定はサーバーが行う)。JSON配列も受け付ける", () => {
+    expect(planImportChunks("not json\n")[0]!.text).toBe("not json\n");
+    const arr = planImportChunks(JSON.stringify([ev("e1"), ev("e2")]));
+    expect(arr[0]!.origLines).toEqual([1, 2]);
+  });
+
+  it("5000行を超えるファイルも、1回5000行以内の塊になる(既定は400行)", () => {
+    const rows = Array.from({ length: 5200 }, (_, i) => ev(`e${i}`));
+    const chunks = planImportChunks(jl(...rows));
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(c.origLines.length).toBeLessThanOrEqual(400);
+    expect(chunks.flatMap((c) => c.origLines)).toHaveLength(5200);
+  });
+
+  it("バイト数でも分ける", () => {
+    const big = "x".repeat(300);
+    const rows = Array.from({ length: 10 }, (_, i) => ({ type: "event", id: `e${i}`, note: big }));
+    const chunks = planImportChunks(jl(...rows), 1000, 1000);
+    expect(chunks.length).toBeGreaterThan(2);
+  });
+});
+
+describe("importInChunks(順に送って、結果を1つにまとめる)", () => {
+  const okRes = (rows: ImportRow[]): ImportResponse & { status: number } => ({ ok: true, status: 200, summary: { total: rows.length, ok: 0, skipped: 0, errors: 0 }, results: rows });
+  const noSleep = async () => undefined;
+
+  it("塊ごとの結果を足し、行番号を元のファイルの行に直す", async () => {
+    const chunks = [
+      { text: "a\nb\n", origLines: [1, 5] },
+      { text: "c\n", origLines: [9] },
+    ];
+    const sent: string[] = [];
+    const out = await importInChunks(
+      chunks,
+      async (body) => {
+        sent.push(body);
+        return okRes(body === "a\nb\n" ? [row(1, "ok"), row(2, "error", "だめ")] : [row(1, "skipped_exists")]);
+      },
+      { sleep: noSleep },
+    );
+    expect(sent).toEqual(["a\nb\n", "c\n"]);
+    expect(out.kind).toBe("done");
+    if (out.kind === "done") expect(out.rows.map((r) => [r.line, r.status])).toEqual([[1, "ok"], [5, "error"], [9, "skipped_exists"]]);
+  });
+
+  it("途中で失敗したら、そこで止まり、読めた分の結果と、何回目で止まったかを返す", async () => {
+    const chunks = [1, 2, 3].map((n) => ({ text: `${n}\n`, origLines: [n] }));
+    let n = 0;
+    const out = await importInChunks(chunks, async () => {
+      n++;
+      return n === 2 ? { ok: false, status: 500, error: "" } : okRes([row(1, "ok")]);
+    }, { sleep: noSleep });
+    expect(out.kind).toBe("stopped");
+    if (out.kind === "stopped") {
+      expect(out.failedAt).toBe(2);
+      expect(out.total).toBe(3);
+      expect(out.rows).toHaveLength(1);
+      expect(out.message).toContain("500");
+    }
+    expect(n).toBe(2);
+  });
+
+  it("429(回数の制限)は、待って送り直す。続けて失敗したら止まる", async () => {
+    const waits: number[] = [];
+    let calls = 0;
+    const ok = await importInChunks([{ text: "x\n", origLines: [1] }], async () => {
+      calls++;
+      return calls < 3 ? { ok: false, status: 429, error: "" } : okRes([row(1, "ok")]);
+    }, { sleep: async (ms) => void waits.push(ms) });
+    expect(ok.kind).toBe("done");
+    expect(waits).toHaveLength(2);
+
+    const never = await importInChunks([{ text: "x\n", origLines: [1] }], async () => ({ ok: false, status: 429, error: "" }), { sleep: noSleep });
+    expect(never.kind).toBe("stopped");
+  });
+
+  it("進み具合を知らせる", async () => {
+    const seen: string[] = [];
+    await importInChunks([{ text: "a\n", origLines: [1] }, { text: "b\n", origLines: [2] }], async () => okRes([row(1, "ok")]), { sleep: noSleep, onProgress: (d, t) => seen.push(`${d}/${t}`) });
+    expect(seen).toEqual(["0/2", "1/2", "2/2"]);
+  });
+});
+

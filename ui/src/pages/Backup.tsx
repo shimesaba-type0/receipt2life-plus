@@ -4,12 +4,14 @@ import { importBackup } from "../api";
 import {
   errorLines,
   formatFileSize,
-  importHttpError,
+  importInChunks,
+  planImportChunks,
   summarizeImport,
   validateImportFile,
   validateImportText,
   reportHref,
   reportQuery,
+  type ImportChunk,
   type ImportRow,
   type ReportInput,
   type ReportMode,
@@ -30,9 +32,20 @@ function Icon(props: { d: string[] }) {
 }
 
 // 選んだファイルの状態。ok のときだけ「読み込む」を押せる
-type Picked = { kind: "none" } | { kind: "checking"; name: string; size: number } | { kind: "ready"; file: File; count: number } | { kind: "invalid"; name: string; size: number; error: string };
+type Picked =
+  | { kind: "none" }
+  | { kind: "checking"; name: string; size: number }
+  // chunks: サーバーの上限の内側に小分けした塊(大きなファイルは、何回かに分けて送る)
+  | { kind: "ready"; name: string; size: number; count: number; chunks: ImportChunk[] }
+  | { kind: "invalid"; name: string; size: number; error: string };
 
-type Outcome = { kind: "none" } | { kind: "sending" } | { kind: "error"; message: string } | { kind: "done"; rows: ImportRow[] };
+type Outcome =
+  | { kind: "none" }
+  | { kind: "sending"; done: number; total: number }
+  | { kind: "error"; message: string }
+  | { kind: "done"; rows: ImportRow[] }
+  // 途中で止まった(続きは、もう一度「読み込む」を押す。すでに入った分は、重複としてスキップされる)
+  | { kind: "stopped"; rows: ImportRow[]; failedAt: number; total: number; message: string };
 
 export function Backup() {
   return (
@@ -172,18 +185,20 @@ function ImportCard() {
     }
     const textCheck = validateImportText(text);
     if (!textCheck.ok) setPicked({ kind: "invalid", name: file.name, size: file.size, error: textCheck.error });
-    else setPicked({ kind: "ready", file, count: textCheck.count });
+    else setPicked({ kind: "ready", name: file.name, size: file.size, count: textCheck.count, chunks: planImportChunks(text) });
   }
 
   async function onSubmit(e: Event) {
     e.preventDefault();
     if (picked.kind !== "ready" || sendingRef.current) return;
     sendingRef.current = true;
-    setOutcome({ kind: "sending" });
+    setOutcome({ kind: "sending", done: 0, total: picked.chunks.length });
     try {
-      const res = await importBackup(picked.file);
-      if (res.ok) setOutcome({ kind: "done", rows: res.results });
-      else setOutcome({ kind: "error", message: importHttpError(res.status, res.error) });
+      const res = await importInChunks(picked.chunks, (body) => importBackup(new Blob([body])), {
+        onProgress: (done, total) => setOutcome({ kind: "sending", done, total }),
+      });
+      if (res.kind === "done") setOutcome({ kind: "done", rows: res.rows });
+      else setOutcome({ kind: "stopped", rows: res.rows, failedAt: res.failedAt, total: res.total, message: res.message });
     } catch (err) {
       setOutcome({ kind: "error", message: err instanceof Error ? err.message : "読み込みに失敗しました。" });
     } finally {
@@ -193,7 +208,7 @@ function ImportCard() {
 
   const fileLabel =
     picked.kind === "ready"
-      ? `${picked.file.name}(${formatFileSize(picked.file.size)}・${picked.count.toLocaleString("en-US")}行)`
+      ? `${picked.name}(${formatFileSize(picked.size)}・${picked.count.toLocaleString("en-US")}行${picked.chunks.length > 1 ? `・${picked.chunks.length}回に分けて送る` : ""})`
       : picked.kind === "none"
         ? "ファイルはまだ選ばれていません"
         : `${picked.name}(${formatFileSize(picked.size)})`;
@@ -204,7 +219,7 @@ function ImportCard() {
         <h2 id="backup-import-h" class="backup__h2">
           バックアップを読み込む
         </h2>
-        <p class="backup__desc">書き出したJSONLを選びます。すでにある記録は上書きせず、重複はスキップします。5MB・5,000行まで。</p>
+        <p class="backup__desc">書き出したJSONLを選びます。すでにある記録は上書きせず、重複はスキップします。大きなファイルは、自動で小分けして順に送ります(50MB・10万行まで)。</p>
       </div>
 
       <form class="backup__import" onSubmit={onSubmit}>
@@ -217,7 +232,7 @@ function ImportCard() {
           {fileLabel}
         </span>
         <button type="submit" class="backup__btn backup__btn--primary backup__submit" disabled={picked.kind !== "ready" || sending} aria-busy={sending}>
-          {sending ? "読み込み中…" : "読み込む"}
+          {outcome.kind === "sending" ? `読み込み中… ${outcome.done} / ${outcome.total}` : "読み込む"}
         </button>
       </form>
 
@@ -231,7 +246,12 @@ function ImportCard() {
           {outcome.message}
         </p>
       )}
-      {outcome.kind === "done" && <ImportResult rows={outcome.rows} />}
+      {outcome.kind === "stopped" && (
+        <p class="backup__error" role="alert">
+          {outcome.total}回に分けて送るうち、{outcome.failedAt}回目で止まりました({outcome.message})。もう一度「読み込む」を押すと、続きから戻せます(すでに入った分は、重複としてスキップされ、増えません)。
+        </p>
+      )}
+      {(outcome.kind === "done" || outcome.kind === "stopped") && <ImportResult rows={outcome.rows} />}
     </section>
   );
 }
