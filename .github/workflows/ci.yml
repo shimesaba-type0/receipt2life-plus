@@ -44,10 +44,21 @@ jobs:
       - run: npm ci
       # Web UI(ui/dist)をビルドする。ui/dist は git に入れていないので、ここで作らないと、画面のファイルが空のままデプロイされる。
       # VITE_STAGING_LABEL を渡すと、画面の上に「STAGING・PR #番号」の帯が出る(本番のビルドには渡さない)
-      - run: VITE_STAGING_LABEL="PR #${PR_NUMBER} · ${HEAD_SHA:0:7}" npm run build
+      # run: に直接書くと、YAML が「 #」以降をコメントとして切ってしまうので、ブロック形式で書く
+      - run: |
+          VITE_STAGING_LABEL="PR #${PR_NUMBER} · ${HEAD_SHA:0:7}" npm run build
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      # ステージングの D1 と R2 は、無ければ作る(あれば何もしない)。
+      # wrangler の自動作成は、マイグレーションの前には効かず、「D1 が見つからない」で止まるため、先に作っておく
+      - name: ステージングの D1 と R2 を、無ければ作る
+        run: |
+          npx wrangler d1 create receipt2life-staging || echo "D1 は、すでにある(または作れなかった。作れなかったときは、次の工程がエラーで教えてくれる)"
+          npx wrangler r2 bucket create receipt2life-staging || echo "R2 は、すでにある(または作れなかった。作れなかったときは、デプロイがエラーで教えてくれる)"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # デプロイの直前にD1のマイグレーションを当てる(Cloudflare側のデプロイコマンドと揃える)
       - uses: cloudflare/wrangler-action@v3
         with:

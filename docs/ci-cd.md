@@ -9,6 +9,17 @@
 
 `npm run check` は、型チェック → lint → テスト(vitest) → ビルド(`npm run build`。Web UI を `ui/dist` に作る)の順に実行する。デプロイは、変数が `true` のときだけ動く。**ステージングは `CLOUDFLARE_STAGING_DEPLOY_ENABLED`、本番は `CLOUDFLARE_DEPLOY_ENABLED`** で、別々に切り替える(本番は Cloudflare 側の自動デプロイが行っているので、`CLOUDFLARE_DEPLOY_ENABLED` は未設定のまま。ステージングだけを有効にできる)。
 
+## ステージングの流れ(PR → 自動でステージング → 確認 → マージ)
+
+1. PR を出す(ドラフトでも動く)。テストが通ると、`deploy-staging` が、D1 のマイグレーションとデプロイを、ステージングに行う
+2. 画面の上に「STAGING ・ PR #番号 ・ コミット」の帯が出る。ステージングの画面で確かめる
+3. NG や追加があれば、同じ PR に追加コミットを積む。自動でステージングに出し直される
+4. よければマージ。本番は、Cloudflare 側の自動デプロイが行う
+
+- ステージングに載るのは、最後に更新した PR 1つだけ(同時に複数の PR を出すと、後の PR が上書きする)。確認は1つずつ行う
+- ステージングには、ダミーのデータだけを入れる(本物の支出・写真・本番のバックアップは入れない)
+- ステージングの作り方(最初の1回)は、[setup.md](setup.md) の「ステージング環境を作る」を参照
+
 ## 人間が行う設定(値はリポジトリに書かない)
 
 1. GitHub の Settings → Environments で `staging` と `production` を作る
