@@ -22,12 +22,13 @@ jobs:
       - run: npm run check
 
   # PR: テストが通ったらステージング(開発環境)へデプロイ
-  # 変数 CLOUDFLARE_DEPLOY_ENABLED=true を設定するまでは動かない(docs/ci-cd.md)
+  # 変数 CLOUDFLARE_STAGING_DEPLOY_ENABLED=true を設定するまでは動かない(docs/ci-cd.md)。
+  # 本番用の CLOUDFLARE_DEPLOY_ENABLED とは別にしてある(本番は Cloudflare 側の自動デプロイが行うので、ステージングだけを有効にできるように)
   deploy-staging:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+      vars.CLOUDFLARE_STAGING_DEPLOY_ENABLED == 'true'
     needs: test
     runs-on: ubuntu-latest
     environment: staging
