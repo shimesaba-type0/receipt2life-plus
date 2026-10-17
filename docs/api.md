@@ -283,4 +283,4 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 ## お知らせ
 
-`GET /api/notices` → `{ok, notices: [{id, level: "info"｜"warn", title, body, href}]}`。保存はせず、そのときの状態から作る(解決すると消える)。いまの種類は、バックアップ(最後から30日以上)だけ。
+`GET /api/notices` → `{ok, notices: [{id, level: "info"｜"warn", title, body, href}]}`。保存はせず、そのときの状態から作る(解決すると消える)。いまの種類は、バックアップ(最後から30日以上)と、使用量(D1 が上限の70%以上は warn、90%以上は danger。使用量が取れないときは出さない)。

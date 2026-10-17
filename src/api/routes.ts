@@ -71,7 +71,11 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.get("/api/backup-status", async (c) => c.json({ ok: true as const, ...(await getBackupStatus(c.env.DB)) }));
 
   // ヘッダーの「お知らせ」
-  app.get("/api/notices", async (c) => c.json({ ok: true as const, notices: await listNotices(c.env.DB) }));
+  app.get("/api/notices", async (c) => {
+    // 使用量が取れないとき(未設定・通信の失敗)は、使用量のお知らせだけ出さない
+    const usage = await getUsage(c.env, { fetchImpl: options.usageFetch }).catch(() => undefined);
+    return c.json({ ok: true as const, notices: await listNotices(c.env.DB, { usage }) });
+  });
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 

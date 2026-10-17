@@ -30,6 +30,20 @@ describe("使用量のAPI", () => {
     expect(JSON.stringify(await json(bad))).not.toContain("dummy-token");
   });
 
+  it("上限に近いときは、お知らせ(/api/notices)に使用量が出る。取れないときは出さない", async () => {
+    const env = { ...base(), CF_API_TOKEN: "dummy-token", CF_ACCOUNT_ID: "dummy-account", D1_DATABASE_ID: "dummy-db" };
+    const today = new Date().toISOString().slice(0, 10);
+    const body = { data: { viewer: { accounts: [{ d1AnalyticsAdaptiveGroups: [{ sum: { readQueries: 1, writeQueries: 1, rowsRead: 10, rowsWritten: 95_000 }, dimensions: { date: today, databaseId: "dummy-db" } }] }] } } };
+    const high = (async () => new Response(JSON.stringify(body))) as unknown as typeof fetch;
+    const res = await createApp({ usageFetch: high }).request("http://localhost/api/notices", undefined, env);
+    expect(await json(res)).toMatchObject({ ok: true, notices: [{ id: "usage", level: "danger", href: "/usage", body: "書いた行が上限の 95% です。" }] });
+
+    clearUsageCache();
+    const denied = (async () => new Response("{}", { status: 403 })) as unknown as typeof fetch;
+    const none = await createApp({ usageFetch: denied }).request("http://localhost/api/notices", undefined, env);
+    expect(await json(none)).toEqual({ ok: true, notices: [] });
+  });
+
   it("未認証は401", async () => {
     expect((await createApp().request("http://example.test/api/usage", {}, { DB: testEnv().DB })).status).toBe(401);
   });
