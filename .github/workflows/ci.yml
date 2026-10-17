@@ -44,7 +44,9 @@ jobs:
       - run: npm ci
       # Web UI(ui/dist)をビルドする。ui/dist は git に入れていないので、ここで作らないと、画面のファイルが空のままデプロイされる。
       # VITE_STAGING_LABEL を渡すと、画面の上に「STAGING・PR #番号」の帯が出る(本番のビルドには渡さない)
-      - run: VITE_STAGING_LABEL="PR #${PR_NUMBER} · ${HEAD_SHA:0:7}" npm run build
+      # run: に直接書くと、YAML が「 #」以降をコメントとして切ってしまうので、ブロック形式で書く
+      - run: |
+          VITE_STAGING_LABEL="PR #${PR_NUMBER} · ${HEAD_SHA:0:7}" npm run build
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
