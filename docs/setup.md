@@ -134,5 +134,5 @@ PR を出すと自動で載る、練習用の別環境。本番とは、Worker�
 
 ### まだ手を付けていないこと
 
-- ステージングの実環境: `wrangler.toml` の `[env.staging]` は定義済みだが、実環境(`receipt2life-staging` の Worker、D1、R2、サービストークン、Access のアプリ)は未作成
+- ステージングの実環境: 作成済み(上の「8. ステージング環境を作る」。Worker・D1・R2・Access のアプリ・アドレス。バックアップのエクスポート/インポートの動作も確認済み)。未作成なのは、ステージング専用のサービストークン(自動テストでログインを通すためのもの。必要になったら作る)と、AI(MCP)のつなぎ込み(ステージングでは確かめない方針)
 - GitHub Actions からのデプロイ。ステージング(`CLOUDFLARE_STAGING_DEPLOY_ENABLED`)は、実環境を作るときに有効にする。本番(`CLOUDFLARE_DEPLOY_ENABLED`)は、Cloudflare 側の自動デプロイが行うので、未設定のまま(有効にする前の確認事項は [ci-cd.md](ci-cd.md))
