@@ -94,3 +94,10 @@ JSONL には写真の「情報」(日付・メモ・どの取引か)は入るが
 ## 戻す用の API
 
 `PUT /api/photos/:id/restore`(本文は画像のバイト列、5MB まで)。詳しくは docs/api.md。
+
+## バックアップの履歴とお知らせ
+
+- JSONL を書き出す(`GET /export`)たびに、日時を1行記録する(最新の50件だけ残す)。写真の ZIP を作るための読み出し(`?for=photos`)は数えない
+- `/backup` に「最後のバックアップ: 日付(N日前)」を出す
+- 最後から30日以上たったとき(まだ取っていないときも。記録が1件もない空の状態は除く)、ホームに「バックアップを書き出しましょう」のお知らせを出す
+- 状況は `GET /api/backup-status`(`last_backup_at`・`days_since`・`has_data`・`remind`)

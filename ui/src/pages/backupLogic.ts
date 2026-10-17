@@ -257,3 +257,14 @@ export async function importInChunks(
   options.onProgress?.(chunks.length, chunks.length);
   return { kind: "done", rows };
 }
+
+// バックアップの状況の文言(最後に書き出した日と、お知らせ)
+export function backupStatusText(lastAt: string | null, daysSince: number | null): string {
+  if (lastAt === null || daysSince === null) return "まだバックアップを書き出していません。";
+  const day = lastAt.slice(0, 10).replaceAll("-", "/");
+  return daysSince === 0 ? `最後のバックアップ: ${day}(今日)` : `最後のバックアップ: ${day}(${daysSince}日前)`;
+}
+
+export function backupRemindText(daysSince: number | null): string {
+  return daysSince === null ? "まだバックアップを取っていません。バックアップを書き出しましょう。" : `最後のバックアップから${daysSince}日たちました。バックアップを書き出しましょう。`;
+}

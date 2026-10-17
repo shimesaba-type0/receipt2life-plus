@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { todayJst } from "../core/dates";
+import { recordBackup } from "../core/backup-log";
 import type { AppEnv } from "../env";
 import { buildPeriodReport, resolveReportPeriod } from "../core/period-report";
 import { exportJsonl, importRecords, MAX_IMPORT_BYTES } from "../io/jsonl";
@@ -8,7 +9,9 @@ import { renderMarkdown } from "../io/report-markdown";
 
 // エクスポート(GET /export)とインポート(POST /import)のルート。実装は src/io に置く
 export function registerIoRoutes(app: Hono<AppEnv>): void {
-  app.get("/export", (c) => {
+  app.get("/export", async (c) => {
+    // 写真の ZIP を作るために一覧だけ読むとき(?for=photos)は、バックアップの履歴に数えない
+    if (c.req.query("for") !== "photos") await recordBackup(c.env.DB);
     const date = todayJst().replaceAll("-", "");
     return new Response(exportJsonl(c.env.DB), {
       headers: {

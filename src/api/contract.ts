@@ -870,6 +870,14 @@ export interface SearchChipView {
   q: string;
   type: SearchHitType | null;
 }
+export interface BackupStatusData {
+  ok: true;
+  last_backup_at: string | null;
+  days_since: number | null;
+  has_data: boolean;
+  remind: boolean;
+}
+
 export interface SearchChipsData {
   chips: SearchChipView[];
 }

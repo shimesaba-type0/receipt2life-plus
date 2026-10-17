@@ -1,8 +1,9 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
-import { fetchExportText, fetchPhotoBytes, importBackup, putPhotoBytes } from "../api";
+import { getBackupStatus, fetchExportText, fetchPhotoBytes, importBackup, putPhotoBytes } from "../api";
 import { buildPhotoZips, parsePhotoRecords, readZips, restorePhotos, type BuildSummary, type RestoreSummary } from "../photoBackup";
 import {
+  backupStatusText,
   errorLines,
   formatFileSize,
   importInChunks,
@@ -48,12 +49,24 @@ type Outcome =
   // 途中で止まった(続きは、もう一度「読み込む」を押す。すでに入った分は、重複としてスキップされる)
   | { kind: "stopped"; rows: ImportRow[]; failedAt: number; total: number; message: string };
 
+function BackupStatusLine() {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    getBackupStatus()
+      .then((res) => {
+        if (res.ok) setText(backupStatusText(res.last_backup_at, res.days_since));
+      })
+      .catch(() => undefined);
+  }, []);
+  return text === null ? null : <p class="backup__desc">{text}</p>;
+}
+
 export function Backup() {
   return (
     <section class="page backup">
       <header class="backup__header">
         <h1 class="backup__title brandmark-line"><BrandMark size={24} />エクスポートとバックアップ</h1>
-        <p class="backup__lead">記録は、いつでも自分の手元に取り出せます。バックアップ(JSONL)に写真は含まれません(別に保存してください)。</p>
+        <p class="backup__lead">記録は、いつでも自分の手元に取り出せます。バックアップ(JSONL)に写真の画像は含まれません(下の「写真のバックアップ」で、ZIP に保存してください)。</p>
       </header>
 
       <div class="backup__pair">
@@ -64,6 +77,7 @@ export function Backup() {
             </h2>
             <p class="backup__desc">全期間の支出・出来事・リンクなどを、1行1件のファイルで書き出します。あとから「読み込む」で元に戻せます。</p>
           </div>
+          <BackupStatusLine />
           {/* ファイル名は Content-Disposition(receipt2life-YYYYMMDD.jsonl)に従う */}
           <a class="backup__btn backup__btn--primary" href="/export" download>
             <Icon d={DOWNLOAD_ICON} />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
 import type { CategoriesData, HomeData, UsageData } from "../../../src/api/contract";
-import { getCategories, getHome, getUsage } from "../api";
+import { getBackupStatus, getCategories, getHome, getUsage } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { DiscountIcon } from "../components/DiscountIcon";
 import { BreakdownCard } from "../components/BreakdownCard";
@@ -9,6 +9,7 @@ import { CompareCard } from "../components/CompareCard";
 import { chipIcon } from "../categoryIcons";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
+import { backupRemindText } from "./backupLogic";
 import { homeNotice } from "./usageLogic";
 import { discountsView, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
 import "./Home.css";
@@ -60,6 +61,16 @@ export function Home() {
       .catch(() => undefined);
   }, []);
 
+  // 最後のバックアップから30日以上たったとき(まだ取っていないときも)だけ、お知らせを出す
+  const [backupNote, setBackupNote] = useState<string | null>(null);
+  useEffect(() => {
+    getBackupStatus()
+      .then((res) => {
+        if (res.ok && res.remind) setBackupNote(backupRemindText(res.days_since));
+      })
+      .catch(() => undefined);
+  }, []);
+
   const today = state.kind === "ready" ? state.data.today.date : todayJst();
 
   return (
@@ -90,6 +101,12 @@ export function Home() {
             もう一度読み込む
           </button>
         </div>
+      )}
+      {backupNote && (
+        <Link href="/backup" class="home__usage is-warn">
+          <span>{backupNote}</span>
+          <span aria-hidden="true">バックアップへ ›</span>
+        </Link>
       )}
       {usage && (
         <Link href="/usage" class={`home__usage is-${usage.level}`}>
