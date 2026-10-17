@@ -157,6 +157,27 @@ export async function getPhoto(db: D1Database, bucket: R2Bucket, id: string): Pr
   return { ok: true, body: object.body, contentType: stored as PhotoMime, size: object.size };
 }
 
+export type RestorePhotoResult = { ok: true; status: "restored" | "exists"; id: string; message: string } | PhotoFailure;
+
+// バックアップから写真の実体(画像)だけを戻す。メタ情報(日付・キャプション・紐づけ先・保存先のキー)は、先に読み込んだバックアップ(JSONL)の
+// attachment の行(DBの attachments)にあるので、それに合う id の写真だけを受ける。保存先のキーは、DBの行のものだけを使う(送り手には決めさせない)。
+// すでに実体があるときは、上書きしない(何度戻しても同じ)。実体の検証は、保存時と同じ(画像の形式・5MBまで)
+export async function restorePhoto(db: D1Database, bucket: R2Bucket, id: string, bytes: ArrayBuffer): Promise<RestorePhotoResult> {
+  if (!idParam.safeParse(id).success) return notFound(id);
+  const row = await db.prepare(`SELECT ${COLUMNS} FROM attachments WHERE id = ?`).bind(id).first<PhotoRow>();
+  if (!row) {
+    return fail(404, "id", `id: 「${id.slice(0, 64)}」の写真の情報がありません。先に、バックアップ(JSONL)を読み込んでください`);
+  }
+  if (bytes.byteLength === 0) return fail(400, "file", "file: 空のファイルです");
+  if (bytes.byteLength > MAX_PHOTO_BYTES) return fail(413, "file", "file: 写真が大きすぎます(上限は5MB)");
+  const mime = detectImageType(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 16)));
+  if (!mime) return fail(400, "file", "file: 画像の形式が分かりません。JPEG / PNG / WebP の写真を送ってください");
+  const head = await bucket.head(row.r2_key);
+  if (head) return { ok: true, status: "exists", id, message: "写真の実体は、すでにあります(上書きしません)" };
+  await bucket.put(row.r2_key, bytes, { httpMetadata: { contentType: mime } });
+  return { ok: true, status: "restored", id, message: "写真を戻しました" };
+}
+
 // R2 → 行の順に消す。途中で失敗しても、再実行すれば消える向きにする
 export async function deletePhoto(db: D1Database, bucket: R2Bucket, id: string): Promise<DeletePhotoResult> {
   if (!idParam.safeParse(id).success) return notFound(id);

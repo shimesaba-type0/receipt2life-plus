@@ -245,3 +245,49 @@ export async function importBackup(file: Blob): Promise<ImportResponse & { statu
   const message = typeof b.error === "string" ? b.error : (b.errors?.[0]?.message ?? "");
   return { ok: false, status: res.status, error: message };
 }
+
+// ---- 写真のバックアップ(ZIP) ----
+// 書き出し(JSONL)の全文。写真の一覧(attachment の行)を取るのに使う
+export async function fetchExportText(): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch("/export", { credentials: "same-origin" });
+  } catch {
+    throw new UnauthorizedError();
+  }
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) throw new Error(`書き出しに失敗しました(${res.status})`);
+  return res.text();
+}
+
+// 写真の画像を1枚取り出す(失敗は、理由つきで返す)
+export async function fetchPhotoBytes(id: string): Promise<{ ok: true; bytes: Uint8Array; contentType: string } | { ok: false; reason: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/photos/${encodeURIComponent(id)}`, { credentials: "same-origin" });
+  } catch {
+    throw new UnauthorizedError();
+  }
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) return { ok: false, reason: res.status === 404 ? "画像の実体が見つかりません" : `取り出せませんでした(${res.status})` };
+  return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()), contentType: res.headers.get("content-type") ?? "" };
+}
+
+// 写真の実体を戻す(先に、バックアップ(JSONL)を読み込んでおく)
+export async function putPhotoBytes(id: string, bytes: Uint8Array): Promise<{ ok: true; status: "restored" | "exists" } | { ok: false; status: number; error: string }> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/photos/${encodeURIComponent(id)}/restore`, { method: "PUT", credentials: "same-origin", body: bytes.slice().buffer as ArrayBuffer });
+  } catch {
+    return { ok: false, status: 0, error: "通信に失敗しました" };
+  }
+  if (res.status === 401) throw new UnauthorizedError();
+  let body: { ok?: boolean; status?: string; errors?: { message?: string }[] } = {};
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    // 本文が読めなくても、状態コードで判断する
+  }
+  if (res.ok && body.ok === true && (body.status === "restored" || body.status === "exists")) return { ok: true, status: body.status };
+  return { ok: false, status: res.status, error: body.errors?.[0]?.message ?? "" };
+}
