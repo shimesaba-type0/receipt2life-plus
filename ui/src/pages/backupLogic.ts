@@ -264,7 +264,3 @@ export function backupStatusText(lastAt: string | null, daysSince: number | null
   const day = lastAt.slice(0, 10).replaceAll("-", "/");
   return daysSince === 0 ? `最後のバックアップ: ${day}(今日)` : `最後のバックアップ: ${day}(${daysSince}日前)`;
 }
-
-export function backupRemindText(daysSince: number | null): string {
-  return daysSince === null ? "まだバックアップを取っていません。バックアップを書き出しましょう。" : `最後のバックアップから${daysSince}日たちました。バックアップを書き出しましょう。`;
-}

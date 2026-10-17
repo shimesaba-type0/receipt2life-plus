@@ -1,5 +1,6 @@
 import { todayJst } from "../format";
 import { GITHUB_URL } from "../links";
+import { NoticeBell } from "./NoticeBell";
 import { Link } from "../router";
 
 // PC幅の画面の上に通す横長のヘッダー。左にロゴ、右に「今日の記録を開く」(どのページからでも今日へ)。スマホ幅では出さない(CSSで切り替える)
@@ -11,6 +12,7 @@ export function Topbar() {
         <img class="topbar__logo" src="/brand/wordmark.svg" alt="Receipt to Life +" />
       </Link>
       <div class="topbar__right">
+      <NoticeBell />
       <a class="topbar__github" href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
         GitHub
       </a>

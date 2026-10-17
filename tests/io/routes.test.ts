@@ -32,6 +32,8 @@ describe("GET /export", () => {
     expect(await count()).toBe(1);
     const status = await app.request("http://localhost/api/backup-status", {}, local);
     expect(await status.json()).toMatchObject({ ok: true, days_since: 0 });
+    const notices = await app.request("http://localhost/api/notices", {}, local);
+    expect(await notices.json()).toEqual({ ok: true, notices: [] });
   });
 
   it("空のDBは200で空の本文", async () => {

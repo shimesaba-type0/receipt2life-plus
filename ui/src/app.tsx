@@ -14,6 +14,8 @@ import { Search } from "./pages/Search";
 import { Tax } from "./pages/Tax";
 import { Usage } from "./pages/Usage";
 import { Transaction } from "./pages/Transaction";
+import { useEffect } from "preact/hooks";
+import { refreshNotices } from "./notices";
 import { useRoute } from "./router";
 import { stagingLabel } from "./stagingBanner";
 
@@ -22,6 +24,15 @@ const STAGING = stagingLabel(import.meta.env.VITE_STAGING_LABEL);
 
 export function App() {
   const route = useRoute();
+  // お知らせは、ページを移るたびと、画面に戻ってきたときに読み直す
+  useEffect(() => {
+    refreshNotices();
+  }, [route.name]);
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === "visible" && refreshNotices();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
   return (
     <>
       {STAGING && (

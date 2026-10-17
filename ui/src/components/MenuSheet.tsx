@@ -10,8 +10,8 @@ const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), a[href], [tabi
 
 // スマホ幅の下のタブ「メニュー」から出る、下からのシート(モーダル)。毎日は使わない機能(カテゴリ・税額・エクスポート)への入口。
 // リンクを押すとシートを閉じて移動する。×・Esc・背景のタップでも閉じる。DaySheet / MonthPicker と同じ作り
-export function MenuSheet(props: { route: Route; onClose: () => void }) {
-  const { route, onClose } = props;
+export function MenuSheet(props: { route: Route; noticeHrefs: Set<string>; onClose: () => void }) {
+  const { route, noticeHrefs, onClose } = props;
   const dialogRef = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
 
@@ -79,6 +79,7 @@ export function MenuSheet(props: { route: Route; onClose: () => void }) {
                   ))}
                 </svg>
                 <span>{item.label}</span>
+                {noticeHrefs.has(item.href) && <span class="notice-dot notice-dot--inline" role="img" aria-label="お知らせあり" />}
               </a>
             </li>
           ))}

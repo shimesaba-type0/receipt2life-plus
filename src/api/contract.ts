@@ -878,6 +878,19 @@ export interface BackupStatusData {
   remind: boolean;
 }
 
+export interface NoticeView {
+  id: string;
+  level: "info" | "warn";
+  title: string;
+  body: string;
+  href: string;
+}
+
+export interface NoticesData {
+  ok: true;
+  notices: NoticeView[];
+}
+
 export interface SearchChipsData {
   chips: SearchChipView[];
 }

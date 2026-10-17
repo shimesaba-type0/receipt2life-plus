@@ -1,7 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
 import type { CategoriesData, HomeData, UsageData } from "../../../src/api/contract";
-import { getBackupStatus, getCategories, getHome, getUsage } from "../api";
+import { getCategories, getHome, getUsage } from "../api";
+import { NoticeBell } from "../components/NoticeBell";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { DiscountIcon } from "../components/DiscountIcon";
 import { BreakdownCard } from "../components/BreakdownCard";
@@ -9,7 +10,6 @@ import { CompareCard } from "../components/CompareCard";
 import { chipIcon } from "../categoryIcons";
 import { formatDateJa, formatYen, todayJst } from "../format";
 import { Link } from "../router";
-import { backupRemindText } from "./backupLogic";
 import { homeNotice } from "./usageLogic";
 import { discountsView, isEmptyHome, monthRangeLabel, recentMerchant, recentSub, reviewHref, reviewLabel, shortDate } from "./homeLogic";
 import "./Home.css";
@@ -61,16 +61,6 @@ export function Home() {
       .catch(() => undefined);
   }, []);
 
-  // 最後のバックアップから30日以上たったとき(まだ取っていないときも)だけ、お知らせを出す
-  const [backupNote, setBackupNote] = useState<string | null>(null);
-  useEffect(() => {
-    getBackupStatus()
-      .then((res) => {
-        if (res.ok && res.remind) setBackupNote(backupRemindText(res.days_since));
-      })
-      .catch(() => undefined);
-  }, []);
-
   const today = state.kind === "ready" ? state.data.today.date : todayJst();
 
   return (
@@ -80,6 +70,7 @@ export function Home() {
           <img class="home__brand" src="/brand/wordmark.svg" alt="Receipt to Life +" />
           <h1 class="home__date">{formatDateJa(today)}</h1>
         </div>
+        <NoticeBell class="notice--home" />
         <Link href={`/day/${today}`} class="home__open-today">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
@@ -101,12 +92,6 @@ export function Home() {
             もう一度読み込む
           </button>
         </div>
-      )}
-      {backupNote && (
-        <Link href="/backup" class="home__usage is-warn">
-          <span>{backupNote}</span>
-          <span aria-hidden="true">バックアップへ ›</span>
-        </Link>
       )}
       {usage && (
         <Link href="/usage" class={`home__usage is-${usage.level}`}>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { MENU_ICON, TODAY_ICON } from "../icons";
-import { isMenuRoute, sidebarItems } from "../menu";
+import { isMenuRoute, menuItems, sidebarItems } from "../menu";
 import type { Route } from "../route";
 import { Link } from "../router";
 import { todayJst } from "../format";
+import { useNotices } from "../notices";
 import { MenuSheet } from "./MenuSheet";
 
 function Icon(props: { d: string[] }) {
@@ -33,6 +34,7 @@ export function Nav(props: { route: Route }) {
     return () => mq.removeEventListener("change", onChange);
   }, [menuOpen]);
 
+  const noticeHrefs = new Set(useNotices().map((n) => n.href));
   const items = sidebarItems(route);
   const menuActive = isMenuRoute(route);
   return (
@@ -43,6 +45,7 @@ export function Nav(props: { route: Route }) {
           <Link href={item.href} class={`nav__item${item.active ? " is-active" : ""}${item.route === "home" || item.route === "calendar" ? "" : " nav__pc"}`} aria-current={item.active ? "page" : undefined}>
             <Icon d={item.d} />
             <span>{item.label}</span>
+            {noticeHrefs.has(item.href) && <span class="notice-dot" role="img" aria-label="お知らせあり" />}
           </Link>
         ))}
         <Link href={`/day/${today}`} class={`nav__item nav__item--mobile${route.name === "day" && route.date === today ? " is-active" : ""}`} aria-current={route.name === "day" && route.date === today ? "page" : undefined}>
@@ -52,9 +55,10 @@ export function Nav(props: { route: Route }) {
         <button type="button" class={`nav__item nav__item--mobile nav__menu${menuActive ? " is-active" : ""}`} aria-haspopup="dialog" aria-expanded={menuOpen} aria-current={menuActive ? "true" : undefined} onClick={() => setMenuOpen(true)}>
           <Icon d={MENU_ICON} />
           <span>メニュー</span>
+          {menuItems().some((i) => noticeHrefs.has(i.href)) && <span class="notice-dot" role="img" aria-label="お知らせあり" />}
         </button>
       </nav>
-      {menuOpen && <MenuSheet route={route} onClose={() => setMenuOpen(false)} />}
+      {menuOpen && <MenuSheet route={route} noticeHrefs={noticeHrefs} onClose={() => setMenuOpen(false)} />}
     </>
   );
 }
