@@ -24,6 +24,18 @@ describe("GET /export", () => {
     expect(JSON.parse(lines[0]!)).toMatchObject({ type: "transaction", id: "t1", category: "食費" });
   });
 
+  it("書き出すと履歴に1行入る。写真用の読み出し(?for=photos)は数えない", async () => {
+    const count = async () => (await testEnv().DB.prepare("SELECT COUNT(*) AS n FROM backup_log").first<{ n: number }>())?.n;
+    await app.request("http://localhost/export?for=photos", {}, local);
+    expect(await count()).toBe(0);
+    await app.request("http://localhost/export", {}, local);
+    expect(await count()).toBe(1);
+    const status = await app.request("http://localhost/api/backup-status", {}, local);
+    expect(await status.json()).toMatchObject({ ok: true, days_since: 0 });
+    const notices = await app.request("http://localhost/api/notices", {}, local);
+    expect(await notices.json()).toEqual({ ok: true, notices: [] });
+  });
+
   it("空のDBは200で空の本文", async () => {
     const res = await app.request("http://localhost/export", {}, local);
     expect(res.status).toBe(200);

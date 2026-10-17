@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { BrandMark } from "../components/BrandMark";
 import type { CategoriesData, HomeData, UsageData } from "../../../src/api/contract";
 import { getCategories, getHome, getUsage } from "../api";
+import { NoticeBell } from "../components/NoticeBell";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { DiscountIcon } from "../components/DiscountIcon";
 import { BreakdownCard } from "../components/BreakdownCard";
@@ -69,6 +70,7 @@ export function Home() {
           <img class="home__brand" src="/brand/wordmark.svg" alt="Receipt to Life +" />
           <h1 class="home__date">{formatDateJa(today)}</h1>
         </div>
+        <NoticeBell class="notice--home" />
         <Link href={`/day/${today}`} class="home__open-today">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />

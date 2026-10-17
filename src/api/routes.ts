@@ -17,6 +17,8 @@ import { addSubscription, deleteSubscription, listSubscriptions, updateSubscript
 import { getUsage } from "../core/usage";
 import { listProducts, productHistory } from "../core/products";
 import { createGroup, deleteGroup, listGroups, updateGroup } from "../core/product-groups";
+import { listNotices } from "../core/notices";
+import { getBackupStatus } from "../core/backup-log";
 import { addChip, deleteChip, listChips } from "../core/search-chips";
 import { addExclude, deleteExclude, listExcludes } from "../core/product-excludes";
 import { compareMonths } from "../core/compare";
@@ -64,6 +66,12 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
   for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id", "/api/product-groups", "/api/product-groups/:id"]) app.use(path, requireJson);
+
+  // バックアップの状況(最後に書き出した日、お知らせが要るか)
+  app.get("/api/backup-status", async (c) => c.json({ ok: true as const, ...(await getBackupStatus(c.env.DB)) }));
+
+  // ヘッダーの「お知らせ」
+  app.get("/api/notices", async (c) => c.json({ ok: true as const, notices: await listNotices(c.env.DB) }));
 
   app.get("/api/home", async (c) => respond(c, await getHome(c.env.DB)));
 

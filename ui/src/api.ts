@@ -45,6 +45,8 @@ import type {
   SearchChipDeleted,
   SearchHitType,
   SearchChipSaved,
+  BackupStatusData,
+  NoticesData,
   SearchChipsData,
   ExcludeSaved,
   ExcludesData,
@@ -123,6 +125,8 @@ export const getDeductions = (query: string) => request<DeductionsData>("GET", `
 // サブスク・保険などの固定費(別枠)。query は "active=true" のような絞り込み(省略可)
 // 商品ごとの集計(一覧と、1つの商品の履歴)
 export const getProducts = (query: string) => request<ProductsData>("GET", `/api/products?${query}`);
+export const getNotices = () => request<NoticesData>("GET", "/api/notices");
+export const getBackupStatus = () => request<BackupStatusData>("GET", "/api/backup-status");
 export const getSearchChips = () => request<SearchChipsData>("GET", "/api/search-chips");
 export const addSearchChip = (chip: { label: string; q: string; type: SearchHitType | null }) => request<SearchChipSaved>("POST", "/api/search-chips", chip);
 export const deleteSearchChip = (id: string) => request<SearchChipDeleted>("DELETE", `/api/search-chips/${encodeURIComponent(id)}`);
@@ -251,7 +255,7 @@ export async function importBackup(file: Blob): Promise<ImportResponse & { statu
 export async function fetchExportText(): Promise<string> {
   let res: Response;
   try {
-    res = await fetch("/export", { credentials: "same-origin" });
+    res = await fetch("/export?for=photos", { credentials: "same-origin" });
   } catch {
     throw new UnauthorizedError();
   }
