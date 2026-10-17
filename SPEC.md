@@ -511,3 +511,7 @@ backup/
 ### ステージングのデプロイの切り替えを、本番と分ける(暫定)
 - GitHub Actions のステージングのデプロイ(PR で動く)は、変数 `CLOUDFLARE_STAGING_DEPLOY_ENABLED=true` のときだけ動く。本番のデプロイ(main で動く)は、従来どおり `CLOUDFLARE_DEPLOY_ENABLED`(未設定のまま。本番は Cloudflare 側の自動デプロイが行うため)
 - 理由: 以前は1つの変数が両方を切り替えていたので、ステージングを有効にすると、本番が Cloudflare 側と二重にデプロイされ、本番用の Environment の設定が無いと main の CI が赤くなる
+
+### ステージングの目印の帯と、デプロイ前の画面のビルド(暫定)
+- ステージングの画面の上に「STAGING・PR #番号・コミット」の帯を出す。ビルド時の変数 `VITE_STAGING_LABEL` があるときだけ出る。渡すのは、GitHub Actions の `deploy-staging` の `npm run build` だけ。本番(Cloudflare 側のビルド、および `deploy-production`)には渡さないので、本番には混ざらない
+- あわせて、`deploy-staging` / `deploy-production` に `npm run build` の工程を足した(`ui/dist` は git に入れていないので、ビルドしないと画面のファイルが空のままデプロイされるため)
