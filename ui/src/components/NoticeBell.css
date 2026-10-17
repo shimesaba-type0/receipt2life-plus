@@ -1,6 +1,7 @@
 .notice { position: relative; }
 .notice__btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; color: var(--muted); cursor: pointer; }
 .notice__btn.has-notice { background: #fbf1de; color: #b45309; }
+.notice__btn.has-danger { background: #fbe4e1; color: #8a2a20; }
 .notice__count { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #c2410c; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
 .notice__backdrop { position: fixed; inset: 0; z-index: 40; background: transparent; }
 .notice__panel { position: fixed; z-index: 41; top: 56px; right: 12px; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); }
@@ -8,6 +9,7 @@
 .notice__empty { margin: 0; color: var(--muted); font-size: 14px; }
 .notice__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .notice__item { display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; background: #fbf1de; color: #6b4410; text-decoration: none; font-size: 14px; }
+.notice__item.is-danger { background: #fbe4e1; color: #8a2a20; }
 .notice__item.is-info { background: var(--accent-soft); color: var(--accent); }
 /* 印の点(メニューの項目に付ける) */
 .notice-dot { position: absolute; top: 6px; right: calc(50% - 16px); width: 9px; height: 9px; border-radius: 50%; background: #c2410c; }
