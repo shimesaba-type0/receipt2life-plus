@@ -99,3 +99,7 @@ button.nav__item { background: transparent; border: 0; padding: 0; font: inherit
 .brandmark--faint { opacity: 0.35; }
 .brandmark-line { display: inline-flex; align-items: center; gap: 8px; }
 .brandmark-empty { display: block; margin: 0 auto 8px; }
+
+/* ステージングの目印の帯(ビルド時に VITE_STAGING_LABEL を渡したときだけ出る。本番には出ない) */
+.staging-banner { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; min-height: 28px; padding: 2px 12px; background: #b45309; color: #fff; font-size: 13px; letter-spacing: 0.04em; text-align: center; }
+.staging-banner strong { font-weight: 700; letter-spacing: 0.12em; }

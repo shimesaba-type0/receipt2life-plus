@@ -42,6 +42,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Web UI(ui/dist)をビルドする。ui/dist は git に入れていないので、ここで作らないと、画面のファイルが空のままデプロイされる。
+      # VITE_STAGING_LABEL を渡すと、画面の上に「STAGING・PR #番号」の帯が出る(本番のビルドには渡さない)
+      - run: VITE_STAGING_LABEL="PR #${PR_NUMBER} · ${HEAD_SHA:0:7}" npm run build
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       # デプロイの直前にD1のマイグレーションを当てる(Cloudflare側のデプロイコマンドと揃える)
       - uses: cloudflare/wrangler-action@v3
         with:
@@ -72,6 +78,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Web UI(ui/dist)をビルドする(帯の変数 VITE_STAGING_LABEL は渡さない。本番には目印の帯を出さない)
+      - run: npm run build
       # デプロイの直前にD1のマイグレーションを当てる(Cloudflare側のデプロイコマンドと揃える)
       - uses: cloudflare/wrangler-action@v3
         with:
