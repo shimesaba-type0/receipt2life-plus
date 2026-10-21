@@ -880,7 +880,7 @@ export interface BackupStatusData {
 
 export interface NoticeView {
   id: string;
-  level: "info" | "warn";
+  level: "info" | "warn" | "danger";
   title: string;
   body: string;
   href: string;

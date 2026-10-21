@@ -20,7 +20,7 @@ export function NoticeBell(props: { class?: string }) {
   const n = notices.length;
   return (
     <div class={`notice ${props.class ?? ""}`}>
-      <button type="button" class={`notice__btn${n > 0 ? " has-notice" : ""}`} aria-label={n > 0 ? `お知らせ ${n}件` : "お知らせ"} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      <button type="button" class={`notice__btn${n > 0 ? " has-notice" : ""}${notices.some((x) => x.level === "danger") ? " has-danger" : ""}`} aria-label={n > 0 ? `お知らせ ${n}件` : "お知らせ"} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           {BELL.map((d) => (
             <path d={d} key={d} />
