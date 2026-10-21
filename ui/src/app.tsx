@@ -3,6 +3,7 @@ import { Topbar } from "./components/Topbar";
 import { Accounts } from "./pages/Accounts";
 import { Backup } from "./pages/Backup";
 import { Connect } from "./pages/Connect";
+import { Books } from "./pages/Books";
 import { Calendar } from "./pages/Calendar";
 import { Categories } from "./pages/Categories";
 import { Day } from "./pages/Day";
@@ -55,6 +56,7 @@ export function App() {
         {route.name === "categories" && <Categories />}
         {route.name === "accounts" && <Accounts />}
         {route.name === "subscriptions" && <Subscriptions />}
+        {route.name === "books" && <Books />}
         {route.name === "tax" && <Tax />}
         {route.name === "usage" && <Usage />}
         {route.name === "products" && <Products month={route.month} product={route.product} by={route.by} />}

@@ -284,3 +284,16 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 ## お知らせ
 
 `GET /api/notices` → `{ok, notices: [{id, level: "info"｜"warn", title, body, href}]}`。保存はせず、そのときの状態から作る(解決すると消える)。いまの種類は、バックアップ(最後から30日以上)と、使用量(D1 が上限の70%以上は warn、90%以上は danger。使用量が取れないときは出さない)。
+
+## 買った本の記録
+
+ISBN・タイトル・著者・シリーズ・購入者・メモを残す。レシートの取引に紐づけられる(任意。取引が消えても本の記録は残り、紐づけだけ外れる)。タイトルなどをネットで調べて入れるのは AI(MCP)の役目で、アプリは外のサービスに接続しない。ロジックは `src/core/books.ts`(MCP も同じ関数)、migration 0024。
+
+| ルート | 入力 | 戻り |
+|---|---|---|
+| `GET /api/books` | クエリ(すべて任意・AND): `q`(タイトル・著者・シリーズ・購入者・メモ・ISBN。空白区切りで AND)、`series` / `author` / `buyer`(完全一致)、`isbn`、`from` / `to`(買った日)、`transaction_id`、`unlinked=1`(紐づけなしだけ)、`limit`(既定100、最大500) | `BooksData`: `count`、`records`(買った日の新しい順。日がない本は最後)、`facets`(`series` / `authors` / `buyers` の候補。全件から)、`truncated`、`message` |
+| `POST /api/books` | `NewBook`(`isbn` か `title` が必須。`author?` / `series?` / `buyer?` / `note?` / `purchased_on?` / `transaction_id?`。ISBN は10桁でも13桁でもよく、13桁にそろえて保存) | `book: BookView`, `message`(同じ ISBN の本がすでにあれば、そのことも) |
+| `PATCH /api/books/:id` | `BookPatch`(指定した項目だけ変える。`null` か空文字で消去。`isbn` と `title` の両方は消せない) | `book`, `message` |
+| `DELETE /api/books/:id` | なし | `deleted: BookView`, `message` |
+
+`BookView.purchased_on` は、自分で入れた買った日。なければ、紐づけた取引の日付。

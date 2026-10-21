@@ -1,6 +1,6 @@
 // メニューの項目(純粋な部分。DOMに触れない。テストする)。
 // スマホは下のタブ「メニュー」から出るシート、PCは左メニューにそのまま並べる。どちらも既存のページへのリンクだけ
-import { ACCOUNT_ICON, CALENDAR_ICON, CATEGORY_ICON, CONNECT_ICON, EXPORT_ICON, HOME_ICON, PRODUCT_ICON, SEARCH_ICON, SUBSCRIPTION_ICON, TAX_ICON, USAGE_ICON } from "./icons";
+import { ACCOUNT_ICON, BOOK_ICON, CALENDAR_ICON, CATEGORY_ICON, CONNECT_ICON, EXPORT_ICON, HOME_ICON, PRODUCT_ICON, SEARCH_ICON, SUBSCRIPTION_ICON, TAX_ICON, USAGE_ICON } from "./icons";
 import type { Route } from "./route";
 
 export interface MenuItem {
@@ -17,6 +17,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { route: "categories", href: "/categories", label: "カテゴリ", d: CATEGORY_ICON },
   { route: "accounts", href: "/accounts", label: "支払方法", d: ACCOUNT_ICON },
   { route: "subscriptions", href: "/subscriptions", label: "サブスク・固定費", d: SUBSCRIPTION_ICON },
+  { route: "books", href: "/books", label: "本", d: BOOK_ICON },
   { route: "tax", href: "/tax", label: "税額", d: TAX_ICON },
   { route: "usage", href: "/usage", label: "使用量", d: USAGE_ICON },
   { route: "backup", href: "/backup", label: "エクスポート・バックアップ", d: EXPORT_ICON },

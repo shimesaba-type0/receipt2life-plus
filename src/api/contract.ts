@@ -962,3 +962,59 @@ export interface ProductHistoryData {
   message: string;
 }
 
+
+// ---- 買った本の記録 ----
+
+export interface BookView {
+  id: string;
+  // 13桁。なければ null
+  isbn: string | null;
+  title: string | null;
+  author: string | null;
+  series: string | null;
+  buyer: string | null;
+  note: string | null;
+  // 買った日。自分で入れた日、なければ紐づけた取引の日付
+  purchased_on: string | null;
+  transaction_id: string | null;
+  created_at: string;
+}
+
+// GET /api/books?q=&series=&author=&buyer=&isbn=&from=&to=&transaction_id=&unlinked=1&limit=
+// 並びは買った日の新しい順。count は絞り込みに合う全件、facets は全部の本からの候補
+export interface BooksData {
+  count: number;
+  records: BookView[];
+  facets: { series: string[]; authors: string[]; buyers: string[] };
+  truncated: boolean;
+  message: string;
+}
+
+// POST /api/books の入力(isbn か title のどちらかは必須。空文字は未指定)
+export interface NewBook {
+  isbn?: string;
+  title?: string;
+  author?: string;
+  series?: string;
+  buyer?: string;
+  note?: string;
+  purchased_on?: string;
+  transaction_id?: string;
+}
+
+// PATCH /api/books/:id の入力(指定した項目だけ変える。null か空文字で消去)
+export interface BookPatch {
+  isbn?: string | null;
+  title?: string | null;
+  author?: string | null;
+  series?: string | null;
+  buyer?: string | null;
+  note?: string | null;
+  purchased_on?: string | null;
+  transaction_id?: string | null;
+}
+
+export interface BookSaved {
+  book: BookView;
+  message: string;
+}

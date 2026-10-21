@@ -1,0 +1,18 @@
+/* 本の画面専用。カテゴリ画面(Categories.css の cat__*)と同じ見た目に合わせる */
+.books__filter { gap: 10px; }
+.books__q { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.books__row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.books__field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 0; font-size: 12px; color: var(--muted); }
+.books__field select, .books__field input { min-height: 44px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 14px; color: var(--ink); }
+.books__check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+.books__clear { align-self: flex-start; }
+.books__count { margin: 0; font-size: 13px; }
+.books__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.books__item { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.books__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.books__title { font-size: 16px; overflow-wrap: anywhere; }
+.books__meta, .books__note { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.books__note { color: var(--ink); }
+.books__receipt { align-self: flex-start; font-size: 13px; }
+.books__actions { flex: none; display: flex; }
+.books__delete { color: var(--danger); }
