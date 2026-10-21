@@ -163,6 +163,8 @@ export type ListBooksResult =
       records: BookView[];
       // 絞り込みの候補(全部の本から。登録の表記をそろえるのにも使う)
       facets: { series: string[]; authors: string[]; buyers: string[] };
+      // status が owned のとき、ほかの条件に合うのに表示していない手放した本の数(それ以外は 0)
+      hidden_released: number;
       truncated: boolean;
       message: string;
     }
@@ -277,6 +279,9 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
   add("b.series = ?", m.series);
   add("b.author = ?", m.author);
   add("b.buyer = ?", m.buyer);
+  // 状況の条件は、最後に足す(手放した本の数を、ほかの条件だけで数えるため)
+  const otherWhere = [...where];
+  const otherBinds = [...binds];
   if (m.status === "owned") where.push("b.status = 'owned'");
   else if (m.status === "released") where.push("b.status <> 'owned'");
   else add("b.status = ?", m.status);
@@ -292,12 +297,14 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
     const { results } = await db.prepare(`SELECT DISTINCT ${column} AS v FROM books WHERE ${column} IS NOT NULL ORDER BY ${column} LIMIT ?`).bind(MAX_FACET_ROWS).all<{ v: string }>();
     return results.map((r) => r.v);
   };
-  const [rows, total, series, authors, buyers] = await Promise.all([
+  const releasedClause = `WHERE ${[...otherWhere, "b.status <> 'owned'"].join(" AND ")}`;
+  const [rows, total, hidden, series, authors, buyers] = await Promise.all([
     db
       .prepare(`${VIEW_SELECT} ${clause} ORDER BY (COALESCE(b.purchased_on, t.date) IS NULL), COALESCE(b.purchased_on, t.date) DESC, b.created_at DESC, b.id DESC LIMIT ? OFFSET ?`)
       .bind(...binds, m.limit, m.offset)
       .all<BookView>(),
     db.prepare(`SELECT COUNT(*) AS n ${from} ${clause}`).bind(...binds).first<{ n: number }>(),
+    m.status === "owned" ? db.prepare(`SELECT COUNT(*) AS n ${from} ${releasedClause}`).bind(...otherBinds).first<{ n: number }>() : Promise.resolve(null),
     facet("series"),
     facet("author"),
     facet("buyer"),
@@ -309,6 +316,7 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
     count,
     records: rows.results,
     facets: { series, authors, buyers },
+    hidden_released: hidden?.n ?? 0,
     truncated,
     message: count === 0 ? "該当する本の記録はありません" : rows.results.length === 0 ? `${count}冊の本の記録がありますが、この範囲(offset ${m.offset})にはありません` : `${count}冊の本の記録があります${truncated || m.offset > 0 ? `(買った日の新しい順に、${m.offset + 1}〜${m.offset + rows.results.length}冊目を返しました)` : ""}`,
   };

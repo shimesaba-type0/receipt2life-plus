@@ -115,6 +115,12 @@ describe("本の記録", () => {
 
     const owned = await listBooks(db(), { status: "owned" });
     expect(owned.ok && owned.records.map((r) => r.title)).toEqual(["ダミー本A"]);
+    // 表示していない手放した本の数(ほかの条件に合うものだけ)
+    expect(owned.ok && owned.hidden_released).toBe(1);
+    const ownedWord = await listBooks(db(), { status: "owned", q: "本A" });
+    expect(ownedWord.ok && ownedWord.hidden_released).toBe(0);
+    const all = await listBooks(db(), {});
+    expect(all.ok && all.hidden_released).toBe(0);
     const released = await listBooks(db(), { status: "released" });
     expect(released.ok && released.records.map((r) => r.title)).toEqual(["ダミー本B"]);
     const sold = await listBooks(db(), { status: "sold" });

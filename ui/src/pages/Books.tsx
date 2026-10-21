@@ -19,7 +19,7 @@ interface Filter {
   to: string;
   unlinked: boolean;
 }
-const NO_FILTER: Filter = { q: "", series: "", author: "", buyer: "", status: "", from: "", to: "", unlinked: false };
+const NO_FILTER: Filter = { q: "", series: "", author: "", buyer: "", status: "owned", from: "", to: "", unlinked: false };
 
 // 買った本の記録。一覧(カバーの並び)と、1冊の詳細(/books/:id)。タイトルなどをネットで調べて入れるのは、AI(MCP)に頼む
 export function Books(props: { id: string | null }) {
@@ -117,6 +117,10 @@ function BookList(props: { selectedId: string | null }) {
           ＋ 本を追加
         </button>
       </div>
+      <label class="books__switch">
+        <input type="checkbox" checked={filter.status !== "owned"} onChange={(e) => set("status", e.currentTarget.checked ? "" : "owned")} />
+        手放した本も表示する(売った・譲った・なくした など)
+      </label>
 
       <details class="books__more" open={filtered || undefined}>
         <summary>絞り込み{filtered ? "(あり)" : ""}</summary>
@@ -125,14 +129,6 @@ function BookList(props: { selectedId: string | null }) {
             <FilterSelect label="シリーズ" value={filter.series} options={facets.series} onChange={(v) => set("series", v)} />
             <FilterSelect label="著者" value={filter.author} options={facets.authors} onChange={(v) => set("author", v)} />
             <FilterSelect label="購入者" value={filter.buyer} options={facets.buyers} onChange={(v) => set("buyer", v)} />
-            <label class="books__field">
-              状況
-              <select value={filter.status} onChange={(e) => set("status", e.currentTarget.value)}>
-                <option value="">すべて</option>
-                <option value="owned">手元にある本だけ</option>
-                <option value="released">手放した本だけ</option>
-              </select>
-            </label>
           </div>
           <div class="books__row">
             <label class="books__field">
@@ -203,6 +199,14 @@ function BookList(props: { selectedId: string | null }) {
             </select>
           </label>
         </div>
+      )}
+      {data && filter.status === "owned" && data.hidden_released > 0 && (
+        <p class="muted books__hidden">
+          手放した本が{data.hidden_released}冊あります(いまは表示していません)。
+          <button type="button" class="cat__link" onClick={() => set("status", "")}>
+            表示する
+          </button>
+        </p>
       )}
       {data && data.records.length === 0 && !filtered && <p class="muted">まだ本の記録がありません。「＋ 本を追加」か、AI に「この本を記録して」と頼んでください。</p>}
 

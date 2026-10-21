@@ -991,6 +991,8 @@ export interface BooksData {
   count: number;
   records: BookView[];
   facets: { series: string[]; authors: string[]; buyers: string[] };
+  // status=owned のとき、ほかの条件に合うのに表示していない手放した本の数
+  hidden_released: number;
   truncated: boolean;
   message: string;
 }
