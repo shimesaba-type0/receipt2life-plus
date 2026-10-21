@@ -46,6 +46,11 @@ import type {
   SearchHitType,
   SearchChipSaved,
   BackupStatusData,
+  BookPatch,
+  BookSaved,
+  BookView,
+  BooksData,
+  NewBook,
   NoticesData,
   SearchChipsData,
   ExcludeSaved,
@@ -224,6 +229,17 @@ export const updateSeatRecord = (id: string, patch: SeatRecordPatch) => request<
 // 会場とスクリーンの一覧(フォームの候補に使う)
 export const getVenues = () => request<VenuesData>("GET", "/api/venues");
 export const deleteSeatRecord = (id: string) => request<{ deleted: SeatRecordView; message: string }>("DELETE", `/api/seat-records/${encodeURIComponent(id)}`);
+
+// 買った本の記録
+export function getBooks(filter: { q?: string; series?: string; author?: string; buyer?: string; from?: string; to?: string; unlinked?: boolean; limit?: number } = {}) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "" && v !== false) params.set(k, v === true ? "1" : String(v));
+  const qs = params.toString();
+  return request<BooksData>("GET", `/api/books${qs ? `?${qs}` : ""}`);
+}
+export const addBook = (book: NewBook) => request<BookSaved>("POST", "/api/books", book);
+export const updateBook = (id: string, patch: BookPatch) => request<BookSaved>("PATCH", `/api/books/${encodeURIComponent(id)}`, patch);
+export const deleteBook = (id: string) => request<{ deleted: BookView; message: string }>("DELETE", `/api/books/${encodeURIComponent(id)}`);
 
 // バックアップ(JSONL)の読み込み。本文はファイルの中身そのまま(JSONLかJSON配列)。上限の検査は呼び出し側で済ませる
 // 全体のエラー(413 など)は ok: false で返る。行ごとの結果は ok: true の results に入る

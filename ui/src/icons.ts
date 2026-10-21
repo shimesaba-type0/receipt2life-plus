@@ -31,3 +31,6 @@ export const ACCOUNT_ICON = ["M3 6h18v12H3z", "M3 10h18", "M7 15h3"];
 
 // サブスク・固定費(くり返しの円形の矢印)
 export const SUBSCRIPTION_ICON = ["M20 11a8 8 0 0 0-14.5-4.6", "M5 3v4h4", "M4 13a8 8 0 0 0 14.5 4.6", "M19 21v-4h-4"];
+
+// 本(本の記録)
+export const BOOK_ICON = ["M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z", "M5 17a3 3 0 0 1 3-3h11"];

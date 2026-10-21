@@ -70,7 +70,7 @@ describe("MCP 集計ツール", () => {
     expect(s?.description).toContain("レシートに印字された割引行(マイナスの明細)だけが対象");
     expect(Object.keys(s?.inputSchema.properties ?? {})).toEqual(expect.arrayContaining(["from", "to", "group_by", "discounts_only"]));
     expect(tools.some((t) => /discount/.test(t.name))).toBe(false);
-    expect(tools).toHaveLength(39);
+    expect(tools).toHaveLength(43);
   });
 
   it("summarize の discounts_only: 割引の合計と、店別。通常の summarize の結果は変わらない", async () => {

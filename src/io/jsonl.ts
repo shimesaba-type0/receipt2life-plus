@@ -21,6 +21,14 @@ import { checkItemProducts } from "../core/item-products";
 import { parseLinkUrl, MAX_DESCRIPTION_LENGTH, MAX_URL_LENGTH } from "../core/links";
 import { resolveMoney, subscriptionFieldsSchema, toMinor } from "../core/subscriptions";
 import { parseHttpsUrl } from "../core/urls";
+import {
+  MAX_AUTHOR_LENGTH,
+  MAX_BUYER_LENGTH,
+  MAX_NOTE_LENGTH as MAX_BOOK_NOTE_LENGTH,
+  MAX_SERIES_LENGTH,
+  MAX_TITLE_LENGTH as MAX_BOOK_TITLE_LENGTH,
+  normalizeIsbn,
+} from "../core/books";
 import { MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
 import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
 import { dedupHash } from "../core/transactions";
@@ -93,6 +101,11 @@ const EXPORT_TABLES: TableSpec[] = [
           LEFT JOIN screens s ON s.id = r.screen_id
           WHERE r.id > ? ORDER BY r.id LIMIT ?`,
   },
+  // 買った本の記録。purchased_on は、自分で入れた日だけ(取引の日付を借りた分は出さない)
+  {
+    sql: `SELECT 'book' AS type, id, isbn, title, author, series, buyer, note, purchased_on, transaction_id, created_at
+          FROM books WHERE id > ? ORDER BY id LIMIT ?`,
+  },
   // サブスク・保険などの固定費(別枠)。active は true / false で出す
   {
     sql: `SELECT 'subscription' AS type, id, name, kind, amount, period, currency, foreign_amount_minor / 100.0 AS foreign_amount, exchange_rate, previous_foreign_minor / 100.0 AS previous_foreign_amount, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at
@@ -116,7 +129,7 @@ async function* exportChunks(db: D1Database): AsyncGenerator<string> {
 }
 
 /**
- * 全データをJSONL(1行1レコード)で返す。event → transaction(税の内訳 tax_lines を入れ子で持つ)→ item(明細)→ attachment → link → screen → seat_record → subscription の順(外部キーの順)。
+ * 全データをJSONL(1行1レコード)で返す。event → transaction(税の内訳 tax_lines を入れ子で持つ)→ item(明細)→ attachment → link → screen → seat_record → book → subscription の順(外部キーの順)。
  * 500行ずつ読み出して流すので、行数が多くてもメモリを使いすぎない。
  */
 export function exportJsonl(db: D1Database): ReadableStream<Uint8Array> {
@@ -165,7 +178,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record", "subscription"] as const;
+const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record", "book", "subscription"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -241,6 +254,30 @@ const seatRecordSchema = z.strictObject({
   created_at: timestampField.optional(),
 });
 
+// 買った本の記録。core の本の記録と同じ上限・トリム。isbn は13桁にそろえる(10桁でも、ハイフン付きでもよい)
+const bookSchema = z
+  .strictObject({
+    id: idField.optional(),
+    isbn: z
+      .string()
+      .trim()
+      .transform((v, ctx) => {
+        const n = normalizeIsbn(v);
+        if (n === null) ctx.addIssue({ code: "custom", message: "ISBN が正しくありません" });
+        return n ?? "";
+      })
+      .optional(),
+    title: z.string().trim().max(MAX_BOOK_TITLE_LENGTH).optional(),
+    author: z.string().trim().max(MAX_AUTHOR_LENGTH).optional(),
+    series: z.string().trim().max(MAX_SERIES_LENGTH).optional(),
+    buyer: z.string().trim().max(MAX_BUYER_LENGTH).optional(),
+    note: z.string().trim().max(MAX_BOOK_NOTE_LENGTH).optional(),
+    purchased_on: isoDate.optional(),
+    transaction_id: z.string().min(1).optional(),
+    created_at: timestampField.optional(),
+  })
+  .refine((v) => !!v.isbn || !!v.title, { message: "isbn か title のどちらかは必須です", path: ["isbn"] });
+
 // スクリーン(会場の名前・スクリーン名・特徴 note)。座席の記録より前に取り込む。会場が無ければ作る
 const screenSchema = z.strictObject({
   id: idField.optional(),
@@ -302,7 +339,7 @@ const chunks = <T>(items: T[], size: number): T[][] => {
   return out;
 };
 
-async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "screens" | "seat_records" | "subscriptions", ids: string[]): Promise<Set<string>> {
+async function existingIds(db: D1Database, table: "events" | "transactions" | "transaction_items" | "attachments" | "links" | "screens" | "seat_records" | "books" | "subscriptions", ids: string[]): Promise<Set<string>> {
   const found = new Set<string>();
   for (const part of chunks([...new Set(ids)], IN_CHUNK)) {
     const { results } = await db
@@ -940,6 +977,49 @@ async function importScreens(db: D1Database, entries: Entry[], report: Report, n
   await insertAll(db, pending, report);
 }
 
+async function importBooks(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
+  if (entries.length === 0) return;
+  const valid: { entry: Entry; id: string; given: boolean; data: z.infer<typeof bookSchema> }[] = [];
+  for (const entry of entries) {
+    const r = bookSchema.safeParse(entry.record);
+    if (!r.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
+      continue;
+    }
+    valid.push({ entry, id: r.data.id ?? crypto.randomUUID(), given: r.data.id !== undefined, data: r.data });
+  }
+
+  const [existing, txIds] = await Promise.all([
+    existingIds(db, "books", valid.filter((v) => v.given).map((v) => v.id)),
+    existingIds(db, "transactions", valid.flatMap((v) => (v.data.transaction_id ? [v.data.transaction_id] : []))),
+  ]);
+
+  const seen = new Set<string>();
+  const pending: Pending[] = [];
+  for (const v of valid) {
+    if (existing.has(v.id) || seen.has(v.id)) {
+      report(v.entry, { status: "skipped_exists", id: v.id, message: `id「${v.id}」の本の記録は既にあるためスキップしました` });
+      continue;
+    }
+    if (v.data.transaction_id && !txIds.has(v.data.transaction_id)) {
+      report(v.entry, { status: "error", message: `transaction_id: 「${v.data.transaction_id}」という取引はありません。先に取引を取り込むか、id を確認してください` });
+      continue;
+    }
+    seen.add(v.id);
+    const d = v.data;
+    pending.push({
+      entry: v.entry,
+      id: v.id,
+      statements: [
+        db
+          .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, d.isbn || null, d.title || null, d.author || null, d.series || null, d.buyer || null, d.note || null, d.purchased_on ?? null, d.transaction_id ?? null, d.created_at ?? nowIso),
+      ],
+    });
+  }
+  await insertAll(db, pending, report);
+}
+
 async function importSeatRecords(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
   if (entries.length === 0) return;
   const valid: { entry: Entry; id: string; given: boolean; data: z.infer<typeof seatRecordSchema> }[] = [];
@@ -984,7 +1064,7 @@ async function importSeatRecords(db: D1Database, entries: Entry[], report: Repor
 
 /**
  * JSONL(または JSON 配列)を取り込む。行ごとに結果を返し、一部の行がエラーでも他の行は取り込む。
- * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → screen → seat_record → subscription(外部キーの都合)。結果は元の行の順。
+ * 順序はファイル内の順に関係なく event → transaction(と、その明細の item)→ attachment → link → screen → seat_record → book → subscription(外部キーの都合)。結果は元の行の順。
  */
 export async function importRecords(db: D1Database, text: string, options: ImportOptions = {}): Promise<ImportResponse> {
   if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES) {
@@ -1000,7 +1080,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [], subscription: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [], book: [], subscription: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -1034,6 +1114,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
   await importLinks(db, byType.link, report, nowIso);
   await importScreens(db, byType.screen, report, nowIso);
   await importSeatRecords(db, byType.seat_record, report, nowIso);
+  await importBooks(db, byType.book, report, nowIso);
   await importSubscriptions(db, byType.subscription, report, nowIso);
 
   const summary: ImportSummary = { total: results.length, ok: 0, skipped: 0, errors: 0 };

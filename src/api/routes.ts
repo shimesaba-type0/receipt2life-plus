@@ -8,6 +8,7 @@ import { getHome } from "../core/home";
 import { listMerchants } from "../core/merchants";
 import { addLink, deleteLink, refreshLinkTitle, updateLink } from "../core/links";
 import type { TitleFetcher } from "../core/link-titles";
+import { addBook, deleteBook, listBooks, updateBook } from "../core/books";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../core/photos";
@@ -65,7 +66,7 @@ export interface ApiRouteOptions {
 export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id", "/api/product-groups", "/api/product-groups/:id"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/books", "/api/books/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id", "/api/product-groups", "/api/product-groups/:id"]) app.use(path, requireJson);
 
   // バックアップの状況(最後に書き出した日、お知らせが要るか)
   app.get("/api/backup-status", async (c) => c.json({ ok: true as const, ...(await getBackupStatus(c.env.DB)) }));
@@ -353,6 +354,30 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   });
 
   app.delete("/api/seat-records/:id", async (c) => respond(c, await deleteSeatRecord(c.env.DB, { id: c.req.param("id") })));
+
+  // 買った本の記録。一覧は絞り込み: q / series / author / buyer / isbn / from / to / transaction_id / unlinked=1 / limit
+  app.get("/api/books", async (c) => {
+    const q = c.req.query();
+    const filter: Record<string, unknown> = {};
+    for (const key of ["q", "series", "author", "buyer", "isbn", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
+    if (q.unlinked === "1" || q.unlinked === "true") filter.unlinked = true;
+    if (q.limit) filter.limit = Number(q.limit);
+    return respond(c, await listBooks(c.env.DB, filter));
+  });
+
+  app.post("/api/books", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await addBook(c.env.DB, body.value));
+  });
+
+  app.patch("/api/books/:id", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await updateBook(c.env.DB, { ...body.value, id: c.req.param("id") }));
+  });
+
+  app.delete("/api/books/:id", async (c) => respond(c, await deleteBook(c.env.DB, { id: c.req.param("id") })));
 
   // 会場・スクリーン(座席の記録とは別のレコード)。削除はなし。座席の記録の venue / screen は名前で受けて、無ければ作る
   app.get("/api/venues", async (c) => respond(c, await listVenues(c.env.DB)));
