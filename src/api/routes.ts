@@ -8,7 +8,7 @@ import { getHome } from "../core/home";
 import { listMerchants } from "../core/merchants";
 import { addLink, deleteLink, refreshLinkTitle, updateLink } from "../core/links";
 import type { TitleFetcher } from "../core/link-titles";
-import { addBook, deleteBook, listBooks, updateBook } from "../core/books";
+import { addBook, deleteBook, getBook, listBooks, updateBook } from "../core/books";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../core/photos";
@@ -362,7 +362,15 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     for (const key of ["q", "series", "author", "buyer", "isbn", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
     if (q.unlinked === "1" || q.unlinked === "true") filter.unlinked = true;
     if (q.limit) filter.limit = Number(q.limit);
+    if (q.offset) filter.offset = Number(q.offset);
     return respond(c, await listBooks(c.env.DB, filter));
+  });
+
+  // 1冊(詳細画面用)。無い id は404
+  app.get("/api/books/:id", async (c) => {
+    const book = await getBook(c.env.DB, c.req.param("id"));
+    if (!book) return c.json({ ok: false as const, errors: [{ field: "id", message: "id: という本の記録はありません" }] }, 404);
+    return c.json({ ok: true as const, book });
   });
 
   app.post("/api/books", async (c) => {

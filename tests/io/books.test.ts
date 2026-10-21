@@ -11,7 +11,7 @@ describe("本の記録のバックアップ(エクスポートとインポート
   it("書き出して、読み込める。同じ id は重複としてスキップする。10桁の ISBN は13桁にそろう", async () => {
     const lines = [
       JSON.stringify({ type: "transaction", id: "t1", date: "2026-10-05", amount: 1500, merchant: "ダミー書店", category: "その他" }),
-      JSON.stringify({ type: "book", id: "b1", isbn: "4-00-000000-4", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" }),
+      JSON.stringify({ type: "book", id: "b1", isbn: "4-00-000000-4", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", cover_url: "https://example.test/c.jpg", transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" }),
       JSON.stringify({ type: "book", id: "b2", title: "タイトルだけ", purchased_on: "2026-09-01" }),
     ].join("\n");
     const res = await post(lines);
@@ -19,8 +19,8 @@ describe("本の記録のバックアップ(エクスポートとインポート
 
     const exported = (await exportLines()).filter((r) => r.type === "book");
     expect(exported).toEqual([
-      { type: "book", id: "b1", isbn: "9784000000000", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", purchased_on: null, transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" },
-      { type: "book", id: "b2", isbn: null, title: "タイトルだけ", author: null, series: null, buyer: null, note: null, purchased_on: "2026-09-01", transaction_id: null, created_at: expect.any(String) },
+      { type: "book", id: "b1", isbn: "9784000000000", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", cover_url: "https://example.test/c.jpg", purchased_on: null, transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" },
+      { type: "book", id: "b2", isbn: null, title: "タイトルだけ", author: null, series: null, buyer: null, note: null, cover_url: null, purchased_on: "2026-09-01", transaction_id: null, created_at: expect.any(String) },
     ]);
 
     // 書き出したものを、そのまま読み込み直しても、重複としてスキップされる
@@ -56,6 +56,9 @@ describe("本の記録のAPI", () => {
     expect(list).toMatchObject({ count: 1, facets: { series: ["S1"] } });
     const none = (await (await app.request("http://localhost/api/books?q=ない言葉", {}, local)).json()) as { count: number };
     expect(none.count).toBe(0);
+    const one = await app.request(`http://localhost/api/books/${created.book.id}`, {}, local);
+    expect(await one.json()).toMatchObject({ ok: true, book: { id: created.book.id, title: "ダミー本" } });
+    expect((await app.request("http://localhost/api/books/nope", {}, local)).status).toBe(404);
     const patched = await json("PATCH", `/api/books/${created.book.id}`, { author: "著者" });
     expect(await patched.json()).toMatchObject({ ok: true, book: { author: "著者" } });
     const bad = await json("POST", "/api/books", { author: "だけ" });

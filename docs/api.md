@@ -292,7 +292,8 @@ ISBN・タイトル・著者・シリーズ・購入者・メモを残す。レ�
 | ルート | 入力 | 戻り |
 |---|---|---|
 | `GET /api/books` | クエリ(すべて任意・AND): `q`(タイトル・著者・シリーズ・購入者・メモ・ISBN。空白区切りで AND)、`series` / `author` / `buyer`(完全一致)、`isbn`、`from` / `to`(買った日)、`transaction_id`、`unlinked=1`(紐づけなしだけ)、`limit`(既定100、最大500) | `BooksData`: `count`、`records`(買った日の新しい順。日がない本は最後)、`facets`(`series` / `authors` / `buyers` の候補。全件から)、`truncated`、`message` |
-| `POST /api/books` | `NewBook`(`isbn` か `title` が必須。`author?` / `series?` / `buyer?` / `note?` / `purchased_on?` / `transaction_id?`。ISBN は10桁でも13桁でもよく、13桁にそろえて保存) | `book: BookView`, `message`(同じ ISBN の本がすでにあれば、そのことも) |
+| `GET /api/books/:id` | なし | `book: BookView`。無い id は404(詳細画面用) |
+| `POST /api/books` | `NewBook`(`isbn` か `title` が必須。`author?` / `series?` / `buyer?` / `note?` / `cover_url?`(https のURL。画像は保存せず参照だけ)/ `purchased_on?` / `transaction_id?`。ISBN は10桁でも13桁でもよく、13桁にそろえて保存) | `book: BookView`, `message`(同じ ISBN の本がすでにあれば、そのことも) |
 | `PATCH /api/books/:id` | `BookPatch`(指定した項目だけ変える。`null` か空文字で消去。`isbn` と `title` の両方は消せない) | `book`, `message` |
 | `DELETE /api/books/:id` | なし | `deleted: BookView`, `message` |
 

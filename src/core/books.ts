@@ -2,6 +2,7 @@ import { z } from "zod";
 import { checkRefs } from "./photos";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
 import { escapeLike, type CoreOptions } from "./transactions";
+import { parseHttpsUrl } from "./urls";
 
 // 買った本の記録(books)。ISBN・タイトル・著者・シリーズ名・購入者・メモを残し、あとから絞り込めるようにする。
 // タイトルなどは、AI がネットで調べて入れる前提(アプリは外のサービスに接続しない)。ISBN かタイトルのどちらかは必須
@@ -13,6 +14,7 @@ export const MAX_AUTHOR_LENGTH = 100;
 export const MAX_SERIES_LENGTH = 100;
 export const MAX_BUYER_LENGTH = 50;
 export const MAX_NOTE_LENGTH = 500;
+export const MAX_COVER_URL_LENGTH = 500;
 export const DEFAULT_LIST_LIMIT = 100;
 export const MAX_LIST_LIMIT = 500;
 // 絞り込みの候補(シリーズ・著者・購入者)の最大数
@@ -49,6 +51,8 @@ export interface BookView {
   series: string | null;
   buyer: string | null;
   note: string | null;
+  // カバー画像のURL(https)。なければ null
+  cover_url: string | null;
   // 買った日。自分で入れた日、なければ紐づけた取引の日付。どちらもなければ null
   purchased_on: string | null;
   transaction_id: string | null;
@@ -66,6 +70,19 @@ const isbnField = z
     if (n === null) ctx.addIssue({ code: "custom", message: "ISBN が正しくありません(10桁か13桁。ハイフンは付けてもよい。チェックディジットも確かめます)" });
     return n ?? "";
   });
+// カバー画像のURL。https のみ(ポート・認証情報つきは不可)。500文字まで。空文字は未指定扱い: 追加では NULL、更新では消去
+export const coverUrlField = z
+  .string({ error: "cover_url は文字列で指定してください" })
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return "";
+    const u = parseHttpsUrl(v);
+    if (u === null || u.length > MAX_COVER_URL_LENGTH) {
+      ctx.addIssue({ code: "custom", message: `cover_url は https のURL(${MAX_COVER_URL_LENGTH}文字まで)で指定してください` });
+      return "";
+    }
+    return u;
+  });
 // 空文字(空白だけを含む)は未指定扱い: 追加では NULL、更新では消去
 const text = (max: number) => z.string().trim().max(max);
 
@@ -79,6 +96,7 @@ export const newBookSchema = z
     series: text(MAX_SERIES_LENGTH).optional().describe(`シリーズ名・叢書名(${MAX_SERIES_LENGTH}文字まで)。任意。表記ゆれを避けるため、list_books の facets.series にある既存の名前に合わせる`),
     buyer: text(MAX_BUYER_LENGTH).optional().describe(`購入者(買った人。${MAX_BUYER_LENGTH}文字まで)。任意`),
     note: text(MAX_NOTE_LENGTH).optional().describe(`メモ(${MAX_NOTE_LENGTH}文字まで)。任意`),
+    cover_url: coverUrlField.optional().describe("カバー画像のURL(https のみ。500文字まで)。任意。画像は保存せず、URLを参照して表示する。ネットで本を調べたときに分かれば入れる"),
     purchased_on: isoDate.optional().describe("買った日(YYYY-MM-DD)。任意。省略して transaction_id を付けると、その取引の日付が買った日になる"),
     transaction_id: idField.optional().describe("紐づけるレシートの取引 id(list_transactions や add_transactions の結果で分かる)。任意"),
   })
@@ -94,6 +112,7 @@ export const updateBookFieldsSchema = z.strictObject({
   series: text(MAX_SERIES_LENGTH).nullable().optional().describe("新しいシリーズ名。null か空文字で消去"),
   buyer: text(MAX_BUYER_LENGTH).nullable().optional().describe("新しい購入者。null か空文字で消去"),
   note: text(MAX_NOTE_LENGTH).nullable().optional().describe("新しいメモ。null か空文字で消去"),
+  cover_url: coverUrlField.nullable().optional().describe("新しいカバー画像のURL(https)。null か空文字で消去"),
   purchased_on: isoDate.nullable().optional().describe("新しい買った日(YYYY-MM-DD)。null で消去(紐づけた取引の日付になる)"),
   transaction_id: idField.nullable().optional().describe("新しい紐づけ先の取引 id。null で紐づけを外す"),
 });
@@ -111,11 +130,12 @@ export const listBooksFieldsSchema = z.strictObject({
   transaction_id: idField.optional().describe("この取引に紐づく本だけ"),
   unlinked: z.boolean().optional().describe("true で、レシートに紐づいていない本だけ"),
   limit: z.number().int().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT).describe(`records の最大件数(既定${DEFAULT_LIST_LIMIT}、最大${MAX_LIST_LIMIT})。count は絞り込みに合う全件で数える`),
+  offset: z.number().int().min(0).max(100_000).default(0).describe("先頭から飛ばす件数(ページ送り用。例: limit 24 の2ページ目は offset 24)"),
 });
 
 // ---- 保存・取得 ----
 
-const VIEW_SELECT = `SELECT b.id, b.isbn, b.title, b.author, b.series, b.buyer, b.note, COALESCE(b.purchased_on, t.date) AS purchased_on, b.transaction_id, b.created_at
+const VIEW_SELECT = `SELECT b.id, b.isbn, b.title, b.author, b.series, b.buyer, b.note, b.cover_url, COALESCE(b.purchased_on, t.date) AS purchased_on, b.transaction_id, b.created_at
   FROM books b LEFT JOIN transactions t ON t.id = b.transaction_id`;
 
 export type BookResult = { ok: true; book: BookView; message: string } | { ok: false; errors: FieldError[] };
@@ -140,7 +160,7 @@ const notFound = (id: string): { ok: false; errors: FieldError[] } => ({
 
 const label = (b: Pick<BookView, "title" | "isbn" | "author">) => `${b.title ?? `ISBN ${b.isbn}`}${b.author ? `(${b.author})` : ""}`;
 
-async function getBook(db: D1Database, id: string): Promise<BookView | null> {
+export async function getBook(db: D1Database, id: string): Promise<BookView | null> {
   return db.prepare(`${VIEW_SELECT} WHERE b.id = ?`).bind(id).first<BookView>();
 }
 
@@ -153,8 +173,8 @@ export async function addBook(db: D1Database, input: unknown, options: CoreOptio
 
   const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, m.isbn || null, m.title || null, m.author || null, m.series || null, m.buyer || null, m.note || null, m.purchased_on ?? null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
+    .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, cover_url, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, m.isbn || null, m.title || null, m.author || null, m.series || null, m.buyer || null, m.note || null, m.cover_url || null, m.purchased_on ?? null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
     .run();
   const book = (await getBook(db, id))!;
   // 同じ ISBN の本が、すでにあるときは知らせる(登録は止めない。同じ本を2冊買うこともある)
@@ -174,7 +194,7 @@ export async function updateBook(db: D1Database, input: unknown): Promise<BookRe
   const current = await getBook(db, id);
   if (!current) return notFound(id);
   if (Object.values(changes).every((v) => v === undefined)) {
-    return { ok: false, errors: [{ field: "input", message: "input: 更新する項目(isbn / title / author / series / buyer / note / purchased_on / transaction_id)を1つ以上指定してください" }] };
+    return { ok: false, errors: [{ field: "input", message: "input: 更新する項目(isbn / title / author / series / buyer / note / cover_url / purchased_on / transaction_id)を1つ以上指定してください" }] };
   }
   if (changes.transaction_id) {
     const errors = await checkRefs(db, { transaction_id: changes.transaction_id });
@@ -191,13 +211,14 @@ export async function updateBook(db: D1Database, input: unknown): Promise<BookRe
     series: pick(changes.series, current.series),
     buyer: pick(changes.buyer, current.buyer),
     note: pick(changes.note, current.note),
+    cover_url: pick(changes.cover_url, current.cover_url),
     purchased_on: pick(changes.purchased_on, raw?.purchased_on ?? null),
     transaction_id: pick(changes.transaction_id, current.transaction_id),
   };
   if (!next.isbn && !next.title) return { ok: false, errors: [{ field: "title", message: "title: isbn と title の両方を消すことはできません" }] };
   await db
-    .prepare("UPDATE books SET isbn = ?, title = ?, author = ?, series = ?, buyer = ?, note = ?, purchased_on = ?, transaction_id = ? WHERE id = ?")
-    .bind(next.isbn, next.title, next.author, next.series, next.buyer, next.note, next.purchased_on, next.transaction_id, id)
+    .prepare("UPDATE books SET isbn = ?, title = ?, author = ?, series = ?, buyer = ?, note = ?, cover_url = ?, purchased_on = ?, transaction_id = ? WHERE id = ?")
+    .bind(next.isbn, next.title, next.author, next.series, next.buyer, next.note, next.cover_url, next.purchased_on, next.transaction_id, id)
     .run();
   const book = (await getBook(db, id))!;
   return { ok: true, book, message: `本の記録を更新しました: ${label(book)}` };
@@ -250,8 +271,8 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
   };
   const [rows, total, series, authors, buyers] = await Promise.all([
     db
-      .prepare(`${VIEW_SELECT} ${clause} ORDER BY (COALESCE(b.purchased_on, t.date) IS NULL), COALESCE(b.purchased_on, t.date) DESC, b.created_at DESC, b.id DESC LIMIT ?`)
-      .bind(...binds, m.limit)
+      .prepare(`${VIEW_SELECT} ${clause} ORDER BY (COALESCE(b.purchased_on, t.date) IS NULL), COALESCE(b.purchased_on, t.date) DESC, b.created_at DESC, b.id DESC LIMIT ? OFFSET ?`)
+      .bind(...binds, m.limit, m.offset)
       .all<BookView>(),
     db.prepare(`SELECT COUNT(*) AS n ${from} ${clause}`).bind(...binds).first<{ n: number }>(),
     facet("series"),
@@ -259,13 +280,13 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
     facet("buyer"),
   ]);
   const count = total?.n ?? 0;
-  const truncated = count > rows.results.length;
+  const truncated = m.offset + rows.results.length < count;
   return {
     ok: true,
     count,
     records: rows.results,
     facets: { series, authors, buyers },
     truncated,
-    message: count === 0 ? "該当する本の記録はありません" : `${count}冊の本の記録があります${truncated ? `(買った日の新しい順に${rows.results.length}冊を返しました)` : ""}`,
+    message: count === 0 ? "該当する本の記録はありません" : rows.results.length === 0 ? `${count}冊の本の記録がありますが、この範囲(offset ${m.offset})にはありません` : `${count}冊の本の記録があります${truncated || m.offset > 0 ? `(買った日の新しい順に、${m.offset + 1}〜${m.offset + rows.results.length}冊目を返しました)` : ""}`,
   };
 }

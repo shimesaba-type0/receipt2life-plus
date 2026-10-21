@@ -974,6 +974,8 @@ export interface BookView {
   series: string | null;
   buyer: string | null;
   note: string | null;
+  // カバー画像のURL(https)。なければ null
+  cover_url: string | null;
   // 買った日。自分で入れた日、なければ紐づけた取引の日付
   purchased_on: string | null;
   transaction_id: string | null;
@@ -998,6 +1000,7 @@ export interface NewBook {
   series?: string;
   buyer?: string;
   note?: string;
+  cover_url?: string;
   purchased_on?: string;
   transaction_id?: string;
 }
@@ -1010,6 +1013,7 @@ export interface BookPatch {
   series?: string | null;
   buyer?: string | null;
   note?: string | null;
+  cover_url?: string | null;
   purchased_on?: string | null;
   transaction_id?: string | null;
 }

@@ -56,7 +56,7 @@ export function App() {
         {route.name === "categories" && <Categories />}
         {route.name === "accounts" && <Accounts />}
         {route.name === "subscriptions" && <Subscriptions />}
-        {route.name === "books" && <Books />}
+        {route.name === "books" && <Books id={route.id} />}
         {route.name === "tax" && <Tax />}
         {route.name === "usage" && <Usage />}
         {route.name === "products" && <Products month={route.month} product={route.product} by={route.by} />}

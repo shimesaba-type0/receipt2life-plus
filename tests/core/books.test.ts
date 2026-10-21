@@ -71,6 +71,17 @@ describe("本の記録", () => {
     expect(await listBooks(db(), { from: "2026-11-01", to: "2026-10-01" })).toMatchObject({ ok: false });
   });
 
+  it("ページ送り: limit と offset。件数は全件で数える", async () => {
+    for (let i = 1; i <= 5; i++) await addBook(db(), { title: `ダミー本${i}`, purchased_on: `2026-10-0${i}` }, { now: NOW });
+    const p1 = await listBooks(db(), { limit: 2 });
+    expect(p1.ok && p1.records.map((r) => r.title)).toEqual(["ダミー本5", "ダミー本4"]);
+    expect(p1.ok && p1.count).toBe(5);
+    const p3 = await listBooks(db(), { limit: 2, offset: 4 });
+    expect(p3.ok && p3.records.map((r) => r.title)).toEqual(["ダミー本1"]);
+    const past = await listBooks(db(), { limit: 2, offset: 10 });
+    expect(past).toMatchObject({ ok: true, count: 5, records: [] });
+  });
+
   it("直す・消す。ISBN とタイトルの両方は消せない", async () => {
     const a = await addBook(db(), { isbn: ISBN13, title: "ダミー本", author: "著者X", purchased_on: "2026-10-01" }, { now: NOW });
     const id = a.ok ? a.book.id : "";
@@ -81,6 +92,17 @@ describe("本の記録", () => {
     expect(await updateBook(db(), { id: "nope", note: "x" })).toMatchObject({ ok: false, errors: [{ field: "id" }] });
     expect(await deleteBook(db(), { id })).toMatchObject({ ok: true });
     expect(await deleteBook(db(), { id })).toMatchObject({ ok: false });
+  });
+
+  it("カバー画像のURLは https だけ。直す・消すこともできる", async () => {
+    const bad = await addBook(db(), { title: "ダミー", cover_url: "http://example.test/c.jpg" }, { now: NOW });
+    expect(bad).toMatchObject({ ok: false, errors: [{ field: "cover_url" }] });
+    const a = await addBook(db(), { title: "ダミー本", cover_url: "https://example.test/c.jpg#x" }, { now: NOW });
+    expect(a).toMatchObject({ ok: true, book: { cover_url: "https://example.test/c.jpg" } });
+    const id = a.ok ? a.book.id : "";
+    expect(await updateBook(db(), { id, cover_url: "https://example.test/d.jpg" })).toMatchObject({ ok: true, book: { cover_url: "https://example.test/d.jpg" } });
+    expect(await updateBook(db(), { id, cover_url: "ftp://example.test/d.jpg" })).toMatchObject({ ok: false });
+    expect(await updateBook(db(), { id, cover_url: null })).toMatchObject({ ok: true, book: { cover_url: null } });
   });
 
   it("取引を消しても本の記録は残り、紐づけだけ外れる", async () => {

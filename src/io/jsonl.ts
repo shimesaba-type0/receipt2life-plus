@@ -27,6 +27,7 @@ import {
   MAX_NOTE_LENGTH as MAX_BOOK_NOTE_LENGTH,
   MAX_SERIES_LENGTH,
   MAX_TITLE_LENGTH as MAX_BOOK_TITLE_LENGTH,
+  coverUrlField,
   normalizeIsbn,
 } from "../core/books";
 import { MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
@@ -103,7 +104,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   // 買った本の記録。purchased_on は、自分で入れた日だけ(取引の日付を借りた分は出さない)
   {
-    sql: `SELECT 'book' AS type, id, isbn, title, author, series, buyer, note, purchased_on, transaction_id, created_at
+    sql: `SELECT 'book' AS type, id, isbn, title, author, series, buyer, note, cover_url, purchased_on, transaction_id, created_at
           FROM books WHERE id > ? ORDER BY id LIMIT ?`,
   },
   // サブスク・保険などの固定費(別枠)。active は true / false で出す
@@ -272,6 +273,8 @@ const bookSchema = z
     series: z.string().trim().max(MAX_SERIES_LENGTH).optional(),
     buyer: z.string().trim().max(MAX_BUYER_LENGTH).optional(),
     note: z.string().trim().max(MAX_BOOK_NOTE_LENGTH).optional(),
+    // 旧形式(cover_url なし)の行も取り込める
+    cover_url: coverUrlField.optional(),
     purchased_on: isoDate.optional(),
     transaction_id: z.string().min(1).optional(),
     created_at: timestampField.optional(),
@@ -1012,8 +1015,8 @@ async function importBooks(db: D1Database, entries: Entry[], report: Report, now
       id: v.id,
       statements: [
         db
-          .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(v.id, d.isbn || null, d.title || null, d.author || null, d.series || null, d.buyer || null, d.note || null, d.purchased_on ?? null, d.transaction_id ?? null, d.created_at ?? nowIso),
+          .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, cover_url, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, d.isbn || null, d.title || null, d.author || null, d.series || null, d.buyer || null, d.note || null, d.cover_url || null, d.purchased_on ?? null, d.transaction_id ?? null, d.created_at ?? nowIso),
       ],
     });
   }

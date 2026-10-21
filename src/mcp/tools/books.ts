@@ -25,7 +25,7 @@ export function registerBookTools(server: McpServer, db: D1Database): void {
     {
       title: "買った本を一覧する",
       description: [
-        "登録済みの本の記録を、買った日の新しい順に返す(日がない本は最後)。絞り込み(すべて任意・AND): q(タイトル・著者・シリーズ・購入者・メモ・ISBN に部分一致。空白で区切るとすべてを含むものに絞る)、series / author / buyer(完全一致)、isbn(10桁でも13桁でも)、from / to(買った日)、transaction_id、unlinked(true でレシートに紐づいていない本だけ)、limit(既定100、最大500)。",
+        "登録済みの本の記録を、買った日の新しい順に返す(日がない本は最後)。絞り込み(すべて任意・AND): q(タイトル・著者・シリーズ・購入者・メモ・ISBN に部分一致。空白で区切るとすべてを含むものに絞る)、series / author / buyer(完全一致)、isbn(10桁でも13桁でも)、from / to(買った日)、transaction_id、unlinked(true でレシートに紐づいていない本だけ)、limit(既定100、最大500)と offset(飛ばす件数。ページ送り用)。",
         "返り値: count(絞り込みに合う全件の数)、records(各要素は id、isbn、title、author、series、buyer、note、purchased_on(買った日。紐づけた取引の日付を借りることがある)、transaction_id、created_at)、facets(series / authors / buyers の既存の表記の一覧)。",
         "使いどころ1: 「この本は買ったっけ?」と聞かれたら、isbn か q で探して答える。使いどころ2: 登録の前に、同じ本がないか・表記をそろえる名前があるかを確かめる。update_book / delete_book に渡す id を調べるときにも使う。",
       ].join("\n"),
