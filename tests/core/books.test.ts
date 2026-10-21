@@ -105,6 +105,28 @@ describe("本の記録", () => {
     expect(await updateBook(db(), { id, cover_url: null })).toMatchObject({ ok: true, book: { cover_url: null } });
   });
 
+  it("手放した本: 状況・手放した日を持ち、絞り込める。手元にある本には手放した日を付けられない", async () => {
+    const a = await addBook(db(), { title: "ダミー本A" }, { now: NOW });
+    expect(a).toMatchObject({ ok: true, book: { status: "owned", released_on: null } });
+    const b = await addBook(db(), { title: "ダミー本B", status: "sold", released_on: "2026-10-03", note: "金額はメモに" }, { now: NOW });
+    expect(b).toMatchObject({ ok: true, book: { status: "sold", released_on: "2026-10-03" } });
+    expect(await addBook(db(), { title: "ダミー本C", released_on: "2026-10-03" }, { now: NOW })).toMatchObject({ ok: false, errors: [{ field: "released_on" }] });
+    expect(await addBook(db(), { title: "ダミー本D", status: "borrowed" }, { now: NOW })).toMatchObject({ ok: false, errors: [{ field: "status" }] });
+
+    const owned = await listBooks(db(), { status: "owned" });
+    expect(owned.ok && owned.records.map((r) => r.title)).toEqual(["ダミー本A"]);
+    const released = await listBooks(db(), { status: "released" });
+    expect(released.ok && released.records.map((r) => r.title)).toEqual(["ダミー本B"]);
+    const sold = await listBooks(db(), { status: "sold" });
+    expect(sold.ok && sold.count).toBe(1);
+    expect((await listBooks(db(), { status: "given" })).ok && (await listBooks(db(), { status: "given" }))).toMatchObject({ count: 0 });
+
+    const id = b.ok ? b.book.id : "";
+    expect(await updateBook(db(), { id, status: "given" })).toMatchObject({ ok: true, book: { status: "given", released_on: "2026-10-03" } });
+    expect(await updateBook(db(), { id, status: "owned", released_on: "2026-10-04" })).toMatchObject({ ok: false, errors: [{ field: "released_on" }] });
+    expect(await updateBook(db(), { id, status: "owned" })).toMatchObject({ ok: true, book: { status: "owned", released_on: null } });
+  });
+
   it("取引を消しても本の記録は残り、紐づけだけ外れる", async () => {
     const tx = await addTransactions(db(), { transactions: [{ date: "2026-10-05", amount: 1500, merchant: "ダミー書店", category: "その他", account: "現金" }] }, { now: NOW });
     const txId = tx.ok ? tx.registered[0]!.id : "";

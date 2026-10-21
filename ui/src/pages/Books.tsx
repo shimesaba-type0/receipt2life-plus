@@ -4,7 +4,7 @@ import { addBook, deleteBook, getBook, getBooks, updateBook } from "../api";
 import { BookCover } from "../components/BookCover";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { PAGE_SIZES, bookHeading, checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, pageCountOf, patchFrom, type BookForm } from "./booksLogic";
+import { BOOK_STATUS_OPTIONS, PAGE_SIZES, bookHeading, checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, pageCountOf, patchFrom, statusLabel, type BookForm } from "./booksLogic";
 import { readPageSize, savePageSize } from "./booksStorage";
 import "./Categories.css";
 import "./Books.css";
@@ -14,11 +14,12 @@ interface Filter {
   series: string;
   author: string;
   buyer: string;
+  status: string;
   from: string;
   to: string;
   unlinked: boolean;
 }
-const NO_FILTER: Filter = { q: "", series: "", author: "", buyer: "", from: "", to: "", unlinked: false };
+const NO_FILTER: Filter = { q: "", series: "", author: "", buyer: "", status: "", from: "", to: "", unlinked: false };
 
 // 買った本の記録。一覧(カバーの並び)と、1冊の詳細(/books/:id)。タイトルなどをネットで調べて入れるのは、AI(MCP)に頼む
 export function Books(props: { id: string | null }) {
@@ -124,6 +125,14 @@ function BookList(props: { selectedId: string | null }) {
             <FilterSelect label="シリーズ" value={filter.series} options={facets.series} onChange={(v) => set("series", v)} />
             <FilterSelect label="著者" value={filter.author} options={facets.authors} onChange={(v) => set("author", v)} />
             <FilterSelect label="購入者" value={filter.buyer} options={facets.buyers} onChange={(v) => set("buyer", v)} />
+            <label class="books__field">
+              状況
+              <select value={filter.status} onChange={(e) => set("status", e.currentTarget.value)}>
+                <option value="">すべて</option>
+                <option value="owned">手元にある本だけ</option>
+                <option value="released">手放した本だけ</option>
+              </select>
+            </label>
           </div>
           <div class="books__row">
             <label class="books__field">
@@ -203,7 +212,7 @@ function BookList(props: { selectedId: string | null }) {
         {data?.records.map((b) => (
           <li key={b.id}>
             <Link href={`/books/${encodeURIComponent(b.id)}`} class={`books__tile${b.id === props.selectedId ? " is-selected" : ""}`} keepScroll aria-current={b.id === props.selectedId ? "page" : undefined}>
-              <BookCover title={b.title} isbn={b.isbn} coverUrl={b.cover_url} />
+              <BookCover title={b.title} isbn={b.isbn} coverUrl={b.cover_url} status={b.status} />
               <span class="books__tile-title">{bookHeading(b)}</span>
               {b.author && <span class="books__tile-author">{b.author}</span>}
             </Link>
@@ -339,7 +348,7 @@ function BookDetail(props: { id: string; prevId: string | null; nextId: string |
       {book && !editing && (
         <article class="bookd">
           <div class="bookd__cover">
-            <BookCover title={book.title} isbn={book.isbn} coverUrl={book.cover_url} />
+            <BookCover title={book.title} isbn={book.isbn} coverUrl={book.cover_url} status={book.status} />
           </div>
           <div class="bookd__info">
             <div class="bookd__head">
@@ -347,6 +356,8 @@ function BookDetail(props: { id: string; prevId: string | null; nextId: string |
               {book.author && <p class="bookd__author">{book.author}</p>}
             </div>
             <dl class="bookd__table">
+              {book.status !== "owned" && <Row label="状況" value={statusLabel(book.status)} />}
+              {book.released_on && <Row label="手放した日" value={book.released_on} />}
               {book.series && <Row label="シリーズ" value={book.series} />}
               {book.purchased_on && <Row label="買った日" value={book.purchased_on} />}
               {book.buyer && <Row label="購入者" value={book.buyer} />}
@@ -461,7 +472,23 @@ function BookFormCard(props: { title: string; initial: BookForm; submitLabel: st
         <input value={f.cover_url} onInput={set("cover_url")} inputMode="url" maxLength={500} />
       </label>
       <label>
-        メモ
+        手元の状況
+        <select value={f.status} onChange={(e) => setF((cur) => ({ ...cur, status: e.currentTarget.value as BookForm["status"] }))}>
+          {BOOK_STATUS_OPTIONS.map((o) => (
+            <option value={o.value} key={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {f.status !== "owned" && (
+        <label>
+          手放した日(わからなければ空でもよい)
+          <input type="date" value={f.released_on} onInput={set("released_on")} />
+        </label>
+      )}
+      <label>
+        メモ(売った金額や、渡した相手など。金額は記録しません)
         <input value={f.note} onInput={set("note")} maxLength={500} />
       </label>
       {error && (

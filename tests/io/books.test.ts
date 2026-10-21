@@ -12,15 +12,15 @@ describe("本の記録のバックアップ(エクスポートとインポート
     const lines = [
       JSON.stringify({ type: "transaction", id: "t1", date: "2026-10-05", amount: 1500, merchant: "ダミー書店", category: "その他" }),
       JSON.stringify({ type: "book", id: "b1", isbn: "4-00-000000-4", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", cover_url: "https://example.test/c.jpg", transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" }),
-      JSON.stringify({ type: "book", id: "b2", title: "タイトルだけ", purchased_on: "2026-09-01" }),
+      JSON.stringify({ type: "book", id: "b2", title: "タイトルだけ", purchased_on: "2026-09-01", status: "sold", released_on: "2026-10-01" }),
     ].join("\n");
     const res = await post(lines);
     expect(await res.json()).toMatchObject({ ok: true, summary: { total: 3, ok: 3, errors: 0 } });
 
     const exported = (await exportLines()).filter((r) => r.type === "book");
     expect(exported).toEqual([
-      { type: "book", id: "b1", isbn: "9784000000000", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", cover_url: "https://example.test/c.jpg", purchased_on: null, transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" },
-      { type: "book", id: "b2", isbn: null, title: "タイトルだけ", author: null, series: null, buyer: null, note: null, cover_url: null, purchased_on: "2026-09-01", transaction_id: null, created_at: expect.any(String) },
+      { type: "book", id: "b1", isbn: "9784000000000", title: "ダミー本", author: "ダミー著者", series: "ダミーシリーズ", buyer: "ダミー太郎", note: "メモ", cover_url: "https://example.test/c.jpg", status: "owned", released_on: null, purchased_on: null, transaction_id: "t1", created_at: "2026-10-05T00:00:00.000Z" },
+      { type: "book", id: "b2", isbn: null, title: "タイトルだけ", author: null, series: null, buyer: null, note: null, cover_url: null, status: "sold", released_on: "2026-10-01", purchased_on: "2026-09-01", transaction_id: null, created_at: expect.any(String) },
     ]);
 
     // 書き出したものを、そのまま読み込み直しても、重複としてスキップされる
@@ -38,10 +38,12 @@ describe("本の記録のバックアップ(エクスポートとインポート
       JSON.stringify({ type: "book", id: "x2", author: "ダミー著者" }),
       JSON.stringify({ type: "book", id: "x3", title: "ダミー", transaction_id: "nope" }),
       JSON.stringify({ type: "book", id: "x4", title: "正しい行" }),
+      JSON.stringify({ type: "book", id: "x5", title: "状況の誤り", status: "borrowed" }),
+      JSON.stringify({ type: "book", id: "x6", title: "手元にあるのに手放した日", status: "owned", released_on: "2026-10-01" }),
     ].join("\n");
     const res = (await (await post(lines)).json()) as { summary: { ok: number; errors: number }; results: { status: string }[] };
-    expect(res.summary).toMatchObject({ ok: 1, errors: 3 });
-    expect(res.results.map((r) => r.status)).toEqual(["error", "error", "error", "ok"]);
+    expect(res.summary).toMatchObject({ ok: 1, errors: 5 });
+    expect(res.results.map((r) => r.status)).toEqual(["error", "error", "error", "ok", "error", "error"]);
   });
 });
 

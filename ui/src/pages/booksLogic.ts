@@ -1,5 +1,17 @@
 import type { BookPatch, BookView, NewBook } from "../../../src/api/contract";
 
+export type BookStatus = BookView["status"];
+// 手元の状況(選ぶ順)。売った金額は記録しない
+export const BOOK_STATUS_OPTIONS: { value: BookStatus; label: string }[] = [
+  { value: "owned", label: "手元にある" },
+  { value: "sold", label: "売った" },
+  { value: "given", label: "譲った・贈った" },
+  { value: "donated", label: "寄贈した" },
+  { value: "lost", label: "なくした" },
+  { value: "discarded", label: "処分した" },
+];
+export const statusLabel = (v: BookStatus): string => BOOK_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v;
+
 // 本の画面の、画面に依存しない部分(テストする)
 
 export interface BookForm {
@@ -10,13 +22,15 @@ export interface BookForm {
   buyer: string;
   note: string;
   cover_url: string;
+  status: BookStatus;
+  released_on: string;
   purchased_on: string;
 }
 
-export const EMPTY_FORM: BookForm = { isbn: "", title: "", author: "", series: "", buyer: "", note: "", cover_url: "", purchased_on: "" };
+export const EMPTY_FORM: BookForm = { isbn: "", title: "", author: "", series: "", buyer: "", note: "", cover_url: "", status: "owned", released_on: "", purchased_on: "" };
 
 export function formFromBook(b: BookView): BookForm {
-  return { isbn: b.isbn ?? "", title: b.title ?? "", author: b.author ?? "", series: b.series ?? "", buyer: b.buyer ?? "", note: b.note ?? "", cover_url: b.cover_url ?? "", purchased_on: b.purchased_on ?? "" };
+  return { isbn: b.isbn ?? "", title: b.title ?? "", author: b.author ?? "", series: b.series ?? "", buyer: b.buyer ?? "", note: b.note ?? "", cover_url: b.cover_url ?? "", status: b.status, released_on: b.released_on ?? "", purchased_on: b.purchased_on ?? "" };
 }
 
 /** ISBN もタイトルも空のときの案内(送る前に出す)。問題なければ null */
@@ -32,13 +46,19 @@ export function newBookFrom(f: BookForm): NewBook {
     const v = f[key].trim();
     if (v !== "") out[key] = v;
   }
+  if (f.status !== "owned") {
+    out.status = f.status;
+    if (f.released_on.trim() !== "") out.released_on = f.released_on.trim();
+  }
   return out;
 }
 
 /** 直す入力。変えた項目だけ送る(空にしたものは null で消去) */
 export function patchFrom(before: BookForm, after: BookForm): BookPatch {
   const out: BookPatch = {};
-  for (const key of ["isbn", "title", "author", "series", "buyer", "note", "cover_url", "purchased_on"] as const) {
+  if (after.status !== before.status) out.status = after.status;
+  for (const key of ["isbn", "title", "author", "series", "buyer", "note", "cover_url", "released_on", "purchased_on"] as const) {
+    if (key === "released_on" && after.status === "owned") continue;
     const b = before[key].trim();
     const a = after[key].trim();
     if (a !== b) out[key] = a === "" ? null : a;

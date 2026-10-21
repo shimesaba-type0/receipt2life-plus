@@ -42,6 +42,13 @@ function isbn13Check(first12: string): number {
   return (10 - (sum % 10)) % 10;
 }
 
+// 手元の状況。売った金額は記録しない(メモに書く)
+export const BOOK_STATUSES = ["owned", "sold", "given", "donated", "lost", "discarded"] as const;
+export type BookStatus = (typeof BOOK_STATUSES)[number];
+export const BOOK_STATUS_LABELS: Record<BookStatus, string> = { owned: "手元にある", sold: "売った", given: "譲った・贈った", donated: "寄贈した", lost: "なくした", discarded: "処分した" };
+const STATUS_DESCRIPTION = `手元の状況: ${BOOK_STATUSES.map((v) => `${v}=${BOOK_STATUS_LABELS[v]}`).join(" / ")}。省略すると owned。売った金額は記録しない(note に書く)`;
+const statusField = z.enum(BOOK_STATUSES, { error: `status は ${BOOK_STATUSES.join(" / ")} のいずれかで指定してください` });
+
 export interface BookView {
   id: string;
   // 13桁。なければ null
@@ -53,6 +60,9 @@ export interface BookView {
   note: string | null;
   // カバー画像のURL(https)。なければ null
   cover_url: string | null;
+  // 手元の状況と、手放した日(手元にあるときは null)
+  status: BookStatus;
+  released_on: string | null;
   // 買った日。自分で入れた日、なければ紐づけた取引の日付。どちらもなければ null
   purchased_on: string | null;
   transaction_id: string | null;
@@ -97,6 +107,8 @@ export const newBookSchema = z
     buyer: text(MAX_BUYER_LENGTH).optional().describe(`購入者(買った人。${MAX_BUYER_LENGTH}文字まで)。任意`),
     note: text(MAX_NOTE_LENGTH).optional().describe(`メモ(${MAX_NOTE_LENGTH}文字まで)。任意`),
     cover_url: coverUrlField.optional().describe("カバー画像のURL(https のみ。500文字まで)。任意。画像は保存せず、URLを参照して表示する。ネットで本を調べたときに分かれば入れる"),
+    status: statusField.optional().describe(STATUS_DESCRIPTION),
+    released_on: isoDate.optional().describe("手放した日(YYYY-MM-DD)。任意。status が owned のときは付けられない"),
     purchased_on: isoDate.optional().describe("買った日(YYYY-MM-DD)。任意。省略して transaction_id を付けると、その取引の日付が買った日になる"),
     transaction_id: idField.optional().describe("紐づけるレシートの取引 id(list_transactions や add_transactions の結果で分かる)。任意"),
   })
@@ -113,6 +125,8 @@ export const updateBookFieldsSchema = z.strictObject({
   buyer: text(MAX_BUYER_LENGTH).nullable().optional().describe("新しい購入者。null か空文字で消去"),
   note: text(MAX_NOTE_LENGTH).nullable().optional().describe("新しいメモ。null か空文字で消去"),
   cover_url: coverUrlField.nullable().optional().describe("新しいカバー画像のURL(https)。null か空文字で消去"),
+  status: statusField.optional().describe(`新しい手元の状況。${STATUS_DESCRIPTION}。owned に戻すと、手放した日は消える`),
+  released_on: isoDate.nullable().optional().describe("新しい手放した日(YYYY-MM-DD)。null で消去。status が owned のときは付けられない"),
   purchased_on: isoDate.nullable().optional().describe("新しい買った日(YYYY-MM-DD)。null で消去(紐づけた取引の日付になる)"),
   transaction_id: idField.nullable().optional().describe("新しい紐づけ先の取引 id。null で紐づけを外す"),
 });
@@ -124,6 +138,7 @@ export const listBooksFieldsSchema = z.strictObject({
   series: z.string().trim().min(1).max(MAX_SERIES_LENGTH).optional().describe("このシリーズの本だけ(完全一致)"),
   author: z.string().trim().min(1).max(MAX_AUTHOR_LENGTH).optional().describe("この著者の本だけ(完全一致)"),
   buyer: z.string().trim().min(1).max(MAX_BUYER_LENGTH).optional().describe("この購入者の本だけ(完全一致)"),
+  status: z.enum(["owned", "released", ...BOOK_STATUSES.filter((v) => v !== "owned")], { error: "status は owned / released / sold / given / donated / lost / discarded のいずれかで指定してください" }).optional().describe("手元の状況で絞る。owned=手元にある本だけ、released=手放した本すべて、ほかは個別の状況"),
   isbn: isbnField.optional().describe("この ISBN の本だけ(10桁でも13桁でもよい)。同じ本を買っていないか確かめるのに使う"),
   from: isoDate.optional().describe("この日以降に買った本(YYYY-MM-DD)"),
   to: isoDate.optional().describe("この日以前に買った本(YYYY-MM-DD)"),
@@ -135,7 +150,7 @@ export const listBooksFieldsSchema = z.strictObject({
 
 // ---- 保存・取得 ----
 
-const VIEW_SELECT = `SELECT b.id, b.isbn, b.title, b.author, b.series, b.buyer, b.note, b.cover_url, COALESCE(b.purchased_on, t.date) AS purchased_on, b.transaction_id, b.created_at
+const VIEW_SELECT = `SELECT b.id, b.isbn, b.title, b.author, b.series, b.buyer, b.note, b.cover_url, b.status, b.released_on, COALESCE(b.purchased_on, t.date) AS purchased_on, b.transaction_id, b.created_at
   FROM books b LEFT JOIN transactions t ON t.id = b.transaction_id`;
 
 export type BookResult = { ok: true; book: BookView; message: string } | { ok: false; errors: FieldError[] };
@@ -171,10 +186,12 @@ export async function addBook(db: D1Database, input: unknown, options: CoreOptio
   const errors = await checkRefs(db, m);
   if (errors.length > 0) return { ok: false, errors };
 
+  const status = m.status ?? "owned";
+  if (status === "owned" && m.released_on) return { ok: false, errors: [{ field: "released_on", message: "released_on: 手元にある本には、手放した日は付けられません。status を変えてください" }] };
   const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, cover_url, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, m.isbn || null, m.title || null, m.author || null, m.series || null, m.buyer || null, m.note || null, m.cover_url || null, m.purchased_on ?? null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
+    .prepare("INSERT INTO books (id, isbn, title, author, series, buyer, note, cover_url, status, released_on, purchased_on, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, m.isbn || null, m.title || null, m.author || null, m.series || null, m.buyer || null, m.note || null, m.cover_url || null, status, m.released_on ?? null, m.purchased_on ?? null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
     .run();
   const book = (await getBook(db, id))!;
   // 同じ ISBN の本が、すでにあるときは知らせる(登録は止めない。同じ本を2冊買うこともある)
@@ -194,7 +211,7 @@ export async function updateBook(db: D1Database, input: unknown): Promise<BookRe
   const current = await getBook(db, id);
   if (!current) return notFound(id);
   if (Object.values(changes).every((v) => v === undefined)) {
-    return { ok: false, errors: [{ field: "input", message: "input: 更新する項目(isbn / title / author / series / buyer / note / cover_url / purchased_on / transaction_id)を1つ以上指定してください" }] };
+    return { ok: false, errors: [{ field: "input", message: "input: 更新する項目(isbn / title / author / series / buyer / note / cover_url / status / released_on / purchased_on / transaction_id)を1つ以上指定してください" }] };
   }
   if (changes.transaction_id) {
     const errors = await checkRefs(db, { transaction_id: changes.transaction_id });
@@ -212,13 +229,16 @@ export async function updateBook(db: D1Database, input: unknown): Promise<BookRe
     buyer: pick(changes.buyer, current.buyer),
     note: pick(changes.note, current.note),
     cover_url: pick(changes.cover_url, current.cover_url),
+    status: changes.status ?? current.status,
+    released_on: changes.status === "owned" ? null : pick(changes.released_on, current.released_on),
     purchased_on: pick(changes.purchased_on, raw?.purchased_on ?? null),
     transaction_id: pick(changes.transaction_id, current.transaction_id),
   };
+  if (next.status === "owned" && changes.released_on) return { ok: false, errors: [{ field: "released_on", message: "released_on: 手元にある本には、手放した日は付けられません。status を変えてください" }] };
   if (!next.isbn && !next.title) return { ok: false, errors: [{ field: "title", message: "title: isbn と title の両方を消すことはできません" }] };
   await db
-    .prepare("UPDATE books SET isbn = ?, title = ?, author = ?, series = ?, buyer = ?, note = ?, cover_url = ?, purchased_on = ?, transaction_id = ? WHERE id = ?")
-    .bind(next.isbn, next.title, next.author, next.series, next.buyer, next.note, next.cover_url, next.purchased_on, next.transaction_id, id)
+    .prepare("UPDATE books SET isbn = ?, title = ?, author = ?, series = ?, buyer = ?, note = ?, cover_url = ?, status = ?, released_on = ?, purchased_on = ?, transaction_id = ? WHERE id = ?")
+    .bind(next.isbn, next.title, next.author, next.series, next.buyer, next.note, next.cover_url, next.status, next.released_on, next.purchased_on, next.transaction_id, id)
     .run();
   const book = (await getBook(db, id))!;
   return { ok: true, book, message: `本の記録を更新しました: ${label(book)}` };
@@ -257,6 +277,9 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
   add("b.series = ?", m.series);
   add("b.author = ?", m.author);
   add("b.buyer = ?", m.buyer);
+  if (m.status === "owned") where.push("b.status = 'owned'");
+  else if (m.status === "released") where.push("b.status <> 'owned'");
+  else add("b.status = ?", m.status);
   add("b.isbn = ?", m.isbn || undefined);
   add("COALESCE(b.purchased_on, t.date) >= ?", m.from);
   add("COALESCE(b.purchased_on, t.date) <= ?", m.to);

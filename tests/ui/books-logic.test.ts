@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_SIZES, bookHeading, pageCountOf, checkForm, coverColor, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, patchFrom } from "../../ui/src/pages/booksLogic";
+import { PAGE_SIZES, statusLabel, bookHeading, pageCountOf, checkForm, coverColor, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, patchFrom } from "../../ui/src/pages/booksLogic";
 
 describe("本の画面の部品", () => {
   it("ISBN もタイトルも空なら、案内を返す", () => {
@@ -13,9 +13,19 @@ describe("本の画面の部品", () => {
   });
 
   it("直すときは、変えた項目だけ送る。空にしたら null", () => {
-    const before = formFromBook({ id: "b", isbn: "9784000000000", title: "ダミー", author: "著者", series: null, buyer: null, note: null, cover_url: null, purchased_on: "2026-10-01", transaction_id: null, created_at: "x" });
+    const before = formFromBook({ id: "b", isbn: "9784000000000", title: "ダミー", author: "著者", series: null, buyer: null, note: null, cover_url: null, status: "owned", released_on: null, purchased_on: "2026-10-01", transaction_id: null, created_at: "x" });
     expect(patchFrom(before, before)).toEqual({});
     expect(patchFrom(before, { ...before, author: "", series: "S1" })).toEqual({ author: null, series: "S1" });
+  });
+
+  it("手放した本: 状況と手放した日を送る。手元にあるときは送らない", () => {
+    expect(newBookFrom({ ...EMPTY_FORM, title: "ダミー" })).toEqual({ title: "ダミー" });
+    expect(newBookFrom({ ...EMPTY_FORM, title: "ダミー", status: "sold", released_on: "2026-10-05" })).toEqual({ title: "ダミー", status: "sold", released_on: "2026-10-05" });
+    const before = { ...EMPTY_FORM, title: "ダミー" };
+    expect(patchFrom(before, { ...before, status: "given", released_on: "2026-10-06" })).toEqual({ status: "given", released_on: "2026-10-06" });
+    const sold = { ...before, status: "sold" as const, released_on: "2026-10-05" };
+    expect(patchFrom(sold, { ...sold, status: "owned", released_on: "" })).toEqual({ status: "owned" });
+    expect(statusLabel("sold")).toBe("売った");
   });
 
   it("カバーがないときの色は、同じ題なら同じ。見出しはタイトル、なければ ISBN", () => {

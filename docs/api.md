@@ -291,10 +291,12 @@ ISBN・タイトル・著者・シリーズ・購入者・メモを残す。レ�
 
 | ルート | 入力 | 戻り |
 |---|---|---|
-| `GET /api/books` | クエリ(すべて任意・AND): `q`(タイトル・著者・シリーズ・購入者・メモ・ISBN。空白区切りで AND)、`series` / `author` / `buyer`(完全一致)、`isbn`、`from` / `to`(買った日)、`transaction_id`、`unlinked=1`(紐づけなしだけ)、`limit`(既定100、最大500) | `BooksData`: `count`、`records`(買った日の新しい順。日がない本は最後)、`facets`(`series` / `authors` / `buyers` の候補。全件から)、`truncated`、`message` |
+| `GET /api/books` | クエリ(すべて任意・AND): `q`(タイトル・著者・シリーズ・購入者・メモ・ISBN。空白区切りで AND)、`series` / `author` / `buyer`(完全一致)、`status`(`owned`=手元にある本だけ、`released`=手放した本すべて、ほかは個別の状況)、`isbn`、`from` / `to`(買った日)、`transaction_id`、`unlinked=1`(紐づけなしだけ)、`limit`(既定100、最大500)、`offset` | `BooksData`: `count`、`records`(買った日の新しい順。日がない本は最後)、`facets`(`series` / `authors` / `buyers` の候補。全件から)、`truncated`、`message` |
 | `GET /api/books/:id` | なし | `book: BookView`。無い id は404(詳細画面用) |
-| `POST /api/books` | `NewBook`(`isbn` か `title` が必須。`author?` / `series?` / `buyer?` / `note?` / `cover_url?`(https のURL。画像は保存せず参照だけ)/ `purchased_on?` / `transaction_id?`。ISBN は10桁でも13桁でもよく、13桁にそろえて保存) | `book: BookView`, `message`(同じ ISBN の本がすでにあれば、そのことも) |
+| `POST /api/books` | `NewBook`(`isbn` か `title` が必須。`author?` / `series?` / `buyer?` / `note?` / `cover_url?`(https のURL。画像は保存せず参照だけ)/ `status?`(`owned`〈省略時〉/ `sold` / `given` / `donated` / `lost` / `discarded`)/ `released_on?`(手放した日。`owned` には付けられない)/ `purchased_on?` / `transaction_id?`。ISBN は10桁でも13桁でもよく、13桁にそろえて保存) | `book: BookView`, `message`(同じ ISBN の本がすでにあれば、そのことも) |
 | `PATCH /api/books/:id` | `BookPatch`(指定した項目だけ変える。`null` か空文字で消去。`isbn` と `title` の両方は消せない) | `book`, `message` |
 | `DELETE /api/books/:id` | なし | `deleted: BookView`, `message` |
 
 `BookView.purchased_on` は、自分で入れた買った日。なければ、紐づけた取引の日付。
+
+手元の状況: `owned`=手元にある / `sold`=売った / `given`=譲った・贈った / `donated`=寄贈した / `lost`=なくした / `discarded`=処分した。売った金額は記録しない(`note` に書く)。`owned` に戻すと手放した日は消える。

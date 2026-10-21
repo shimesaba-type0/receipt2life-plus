@@ -231,7 +231,7 @@ export const getVenues = () => request<VenuesData>("GET", "/api/venues");
 export const deleteSeatRecord = (id: string) => request<{ deleted: SeatRecordView; message: string }>("DELETE", `/api/seat-records/${encodeURIComponent(id)}`);
 
 // 買った本の記録
-export function getBooks(filter: { q?: string; series?: string; author?: string; buyer?: string; from?: string; to?: string; unlinked?: boolean; limit?: number; offset?: number } = {}) {
+export function getBooks(filter: { q?: string; series?: string; author?: string; buyer?: string; status?: string; from?: string; to?: string; unlinked?: boolean; limit?: number; offset?: number } = {}) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "" && v !== false && v !== 0) params.set(k, v === true ? "1" : String(v));
   const qs = params.toString();

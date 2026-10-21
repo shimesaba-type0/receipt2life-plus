@@ -359,7 +359,7 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.get("/api/books", async (c) => {
     const q = c.req.query();
     const filter: Record<string, unknown> = {};
-    for (const key of ["q", "series", "author", "buyer", "isbn", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
+    for (const key of ["q", "series", "author", "buyer", "isbn", "status", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
     if (q.unlinked === "1" || q.unlinked === "true") filter.unlinked = true;
     if (q.limit) filter.limit = Number(q.limit);
     if (q.offset) filter.offset = Number(q.offset);
