@@ -58,7 +58,7 @@
 .bookp__nav:disabled { opacity: 0.3; cursor: default; }
 @media (min-width: 900px) {
   .books.has-panel { max-width: 1280px; }
-  .books.has-panel .books__split { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
+  .books.has-panel .books__split { display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w, 400px); gap: 24px; align-items: start; }
   .books__backdrop { display: none; }
   .books__panel { position: sticky; top: 76px; left: auto; right: auto; bottom: auto; max-height: calc(100vh - 100px); border: 1px solid var(--line); border-radius: 24px; box-shadow: none; padding: 8px 20px 24px; }
 }
@@ -70,3 +70,14 @@
 
 .books__switch { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
 .books__hidden { margin: 0; font-size: 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+
+.books__tools { display: flex; flex-wrap: wrap; gap: 10px; }
+.books__tool { min-height: 44px; padding: 0 18px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--muted); font-size: 14px; font-weight: 500; cursor: pointer; }
+.books__tool.is-on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.books__resize { display: none; }
+@media (min-width: 900px) {
+  .books__panel { position: sticky; }
+  .books__resize { display: block; position: absolute; left: 0; top: 0; bottom: 0; width: 12px; z-index: 2; cursor: col-resize; touch-action: none; }
+  .books__resize::after { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 44px; margin-top: -22px; border-radius: 2px; background: var(--line); }
+  .books__resize:hover::after { background: var(--accent); }
+}

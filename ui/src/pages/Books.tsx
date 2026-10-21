@@ -4,8 +4,8 @@ import { addBook, deleteBook, getBook, getBooks, updateBook } from "../api";
 import { BookCover } from "../components/BookCover";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { BOOK_STATUS_OPTIONS, PAGE_SIZES, bookHeading, checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, pageCountOf, patchFrom, statusLabel, type BookForm } from "./booksLogic";
-import { readPageSize, savePageSize } from "./booksStorage";
+import { BOOK_STATUS_OPTIONS, PAGE_SIZES, bookHeading, checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, clampPanelWidth, pageCountOf, patchFrom, statusLabel, type BookForm } from "./booksLogic";
+import { readPageSize, readPanelWidth, savePageSize, savePanelWidth } from "./booksStorage";
 import "./Categories.css";
 import "./Books.css";
 
@@ -55,6 +55,9 @@ function BookList(props: { selectedId: string | null }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
+  const [panelW, setPanelW] = useState(readPanelWidth);
+  const splitRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(readPageSize);
   const { act, busy } = useAct();
@@ -102,7 +105,7 @@ function BookList(props: { selectedId: string | null }) {
     <section class={`page cat books${props.selectedId !== null ? " has-panel" : ""}`}>
       <header class="cat__header">
         <h1 class="cat__title">本</h1>
-        <p class="cat__lead">買った本の記録です。ISBN だけをAI(Claude など)に伝えると、タイトル・著者・シリーズ・カバーをネットで調べて登録してくれます。カバーを押すと、くわしく見られます。</p>
+        <p class="cat__lead">買った本の記録です。ISBN を AI に伝えると、ネットで調べて登録してくれます。</p>
       </header>
 
       {notice && (
@@ -117,13 +120,17 @@ function BookList(props: { selectedId: string | null }) {
           ＋ 本を追加
         </button>
       </div>
-      <label class="books__switch">
-        <input type="checkbox" checked={filter.status !== "owned"} onChange={(e) => set("status", e.currentTarget.checked ? "" : "owned")} />
-        手放した本も表示する(売った・譲った・なくした など)
-      </label>
 
-      <details class="books__more" open={filtered || undefined}>
-        <summary>絞り込み{filtered ? "(あり)" : ""}</summary>
+      <div class="books__tools">
+        <button type="button" class={`books__tool${showFilter || filtered ? " is-on" : ""}`} aria-expanded={showFilter} onClick={() => setShowFilter((v) => !v)}>
+          絞り込み{filtered ? "(あり)" : ""} {showFilter ? "▴" : "▾"}
+        </button>
+        <button type="button" class={`books__tool${filter.status !== "owned" ? " is-on" : ""}`} aria-pressed={filter.status !== "owned"} onClick={() => set("status", filter.status === "owned" ? "" : "owned")}>
+          手放した本も表示
+        </button>
+      </div>
+
+      {showFilter && (
         <section class="cat__card books__filter" aria-label="絞り込み">
           <div class="books__row">
             <FilterSelect label="シリーズ" value={filter.series} options={facets.series} onChange={(v) => set("series", v)} />
@@ -150,7 +157,7 @@ function BookList(props: { selectedId: string | null }) {
             </button>
           )}
         </section>
-      </details>
+      )}
 
       {adding && (
         <BookFormCard
@@ -210,7 +217,7 @@ function BookList(props: { selectedId: string | null }) {
       )}
       {data && data.records.length === 0 && !filtered && <p class="muted">まだ本の記録がありません。「＋ 本を追加」か、AI に「この本を記録して」と頼んでください。</p>}
 
-      <div class="books__split">
+      <div class="books__split" ref={splitRef} style={{ "--panel-w": `${panelW}px` }}>
       <div class="books__listcol">
       <ul class="books__grid">
         {data?.records.map((b) => (
@@ -229,6 +236,28 @@ function BookList(props: { selectedId: string | null }) {
         <>
           <div class="books__backdrop" onClick={() => open(null)} />
           <aside class="books__panel" aria-label="本の詳細">
+            <div
+              class="books__resize"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="詳細の幅を変える"
+              onPointerDown={(e) => {
+                const el = e.currentTarget;
+                el.setPointerCapture(e.pointerId);
+                const move = (ev: PointerEvent) => {
+                  const r = splitRef.current?.getBoundingClientRect();
+                  if (r) setPanelW(clampPanelWidth(r.right - ev.clientX, r.width));
+                };
+                const up = () => {
+                  el.removeEventListener("pointermove", move);
+                  el.removeEventListener("pointerup", up);
+                  const r = splitRef.current?.getBoundingClientRect();
+                  if (r) setPanelW((w) => (savePanelWidth(w), w));
+                };
+                el.addEventListener("pointermove", move);
+                el.addEventListener("pointerup", up);
+              }}
+            />
             <BookDetail id={props.selectedId} prevId={prevId} nextId={nextId} onOpen={open} onChanged={() => load(filter)} />
           </aside>
         </>

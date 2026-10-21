@@ -106,3 +106,9 @@ export const PAGE_SIZES = [12, 24, 48, 96, 200] as const;
 export const DEFAULT_PAGE_SIZE = 24;
 /** 全件数とページの件数からのページ数(0件でも1) */
 export const pageCountOf = (total: number, size: number): number => Math.max(1, Math.ceil(total / size));
+
+/** 詳細の枠の幅を、最小(320px)と、一覧+詳細の全体の幅の6割までに収める */
+export function clampPanelWidth(want: number, total: number, min = 320): number {
+  const max = Math.max(min, Math.floor(total * 0.6));
+  return Math.min(max, Math.max(min, Math.round(want)));
+}
