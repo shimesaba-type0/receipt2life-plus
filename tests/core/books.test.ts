@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addBook, deleteBook, listBooks, normalizeIsbn, updateBook } from "../../src/core/books";
+import { addBook, deleteBook, listBooks, normalizeIsbn, setFavoriteSeries, updateBook } from "../../src/core/books";
 import { addTransactions } from "../../src/core/transactions";
 import { testEnv } from "../helpers";
 
@@ -131,6 +131,27 @@ describe("本の記録", () => {
     expect(await updateBook(db(), { id, status: "given" })).toMatchObject({ ok: true, book: { status: "given", released_on: "2026-10-03" } });
     expect(await updateBook(db(), { id, status: "owned", released_on: "2026-10-04" })).toMatchObject({ ok: false, errors: [{ field: "released_on" }] });
     expect(await updateBook(db(), { id, status: "owned" })).toMatchObject({ ok: true, book: { status: "owned", released_on: null } });
+  });
+
+  it("お気に入りシリーズ: 入れる・外す。本にあるシリーズだけ。絞り込みと、年の一覧", async () => {
+    await addBook(db(), { title: "ダミー本A", series: "シリーズ1", purchased_on: "2025-03-01" }, { now: NOW });
+    await addBook(db(), { title: "ダミー本B", series: "シリーズ2", purchased_on: "2026-04-01" }, { now: NOW });
+    await addBook(db(), { title: "ダミー本C", purchased_on: "2026-05-01" }, { now: NOW });
+    expect(await setFavoriteSeries(db(), { series: "ないシリーズ", favorite: true }, { now: NOW })).toMatchObject({ ok: false, errors: [{ field: "series" }] });
+    expect(await setFavoriteSeries(db(), { series: "シリーズ1", favorite: true }, { now: NOW })).toMatchObject({ ok: true, favorite: true });
+    // 二重に入れても、1件のまま
+    expect(await setFavoriteSeries(db(), { series: "シリーズ1", favorite: true }, { now: NOW })).toMatchObject({ ok: true });
+
+    const all = await listBooks(db(), {});
+    expect(all).toMatchObject({ ok: true, facets: { favorite_series: ["シリーズ1"], years: ["2026", "2025"] } });
+    expect(all.ok && all.records.map((r) => [r.title, r.series_favorite])).toEqual([["ダミー本C", false], ["ダミー本B", false], ["ダミー本A", true]]);
+    const fav = await listBooks(db(), { favorite: true });
+    expect(fav.ok && fav.records.map((r) => r.title)).toEqual(["ダミー本A"]);
+
+    expect(await setFavoriteSeries(db(), { series: "シリーズ1", favorite: false })).toMatchObject({ ok: true, favorite: false });
+    const none = await listBooks(db(), { favorite: true });
+    expect(none.ok && none.count).toBe(0);
+    expect(await setFavoriteSeries(db(), { series: "", favorite: true })).toMatchObject({ ok: false });
   });
 
   it("取引を消しても本の記録は残り、紐づけだけ外れる", async () => {

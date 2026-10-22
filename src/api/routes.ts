@@ -8,7 +8,7 @@ import { getHome } from "../core/home";
 import { listMerchants } from "../core/merchants";
 import { addLink, deleteLink, refreshLinkTitle, updateLink } from "../core/links";
 import type { TitleFetcher } from "../core/link-titles";
-import { addBook, deleteBook, getBook, listBooks, updateBook } from "../core/books";
+import { addBook, deleteBook, getBook, listBooks, setFavoriteSeries, updateBook } from "../core/books";
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../core/photos";
@@ -66,7 +66,7 @@ export interface ApiRouteOptions {
 export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = {}): void {
   app.use("/api/*", noStoreJson, sameOriginOnly);
   app.use("/api/:kind/:id", shortIdOnly);
-  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/books", "/api/books/:id", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id", "/api/product-groups", "/api/product-groups/:id"]) app.use(path, requireJson);
+  for (const path of ["/api/transactions", "/api/transactions/:id", "/api/events", "/api/events/:id", "/api/links", "/api/links/:id", "/api/seat-records", "/api/seat-records/:id", "/api/books", "/api/books/:id", "/api/book-favorites", "/api/venues/:id", "/api/screens/:id", "/api/categories", "/api/categories/:name", "/api/category-groups/rename", "/api/accounts", "/api/accounts/:name", "/api/product-excludes", "/api/product-excludes/:id", "/api/search-chips", "/api/search-chips/:id", "/api/product-groups", "/api/product-groups/:id"]) app.use(path, requireJson);
 
   // バックアップの状況(最後に書き出した日、お知らせが要るか)
   app.get("/api/backup-status", async (c) => c.json({ ok: true as const, ...(await getBackupStatus(c.env.DB)) }));
@@ -361,9 +361,17 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     const filter: Record<string, unknown> = {};
     for (const key of ["q", "series", "author", "buyer", "isbn", "status", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
     if (q.unlinked === "1" || q.unlinked === "true") filter.unlinked = true;
+    if (q.favorite === "1" || q.favorite === "true") filter.favorite = true;
     if (q.limit) filter.limit = Number(q.limit);
     if (q.offset) filter.offset = Number(q.offset);
     return respond(c, await listBooks(c.env.DB, filter));
+  });
+
+  // お気に入りシリーズに入れる・外す: { series, favorite }
+  app.put("/api/book-favorites", async (c) => {
+    const body = await readJson(c);
+    if (!body) return badJson(c);
+    return respond(c, await setFavoriteSeries(c.env.DB, body.value));
   });
 
   // 1冊(詳細画面用)。無い id は404

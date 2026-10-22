@@ -112,3 +112,8 @@ export function clampPanelWidth(want: number, total: number, min = 320): number 
   const max = Math.max(min, Math.floor(total * 0.6));
   return Math.min(max, Math.max(min, Math.round(want)));
 }
+
+// ---- 年ごとの素早い指定 ----
+
+export const yearRange = (year: string): { from: string; to: string } => ({ from: `${year}-01-01`, to: `${year}-12-31` });
+export const isYearSelected = (from: string, to: string, year: string): boolean => from === `${year}-01-01` && to === `${year}-12-31`;

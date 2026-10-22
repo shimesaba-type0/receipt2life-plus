@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { BookView, BooksData } from "../../../src/api/contract";
-import { addBook, deleteBook, getBook, getBooks, updateBook } from "../api";
+import { addBook, deleteBook, getBook, getBooks, setFavoriteSeries, updateBook } from "../api";
 import { BookCover } from "../components/BookCover";
 import { Link, navigate } from "../router";
 import { errorText } from "./categoriesLogic";
-import { BOOK_STATUS_OPTIONS, PAGE_SIZES, bookHeading, checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, clampPanelWidth, pageCountOf, patchFrom, statusLabel, type BookForm } from "./booksLogic";
+import { BOOK_STATUS_OPTIONS, PAGE_SIZES, bookHeading, checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, clampPanelWidth, isYearSelected, pageCountOf, patchFrom, statusLabel, yearRange, type BookForm } from "./booksLogic";
 import { readPageSize, readPanelWidth, savePageSize, savePanelWidth } from "./booksStorage";
 import "./Categories.css";
 import "./Books.css";
@@ -18,8 +18,9 @@ interface Filter {
   from: string;
   to: string;
   unlinked: boolean;
+  favorite: boolean;
 }
-const NO_FILTER: Filter = { q: "", series: "", author: "", buyer: "", status: "owned", from: "", to: "", unlinked: false };
+const NO_FILTER: Filter = { q: "", series: "", author: "", buyer: "", status: "owned", from: "", to: "", unlinked: false, favorite: false };
 
 // 買った本の記録。一覧(カバーの並び)と、1冊の詳細(/books/:id)。タイトルなどをネットで調べて入れるのは、AI(MCP)に頼む
 export function Books(props: { id: string | null }) {
@@ -92,7 +93,7 @@ function BookList(props: { selectedId: string | null }) {
 
   const set = <K extends keyof Filter>(key: K, value: Filter[K]) => changeFilter({ ...filter, [key]: value });
   const filtered = JSON.stringify(filter) !== JSON.stringify(NO_FILTER);
-  const facets = data?.facets ?? { series: [], authors: [], buyers: [] };
+  const facets = data?.facets ?? { series: [], authors: [], buyers: [], favorite_series: [], years: [] };
 
   // シートを開いている間は、ページ全体の「引き下げて更新」を止める
   useEffect(() => {
@@ -138,6 +139,20 @@ function BookList(props: { selectedId: string | null }) {
         <button type="button" class={`books__tool${filter.status !== "owned" ? " is-on" : ""}`} aria-pressed={filter.status !== "owned"} onClick={() => set("status", filter.status === "owned" ? "" : "owned")}>
           手放した本も表示
         </button>
+        <button type="button" class={`books__tool${filter.favorite ? " is-on" : ""}`} aria-pressed={filter.favorite} onClick={() => set("favorite", !filter.favorite)}>
+          ♥ お気に入りシリーズ
+        </button>
+        {facets.years.map((y) => (
+          <button
+            type="button"
+            key={y}
+            class={`books__tool${isYearSelected(filter.from, filter.to, y) ? " is-on" : ""}`}
+            aria-pressed={isYearSelected(filter.from, filter.to, y)}
+            onClick={() => changeFilter({ ...filter, ...(isYearSelected(filter.from, filter.to, y) ? { from: "", to: "" } : yearRange(y)) })}
+          >
+            {y}年
+          </button>
+        ))}
       </div>
 
       {showFilter && (
@@ -233,7 +248,7 @@ function BookList(props: { selectedId: string | null }) {
         {data?.records.map((b) => (
           <li key={b.id}>
             <Link href={`/books/${encodeURIComponent(b.id)}`} class={`books__tile${b.id === props.selectedId ? " is-selected" : ""}`} keepScroll aria-current={b.id === props.selectedId ? "page" : undefined}>
-              <BookCover title={b.title} isbn={b.isbn} coverUrl={b.cover_url} status={b.status} />
+              <BookCover title={b.title} isbn={b.isbn} coverUrl={b.cover_url} status={b.status} favorite={b.series_favorite} />
               <span class="books__tile-title">{bookHeading(b)}</span>
               {b.author && <span class="books__tile-author">{b.author}</span>}
             </Link>
@@ -422,6 +437,29 @@ function BookDetail(props: { id: string; prevId: string | null; nextId: string |
         <article class="bookd">
           <div class="bookd__cover">
             <BookCover title={book.title} isbn={book.isbn} coverUrl={book.cover_url} status={book.status} />
+            {book.series && (
+              <div class="bookd__heartrow">
+                <button
+                  type="button"
+                  class={`bookd__heart${book.series_favorite ? " is-on" : ""}`}
+                  aria-pressed={book.series_favorite}
+                  aria-label={book.series_favorite ? "お気に入りシリーズから外す" : "お気に入りシリーズに入れる"}
+                  disabled={busy}
+                  onClick={() =>
+                    void act(
+                      () => setFavoriteSeries(book.series!, !book.series_favorite),
+                      async (res) => {
+                        setNotice(res.message);
+                        await load();
+                        props.onChanged();
+                      },
+                    ).then((e) => e && setError(e))
+                  }
+                >
+                  {book.series_favorite ? <span class="gold">♥</span> : "♡"}
+                </button>
+              </div>
+            )}
           </div>
           <div class="bookd__info">
             <div class="bookd__head">
