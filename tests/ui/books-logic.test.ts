@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PAGE_SIZES, clampPanelWidth, statusLabel, bookHeading, pageCountOf, checkForm, coverColor, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, patchFrom } from "../../ui/src/pages/booksLogic";
+import { PAGE_SIZES, isYearSelected, yearRange, clampPanelWidth, statusLabel, bookHeading, pageCountOf, checkForm, coverColor, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, patchFrom } from "../../ui/src/pages/booksLogic";
 
 describe("本の画面の部品", () => {
   it("ISBN もタイトルも空なら、案内を返す", () => {
@@ -13,7 +13,7 @@ describe("本の画面の部品", () => {
   });
 
   it("直すときは、変えた項目だけ送る。空にしたら null", () => {
-    const before = formFromBook({ id: "b", isbn: "9784000000000", title: "ダミー", author: "著者", series: null, buyer: null, note: null, cover_url: null, status: "owned", released_on: null, purchased_on: "2026-10-01", transaction_id: null, created_at: "x" });
+    const before = formFromBook({ id: "b", isbn: "9784000000000", title: "ダミー", author: "著者", series: null, buyer: null, note: null, cover_url: null, status: "owned", released_on: null, series_favorite: false, purchased_on: "2026-10-01", transaction_id: null, created_at: "x" });
     expect(patchFrom(before, before)).toEqual({});
     expect(patchFrom(before, { ...before, author: "", series: "S1" })).toEqual({ author: null, series: "S1" });
   });
@@ -40,6 +40,13 @@ describe("本の画面の部品", () => {
     expect(clampPanelWidth(450, 1000)).toBe(450);
     expect(clampPanelWidth(900, 1000)).toBe(600);
     expect(clampPanelWidth(900, 400)).toBe(320);
+  });
+
+  it("年ごとの素早い指定は、その年の1月1日から12月31日まで", () => {
+    expect(yearRange("2025")).toEqual({ from: "2025-01-01", to: "2025-12-31" });
+    expect(isYearSelected("2025-01-01", "2025-12-31", "2025")).toBe(true);
+    expect(isYearSelected("2025-01-01", "2025-06-30", "2025")).toBe(false);
+    expect(isYearSelected("", "", "2025")).toBe(false);
   });
 
   it("件数の文言と、ISBN の表示", () => {

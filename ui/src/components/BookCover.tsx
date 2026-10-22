@@ -3,17 +3,19 @@ import { bookHeading, coverColor, statusLabel, type BookStatus } from "../pages/
 
 // 本のカバー。カバー画像のURLがあれば出し、無い・読めないときは、タイトルを載せた色つきの表紙にする
 // 外のサイトの画像なので、参照元(Referer)は送らない
-export function BookCover(props: { title: string | null; isbn: string | null; coverUrl: string | null; class?: string; status?: BookStatus }) {
+export function BookCover(props: { title: string | null; isbn: string | null; coverUrl: string | null; class?: string; status?: BookStatus; favorite?: boolean }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [props.coverUrl]);
   const heading = bookHeading({ title: props.title, isbn: props.isbn });
   const gone = props.status !== undefined && props.status !== "owned";
+  const heart = props.favorite ? <span class="bookcover__heart" aria-label="お気に入りシリーズ">♥</span> : null;
   const badge = gone ? <span class="bookcover__badge">{statusLabel(props.status!)}</span> : null;
   if (props.coverUrl && !failed) {
     return (
       <span class={`bookcover-wrap${gone ? " is-gone" : ""}`}>
         <img class={`bookcover ${props.class ?? ""}`} src={props.coverUrl} alt={`${heading}のカバー`} loading="lazy" referrerpolicy="no-referrer" onError={() => setFailed(true)} />
         {badge}
+        {heart}
       </span>
     );
   }
@@ -24,6 +26,7 @@ export function BookCover(props: { title: string | null; isbn: string | null; co
         <span>{heading}</span>
       </span>
       {badge}
+      {heart}
     </span>
   );
 }

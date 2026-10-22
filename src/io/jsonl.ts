@@ -108,6 +108,10 @@ const EXPORT_TABLES: TableSpec[] = [
     sql: `SELECT 'book' AS type, id, isbn, title, author, series, buyer, note, cover_url, status, released_on, purchased_on, transaction_id, created_at
           FROM books WHERE id > ? ORDER BY id LIMIT ?`,
   },
+  // 本のお気に入りシリーズ。id はシリーズ名
+  {
+    sql: `SELECT 'favorite_series' AS type, series AS id, series, created_at FROM favorite_series WHERE series > ? ORDER BY series LIMIT ?`,
+  },
   // サブスク・保険などの固定費(別枠)。active は true / false で出す
   {
     sql: `SELECT 'subscription' AS type, id, name, kind, amount, period, currency, foreign_amount_minor / 100.0 AS foreign_amount, exchange_rate, previous_foreign_minor / 100.0 AS previous_foreign_amount, billing_month, billing_day, previous_amount, amount_changed_on, price_checked_on, url, note, active, created_at, updated_at
@@ -180,7 +184,7 @@ export interface ImportOptions {
   now?: Date;
 }
 
-const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record", "book", "subscription"] as const;
+const RECORD_TYPES = ["event", "transaction", "item", "attachment", "link", "screen", "seat_record", "book", "favorite_series", "subscription"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 interface Entry {
@@ -985,6 +989,35 @@ async function importScreens(db: D1Database, entries: Entry[], report: Report, n
   await insertAll(db, pending, report);
 }
 
+// お気に入りシリーズ: id はシリーズ名(あっても無視。series が正)。同じシリーズは何度戻しても増えない
+const favoriteSeriesSchema = z.strictObject({
+  id: z.string().optional(),
+  series: z.string().trim().min(1, "空にできません").max(MAX_SERIES_LENGTH, `${MAX_SERIES_LENGTH}文字以内にしてください`),
+  created_at: timestampField.optional(),
+});
+
+async function importFavoriteSeries(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
+  if (entries.length === 0) return;
+  const seen = new Set<string>();
+  const pending: Pending[] = [];
+  for (const entry of entries) {
+    const r = favoriteSeriesSchema.safeParse(entry.record);
+    if (!r.success) {
+      report(entry, { status: "error", message: joinMessages(toFieldErrors(r.error)) });
+      continue;
+    }
+    const { series } = r.data;
+    const exists = seen.has(series) || (await db.prepare("SELECT 1 AS x FROM favorite_series WHERE series = ?").bind(series).first()) !== null;
+    if (exists) {
+      report(entry, { status: "skipped_exists", id: series, message: `シリーズ「${series}」は、お気に入りに入っているためスキップしました` });
+      continue;
+    }
+    seen.add(series);
+    pending.push({ entry, id: series, statements: [db.prepare("INSERT INTO favorite_series (series, created_at) VALUES (?, ?)").bind(series, r.data.created_at ?? nowIso)] });
+  }
+  await insertAll(db, pending, report);
+}
+
 async function importBooks(db: D1Database, entries: Entry[], report: Report, nowIso: string): Promise<void> {
   if (entries.length === 0) return;
   const valid: { entry: Entry; id: string; given: boolean; data: z.infer<typeof bookSchema> }[] = [];
@@ -1088,7 +1121,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
     results[entry.index] = { line: entry.line, type: entry.type, ...result };
   };
 
-  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [], book: [], subscription: [] };
+  const byType: Record<RecordType, Entry[]> = { event: [], transaction: [], item: [], attachment: [], link: [], screen: [], seat_record: [], book: [], favorite_series: [], subscription: [] };
   for (const entry of entries) {
     if (entry.parseError) {
       report(entry, { status: "error", message: entry.parseError });
@@ -1123,6 +1156,7 @@ export async function importRecords(db: D1Database, text: string, options: Impor
   await importScreens(db, byType.screen, report, nowIso);
   await importSeatRecords(db, byType.seat_record, report, nowIso);
   await importBooks(db, byType.book, report, nowIso);
+  await importFavoriteSeries(db, byType.favorite_series, report, nowIso);
   await importSubscriptions(db, byType.subscription, report, nowIso);
 
   const summary: ImportSummary = { total: results.length, ok: 0, skipped: 0, errors: 0 };
