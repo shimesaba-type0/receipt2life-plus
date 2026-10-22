@@ -92,8 +92,8 @@
 }
 
 /* お気に入りシリーズ */
-.bookcover__heart { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border-radius: 12px; background: rgba(255, 255, 255, 0.92); color: #d6455d; font-size: 14px; line-height: 24px; text-align: center; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2); }
+.bookcover__heart { position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 10px; background: rgba(255, 255, 255, 0.78); color: #a8707a; font-size: 12px; line-height: 20px; text-align: center; }
 .bookd__heartrow { display: flex; justify-content: center; margin-top: 4px; }
 .bookd__heart { flex: none; width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
-.bookd__heart.is-on { color: #d6455d; }
+.bookd__heart.is-on { color: #a8707a; }
 .bookd__heart:hover:not(:disabled) { background: var(--accent-soft); }
