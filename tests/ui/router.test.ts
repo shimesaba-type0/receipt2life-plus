@@ -33,7 +33,9 @@ describe("parseRoute", () => {
   it("サブスク・固定費は /subscriptions(/api/subscriptions はAPI)", () => {
     expect(parseRoute("/subscriptions")).toEqual({ name: "subscriptions" });
     expect(parseRoute("/subscriptions/")).toEqual({ name: "subscriptions" });
-    expect(parseRoute("/books")).toEqual({ name: "books" });
+    expect(parseRoute("/books")).toEqual({ name: "books", id: null });
+    expect(parseRoute("/books/abc")).toEqual({ name: "books", id: "abc" });
+    expect(parseRoute("/books/a%20b")).toEqual({ name: "books", id: "a b" });
     expect(parseRoute("/subscriptions/abc")).toEqual({ name: "notfound" });
   });
 

@@ -12,7 +12,7 @@ export type Route =
   | { name: "categories" }
   | { name: "accounts" }
   | { name: "subscriptions" }
-  | { name: "books" }
+  | { name: "books"; id: string | null }
   | { name: "tax" }
   | { name: "usage" }
   | { name: "products"; month: string | null; product: string | null; by: "product" | "group" | null }
@@ -65,7 +65,16 @@ export function parseRoute(pathname: string, search = ""): Route {
   // サブスク・固定費。API の /api/subscriptions とは衝突しない
   if (path === "/subscriptions") return { name: "subscriptions" };
   // 買った本の記録。API の /api/books とは衝突しない
-  if (path === "/books") return { name: "books" };
+  if (path === "/books") return { name: "books", id: null };
+  const book = /^\/books\/([^/]+)$/.exec(path);
+  if (book?.[1]) {
+    try {
+      const id = decodeURIComponent(book[1]);
+      if (id.length <= 64) return { name: "books", id };
+    } catch {
+      return { name: "notfound" };
+    }
+  }
   // 税率別の税額。API の /api/tax-summary とは衝突しない
   if (path === "/tax") return { name: "tax" };
   if (path === "/usage") return { name: "usage" };

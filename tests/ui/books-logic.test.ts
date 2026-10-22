@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkForm, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, patchFrom } from "../../ui/src/pages/booksLogic";
+import { PAGE_SIZES, clampPanelWidth, statusLabel, bookHeading, pageCountOf, checkForm, coverColor, countText, EMPTY_FORM, formFromBook, isbnText, newBookFrom, patchFrom } from "../../ui/src/pages/booksLogic";
 
 describe("本の画面の部品", () => {
   it("ISBN もタイトルも空なら、案内を返す", () => {
@@ -13,15 +13,42 @@ describe("本の画面の部品", () => {
   });
 
   it("直すときは、変えた項目だけ送る。空にしたら null", () => {
-    const before = formFromBook({ id: "b", isbn: "9784000000000", title: "ダミー", author: "著者", series: null, buyer: null, note: null, purchased_on: "2026-10-01", transaction_id: null, created_at: "x" });
+    const before = formFromBook({ id: "b", isbn: "9784000000000", title: "ダミー", author: "著者", series: null, buyer: null, note: null, cover_url: null, status: "owned", released_on: null, purchased_on: "2026-10-01", transaction_id: null, created_at: "x" });
     expect(patchFrom(before, before)).toEqual({});
     expect(patchFrom(before, { ...before, author: "", series: "S1" })).toEqual({ author: null, series: "S1" });
   });
 
+  it("手放した本: 状況と手放した日を送る。手元にあるときは送らない", () => {
+    expect(newBookFrom({ ...EMPTY_FORM, title: "ダミー" })).toEqual({ title: "ダミー" });
+    expect(newBookFrom({ ...EMPTY_FORM, title: "ダミー", status: "sold", released_on: "2026-10-05" })).toEqual({ title: "ダミー", status: "sold", released_on: "2026-10-05" });
+    const before = { ...EMPTY_FORM, title: "ダミー" };
+    expect(patchFrom(before, { ...before, status: "given", released_on: "2026-10-06" })).toEqual({ status: "given", released_on: "2026-10-06" });
+    const sold = { ...before, status: "sold" as const, released_on: "2026-10-05" };
+    expect(patchFrom(sold, { ...sold, status: "owned", released_on: "" })).toEqual({ status: "owned" });
+    expect(statusLabel("sold")).toBe("売った");
+  });
+
+  it("カバーがないときの色は、同じ題なら同じ。見出しはタイトル、なければ ISBN", () => {
+    expect(coverColor("ダミー小説")).toEqual(coverColor("ダミー小説"));
+    expect(coverColor("")).toBeDefined();
+    expect(bookHeading({ title: "ダミー", isbn: null })).toBe("ダミー");
+    expect(bookHeading({ title: null, isbn: "9784000000000" })).toBe("ISBN 978-400000000-0");
+  });
+
+  it("詳細の枠の幅は、320px以上、全体の6割まで", () => {
+    expect(clampPanelWidth(100, 1000)).toBe(320);
+    expect(clampPanelWidth(450, 1000)).toBe(450);
+    expect(clampPanelWidth(900, 1000)).toBe(600);
+    expect(clampPanelWidth(900, 400)).toBe(320);
+  });
+
   it("件数の文言と、ISBN の表示", () => {
-    expect(countText(0, 0)).toBe("該当する本はありません。");
-    expect(countText(3, 3)).toBe("3冊");
-    expect(countText(300, 200)).toBe("300冊(新しい順に200冊を表示)");
+    expect(countText(0)).toBe("該当する本はありません。");
+    expect(countText(300)).toBe("300冊");
+    expect(pageCountOf(0, 24)).toBe(1);
+    expect(pageCountOf(24, 24)).toBe(1);
+    expect(pageCountOf(25, 24)).toBe(2);
+    expect(PAGE_SIZES).toHaveLength(5);
     expect(isbnText("9784000000000")).toBe("978-400000000-0");
     expect(isbnText(null)).toBe("");
   });

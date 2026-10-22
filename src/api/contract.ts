@@ -974,6 +974,11 @@ export interface BookView {
   series: string | null;
   buyer: string | null;
   note: string | null;
+  // カバー画像のURL(https)。なければ null
+  cover_url: string | null;
+  // 手元の状況(owned=手元にある / sold=売った / given=譲った・贈った / donated=寄贈した / lost=なくした / discarded=処分した)と、手放した日
+  status: "owned" | "sold" | "given" | "donated" | "lost" | "discarded";
+  released_on: string | null;
   // 買った日。自分で入れた日、なければ紐づけた取引の日付
   purchased_on: string | null;
   transaction_id: string | null;
@@ -986,6 +991,8 @@ export interface BooksData {
   count: number;
   records: BookView[];
   facets: { series: string[]; authors: string[]; buyers: string[] };
+  // status=owned のとき、ほかの条件に合うのに表示していない手放した本の数
+  hidden_released: number;
   truncated: boolean;
   message: string;
 }
@@ -998,6 +1005,9 @@ export interface NewBook {
   series?: string;
   buyer?: string;
   note?: string;
+  cover_url?: string;
+  status?: BookView["status"];
+  released_on?: string;
   purchased_on?: string;
   transaction_id?: string;
 }
@@ -1010,6 +1020,9 @@ export interface BookPatch {
   series?: string | null;
   buyer?: string | null;
   note?: string | null;
+  cover_url?: string | null;
+  status?: BookView["status"];
+  released_on?: string | null;
   purchased_on?: string | null;
   transaction_id?: string | null;
 }
