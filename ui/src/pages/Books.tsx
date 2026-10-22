@@ -456,7 +456,7 @@ function BookDetail(props: { id: string; prevId: string | null; nextId: string |
                     ).then((e) => e && setError(e))
                   }
                 >
-                  {book.series_favorite ? "♥" : "♡"}
+                  {book.series_favorite ? <span class="gold">♥</span> : "♡"}
                 </button>
               </div>
             )}

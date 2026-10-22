@@ -8,7 +8,7 @@ export function BookCover(props: { title: string | null; isbn: string | null; co
   useEffect(() => setFailed(false), [props.coverUrl]);
   const heading = bookHeading({ title: props.title, isbn: props.isbn });
   const gone = props.status !== undefined && props.status !== "owned";
-  const heart = props.favorite ? <span class="bookcover__heart" aria-label="お気に入りシリーズ">♥</span> : null;
+  const heart = props.favorite ? <span class="bookcover__heart" role="img" aria-label="お気に入りシリーズ"><span class="gold">♥</span></span> : null;
   const badge = gone ? <span class="bookcover__badge">{statusLabel(props.status!)}</span> : null;
   if (props.coverUrl && !failed) {
     return (
