@@ -13,8 +13,8 @@
 .books__more summary { cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; padding: 0 18px; border: 1px solid var(--accent); border-radius: 22px; color: var(--accent); font-weight: 500; font-size: 14px; list-style: none; }
 .books__more summary::-webkit-details-marker { display: none; }
 
-/* 一覧: カバーの並び(スマホは3列前後、広くなるほど増える) */
-.books__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 18px 12px; }
+/* 一覧: カバーの並び。カバーの大きさは固定で、幅に応じて列の数だけが変わる(詳細の枠の幅を変えても、カバーは伸び縮みしない) */
+.books__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, var(--cover-w, 108px)); gap: 18px 14px; justify-content: start; }
 .books__tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: inherit; text-decoration: none; }
 .books__tile:hover .bookcover { transform: translateY(-2px); }
 .books__tile-title { font-size: 13px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
