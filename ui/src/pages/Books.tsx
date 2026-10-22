@@ -437,6 +437,29 @@ function BookDetail(props: { id: string; prevId: string | null; nextId: string |
         <article class="bookd">
           <div class="bookd__cover">
             <BookCover title={book.title} isbn={book.isbn} coverUrl={book.cover_url} status={book.status} />
+            {book.series && (
+              <div class="bookd__heartrow">
+                <button
+                  type="button"
+                  class={`bookd__heart${book.series_favorite ? " is-on" : ""}`}
+                  aria-pressed={book.series_favorite}
+                  aria-label={book.series_favorite ? "お気に入りシリーズから外す" : "お気に入りシリーズに入れる"}
+                  disabled={busy}
+                  onClick={() =>
+                    void act(
+                      () => setFavoriteSeries(book.series!, !book.series_favorite),
+                      async (res) => {
+                        setNotice(res.message);
+                        await load();
+                        props.onChanged();
+                      },
+                    ).then((e) => e && setError(e))
+                  }
+                >
+                  {book.series_favorite ? "♥" : "♡"}
+                </button>
+              </div>
+            )}
           </div>
           <div class="bookd__info">
             <div class="bookd__head">
@@ -446,33 +469,7 @@ function BookDetail(props: { id: string; prevId: string | null; nextId: string |
             <dl class="bookd__table">
               {book.status !== "owned" && <Row label="状況" value={statusLabel(book.status)} />}
               {book.released_on && <Row label="手放した日" value={book.released_on} />}
-              {book.series && (
-                <>
-                  <dt>シリーズ</dt>
-                  <dd class="bookd__series">
-                    <span>{book.series}</span>
-                    <button
-                      type="button"
-                      class={`bookd__heart${book.series_favorite ? " is-on" : ""}`}
-                      aria-pressed={book.series_favorite}
-                      aria-label={book.series_favorite ? "お気に入りシリーズから外す" : "お気に入りシリーズに入れる"}
-                      disabled={busy}
-                      onClick={() =>
-                        void act(
-                          () => setFavoriteSeries(book.series!, !book.series_favorite),
-                          async (res) => {
-                            setNotice(res.message);
-                            await load();
-                            props.onChanged();
-                          },
-                        ).then((e) => e && setError(e))
-                      }
-                    >
-                      {book.series_favorite ? "♥" : "♡"}
-                    </button>
-                  </dd>
-                </>
-              )}
+              {book.series && <Row label="シリーズ" value={book.series} />}
               {book.purchased_on && <Row label="買った日" value={book.purchased_on} />}
               {book.buyer && <Row label="購入者" value={book.buyer} />}
               {book.isbn && <Row label="ISBN" value={isbnText(book.isbn)} />}
