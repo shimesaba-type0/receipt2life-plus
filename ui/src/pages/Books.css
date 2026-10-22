@@ -81,3 +81,12 @@
   .books__resize::after { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 44px; margin-top: -22px; border-radius: 2px; background: var(--line); }
   .books__resize:hover::after { background: var(--accent); }
 }
+
+/* スマホ幅のシート: 持ち手(下に引くと閉じる)。引き下げての更新に取られないように、シートの中でスクロールを止める */
+.books__grab { height: 24px; margin: 0 -16px; position: relative; touch-action: none; cursor: grab; }
+.books__grab::after { content: ""; position: absolute; left: 50%; top: 10px; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--line); }
+.books__panel { overscroll-behavior: contain; }
+.bookp__bar { touch-action: none; }
+@media (min-width: 900px) {
+  .books__grab { display: none; }
+}

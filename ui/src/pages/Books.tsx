@@ -94,6 +94,16 @@ function BookList(props: { selectedId: string | null }) {
   const filtered = JSON.stringify(filter) !== JSON.stringify(NO_FILTER);
   const facets = data?.facets ?? { series: [], authors: [], buyers: [] };
 
+  // シートを開いている間は、ページ全体の「引き下げて更新」を止める
+  useEffect(() => {
+    if (props.selectedId === null) return;
+    const prev = document.documentElement.style.overscrollBehaviorY;
+    document.documentElement.style.overscrollBehaviorY = "contain";
+    return () => {
+      document.documentElement.style.overscrollBehaviorY = prev;
+    };
+  }, [props.selectedId === null]);
+
   // 開いている本の、前と次(いま出ている一覧の並びで)
   const records = data?.records ?? [];
   const at = props.selectedId === null ? -1 : records.findIndex((b) => b.id === props.selectedId);
@@ -235,7 +245,8 @@ function BookList(props: { selectedId: string | null }) {
       {props.selectedId !== null && (
         <>
           <div class="books__backdrop" onClick={() => open(null)} />
-          <aside class="books__panel" aria-label="本の詳細">
+          <aside class="books__panel" aria-label="本の詳細" onPointerDown={sheetSwipe(() => open(null))}>
+            <div class="books__grab" aria-hidden="true" />
             <div
               class="books__resize"
               role="separator"
@@ -265,6 +276,35 @@ function BookList(props: { selectedId: string | null }) {
       </div>
     </section>
   );
+}
+
+// スマホ幅の下からのシート: 上の持ち手と ‹ › の行を、下へ引くと閉じる(一定以上引いたら閉じ、足りなければ戻る)
+function sheetSwipe(close: () => void) {
+  return (e: PointerEvent) => {
+    if (!window.matchMedia("(max-width: 899px)").matches) return;
+    const el = e.currentTarget as HTMLElement;
+    const t = e.target as HTMLElement;
+    if (!t.closest(".books__grab, .bookp__bar") || t.closest("button")) return;
+    const startY = e.clientY;
+    let dy = 0;
+    el.setPointerCapture(e.pointerId);
+    el.style.transition = "none";
+    const move = (ev: PointerEvent) => {
+      dy = Math.max(0, ev.clientY - startY);
+      el.style.transform = `translateY(${dy}px)`;
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      el.style.transition = "transform 0.18s";
+      if (dy > 110) close();
+      el.style.transform = "";
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
 }
 
 function Pager(props: { page: number; pages: number; onPage: (p: number) => void }) {
