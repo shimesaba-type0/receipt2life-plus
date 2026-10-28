@@ -90,3 +90,13 @@
 @media (min-width: 900px) {
   .books__grab { display: none; }
 }
+
+/* お気に入りシリーズ */
+.bookcover__heart { position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border-radius: 11px; background: rgba(24, 33, 29, 0.62); display: flex; align-items: center; justify-content: center; font-size: 13px; line-height: 1; }
+.bookd__heartrow { display: flex; justify-content: center; margin-top: 4px; }
+.bookd__heart { flex: none; width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+.bookd__heart.is-on { color: transparent; }
+.bookd__heart:hover:not(:disabled) { background: var(--accent-soft); }
+
+/* お気に入りの印: ゴールドのグラデーションの文字 */
+.gold { display: inline-block; background: linear-gradient(160deg, #f8e08e 0%, #d9a826 55%, #b07d12 100%); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }

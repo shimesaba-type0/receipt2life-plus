@@ -63,6 +63,8 @@ export interface BookView {
   // 手元の状況と、手放した日(手元にあるときは null)
   status: BookStatus;
   released_on: string | null;
+  // シリーズがお気に入りに入っているか
+  series_favorite: boolean;
   // 買った日。自分で入れた日、なければ紐づけた取引の日付。どちらもなければ null
   purchased_on: string | null;
   transaction_id: string | null;
@@ -144,13 +146,14 @@ export const listBooksFieldsSchema = z.strictObject({
   to: isoDate.optional().describe("この日以前に買った本(YYYY-MM-DD)"),
   transaction_id: idField.optional().describe("この取引に紐づく本だけ"),
   unlinked: z.boolean().optional().describe("true で、レシートに紐づいていない本だけ"),
+  favorite: z.boolean().optional().describe("true で、お気に入りシリーズの本だけ"),
   limit: z.number().int().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT).describe(`records の最大件数(既定${DEFAULT_LIST_LIMIT}、最大${MAX_LIST_LIMIT})。count は絞り込みに合う全件で数える`),
   offset: z.number().int().min(0).max(100_000).default(0).describe("先頭から飛ばす件数(ページ送り用。例: limit 24 の2ページ目は offset 24)"),
 });
 
 // ---- 保存・取得 ----
 
-const VIEW_SELECT = `SELECT b.id, b.isbn, b.title, b.author, b.series, b.buyer, b.note, b.cover_url, b.status, b.released_on, COALESCE(b.purchased_on, t.date) AS purchased_on, b.transaction_id, b.created_at
+const VIEW_SELECT = `SELECT b.id, b.isbn, b.title, b.author, b.series, b.buyer, b.note, b.cover_url, b.status, b.released_on, EXISTS(SELECT 1 FROM favorite_series f WHERE f.series = b.series) AS series_favorite, COALESCE(b.purchased_on, t.date) AS purchased_on, b.transaction_id, b.created_at
   FROM books b LEFT JOIN transactions t ON t.id = b.transaction_id`;
 
 export type BookResult = { ok: true; book: BookView; message: string } | { ok: false; errors: FieldError[] };
@@ -162,7 +165,7 @@ export type ListBooksResult =
       count: number;
       records: BookView[];
       // 絞り込みの候補(全部の本から。登録の表記をそろえるのにも使う)
-      facets: { series: string[]; authors: string[]; buyers: string[] };
+      facets: { series: string[]; authors: string[]; buyers: string[]; favorite_series: string[]; years: string[] };
       // status が owned のとき、ほかの条件に合うのに表示していない手放した本の数(それ以外は 0)
       hidden_released: number;
       truncated: boolean;
@@ -177,8 +180,12 @@ const notFound = (id: string): { ok: false; errors: FieldError[] } => ({
 
 const label = (b: Pick<BookView, "title" | "isbn" | "author">) => `${b.title ?? `ISBN ${b.isbn}`}${b.author ? `(${b.author})` : ""}`;
 
+// SQLite の EXISTS は 0 / 1 で返るので、真偽値にする
+const fix = (row: BookView): BookView => ({ ...row, series_favorite: Boolean(row.series_favorite) });
+
 export async function getBook(db: D1Database, id: string): Promise<BookView | null> {
-  return db.prepare(`${VIEW_SELECT} WHERE b.id = ?`).bind(id).first<BookView>();
+  const row = await db.prepare(`${VIEW_SELECT} WHERE b.id = ?`).bind(id).first<BookView>();
+  return row ? fix(row) : null;
 }
 
 export async function addBook(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<BookResult> {
@@ -290,6 +297,7 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
   add("COALESCE(b.purchased_on, t.date) <= ?", m.to);
   add("b.transaction_id = ?", m.transaction_id);
   if (m.unlinked) where.push("b.transaction_id IS NULL");
+  if (m.favorite) where.push("EXISTS(SELECT 1 FROM favorite_series f WHERE f.series = b.series)");
   const clause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
   const from = "FROM books b LEFT JOIN transactions t ON t.id = b.transaction_id";
 
@@ -297,8 +305,19 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
     const { results } = await db.prepare(`SELECT DISTINCT ${column} AS v FROM books WHERE ${column} IS NOT NULL ORDER BY ${column} LIMIT ?`).bind(MAX_FACET_ROWS).all<{ v: string }>();
     return results.map((r) => r.v);
   };
+  // 買った日の年の一覧(新しい順)。年ごとの素早い指定に使う
+  const yearList = async (): Promise<string[]> => {
+    const { results } = await db
+      .prepare(`SELECT DISTINCT substr(COALESCE(b.purchased_on, t.date), 1, 4) AS v ${from} WHERE COALESCE(b.purchased_on, t.date) IS NOT NULL ORDER BY v DESC LIMIT 50`)
+      .all<{ v: string }>();
+    return results.map((r) => r.v);
+  };
+  const favoriteList = async (): Promise<string[]> => {
+    const { results } = await db.prepare("SELECT series AS v FROM favorite_series ORDER BY series LIMIT ?").bind(MAX_FACET_ROWS).all<{ v: string }>();
+    return results.map((r) => r.v);
+  };
   const releasedClause = `WHERE ${[...otherWhere, "b.status <> 'owned'"].join(" AND ")}`;
-  const [rows, total, hidden, series, authors, buyers] = await Promise.all([
+  const [rows, total, hidden, series, authors, buyers, favoriteSeries, years] = await Promise.all([
     db
       .prepare(`${VIEW_SELECT} ${clause} ORDER BY (COALESCE(b.purchased_on, t.date) IS NULL), COALESCE(b.purchased_on, t.date) DESC, b.created_at DESC, b.id DESC LIMIT ? OFFSET ?`)
       .bind(...binds, m.limit, m.offset)
@@ -308,16 +327,41 @@ export async function listBooks(db: D1Database, input: unknown): Promise<ListBoo
     facet("series"),
     facet("author"),
     facet("buyer"),
+    favoriteList(),
+    yearList(),
   ]);
   const count = total?.n ?? 0;
   const truncated = m.offset + rows.results.length < count;
   return {
     ok: true,
     count,
-    records: rows.results,
-    facets: { series, authors, buyers },
+    records: rows.results.map(fix),
+    facets: { series, authors, buyers, favorite_series: favoriteSeries, years },
     hidden_released: hidden?.n ?? 0,
     truncated,
     message: count === 0 ? "該当する本の記録はありません" : rows.results.length === 0 ? `${count}冊の本の記録がありますが、この範囲(offset ${m.offset})にはありません` : `${count}冊の本の記録があります${truncated || m.offset > 0 ? `(買った日の新しい順に、${m.offset + 1}〜${m.offset + rows.results.length}冊目を返しました)` : ""}`,
   };
+}
+
+// ---- お気に入りシリーズ ----
+
+export const setFavoriteSeriesSchema = z.strictObject({
+  series: z.string().trim().min(1, "series は空にできません").max(MAX_SERIES_LENGTH, `series は${MAX_SERIES_LENGTH}文字以内にしてください`).describe("シリーズ名(本に付けたシリーズ名と同じ文字)"),
+  favorite: z.boolean({ error: "favorite は true か false で指定してください" }).describe("true でお気に入りに入れる、false で外す"),
+});
+
+export type FavoriteSeriesResult = { ok: true; series: string; favorite: boolean; message: string } | { ok: false; errors: FieldError[] };
+
+export async function setFavoriteSeries(db: D1Database, input: unknown, options: CoreOptions = {}): Promise<FavoriteSeriesResult> {
+  const parsed = setFavoriteSeriesSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
+  const { series, favorite } = parsed.data;
+  if (favorite) {
+    const used = await db.prepare("SELECT 1 AS x FROM books WHERE series = ? LIMIT 1").bind(series).first();
+    if (!used) return { ok: false, errors: [{ field: "series", message: `series: 「${series.slice(0, 50)}」というシリーズの本はありません。list_books の facets.series で名前を確かめてください` }] };
+    await db.prepare("INSERT OR IGNORE INTO favorite_series (series, created_at) VALUES (?, ?)").bind(series, (options.now ?? new Date()).toISOString()).run();
+  } else {
+    await db.prepare("DELETE FROM favorite_series WHERE series = ?").bind(series).run();
+  }
+  return { ok: true, series, favorite, message: favorite ? `「${series}」をお気に入りシリーズに入れました` : `「${series}」をお気に入りシリーズから外しました` };
 }

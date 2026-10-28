@@ -979,6 +979,8 @@ export interface BookView {
   // 手元の状況(owned=手元にある / sold=売った / given=譲った・贈った / donated=寄贈した / lost=なくした / discarded=処分した)と、手放した日
   status: "owned" | "sold" | "given" | "donated" | "lost" | "discarded";
   released_on: string | null;
+  // シリーズがお気に入りに入っているか
+  series_favorite: boolean;
   // 買った日。自分で入れた日、なければ紐づけた取引の日付
   purchased_on: string | null;
   transaction_id: string | null;
@@ -990,7 +992,8 @@ export interface BookView {
 export interface BooksData {
   count: number;
   records: BookView[];
-  facets: { series: string[]; authors: string[]; buyers: string[] };
+  // favorite_series: お気に入りのシリーズ名。years: 買った日の年(新しい順)
+  facets: { series: string[]; authors: string[]; buyers: string[]; favorite_series: string[]; years: string[] };
   // status=owned のとき、ほかの条件に合うのに表示していない手放した本の数
   hidden_released: number;
   truncated: boolean;
@@ -1029,5 +1032,12 @@ export interface BookPatch {
 
 export interface BookSaved {
   book: BookView;
+  message: string;
+}
+
+// PUT /api/book-favorites の入力と戻り(お気に入りシリーズに入れる・外す)
+export interface FavoriteSeriesSaved {
+  series: string;
+  favorite: boolean;
   message: string;
 }

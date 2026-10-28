@@ -32,6 +32,24 @@ describe("本の記録のバックアップ(エクスポートとインポート
     expect(await again.json()).toMatchObject({ ok: true, summary: { errors: 0, ok: 0 } });
   });
 
+  it("お気に入りシリーズも、書き出して読み込める。同じシリーズは何度戻しても増えない", async () => {
+    const lines = [
+      JSON.stringify({ type: "book", id: "f1", title: "ダミー本", series: "シリーズ1" }),
+      JSON.stringify({ type: "favorite_series", series: "シリーズ1", created_at: "2026-10-05T00:00:00.000Z" }),
+      JSON.stringify({ type: "favorite_series", series: "" }),
+    ].join("\n");
+    const res = (await (await post(lines)).json()) as { summary: { ok: number; errors: number } };
+    expect(res.summary).toMatchObject({ ok: 2, errors: 1 });
+    const exported = (await exportLines()).filter((r) => r.type === "favorite_series");
+    expect(exported).toEqual([{ type: "favorite_series", id: "シリーズ1", series: "シリーズ1", created_at: "2026-10-05T00:00:00.000Z" }]);
+    const again = await post(
+      (await exportLines())
+        .map((r) => JSON.stringify(r))
+        .join("\n"),
+    );
+    expect(await again.json()).toMatchObject({ ok: true, summary: { errors: 0, ok: 0 } });
+  });
+
   it("ISBN の誤り、ISBN もタイトルもない行、存在しない取引は、その行だけエラー", async () => {
     const lines = [
       JSON.stringify({ type: "book", id: "x1", isbn: "9784000000001", title: "ダミー" }),
@@ -56,6 +74,11 @@ describe("本の記録のAPI", () => {
     expect(created.ok).toBe(true);
     const list = (await (await app.request("http://localhost/api/books?series=S1&limit=10", {}, local)).json()) as { count: number; facets: { series: string[] } };
     expect(list).toMatchObject({ count: 1, facets: { series: ["S1"] } });
+    const fav = await json("PUT", "/api/book-favorites", { series: "S1", favorite: true });
+    expect(await fav.json()).toMatchObject({ ok: true, favorite: true });
+    const favList = (await (await app.request("http://localhost/api/books?favorite=1", {}, local)).json()) as { count: number; records: { series_favorite: boolean }[] };
+    expect(favList).toMatchObject({ count: 1, records: [{ series_favorite: true }] });
+    expect((await json("PUT", "/api/book-favorites", { series: "ない", favorite: true })).status).toBe(400);
     const none = (await (await app.request("http://localhost/api/books?q=ない言葉", {}, local)).json()) as { count: number };
     expect(none.count).toBe(0);
     const one = await app.request(`http://localhost/api/books/${created.book.id}`, {}, local);
