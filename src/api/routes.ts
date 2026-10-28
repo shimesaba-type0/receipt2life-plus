@@ -12,7 +12,7 @@ import { addBook, deleteBook, getBook, listBooks, setFavoriteSeries, updateBook 
 import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../core/photos";
-import { addTransactions, deleteTransaction, getTransaction, updateTransaction } from "../core/transactions";
+import { addTransactions, deleteTransaction, getTransaction, listTransactions, updateTransaction } from "../core/transactions";
 import { summarizeDeductions } from "../core/deductions";
 import { addSubscription, deleteSubscription, listSubscriptions, updateSubscription } from "../core/subscriptions";
 import { getUsage } from "../core/usage";
@@ -239,6 +239,15 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
     const body = await readJson(c);
     if (!body) return badJson(c);
     return respond(c, await renameGroup(c.env.DB, body.value));
+  });
+
+  // 取引の一覧(絞り込み: from / to / category / tax_flag / status / keyword / limit)。要確認の一覧(status=needs_review)にも使う
+  app.get("/api/transactions", async (c) => {
+    const q = c.req.query();
+    const filter: Record<string, unknown> = {};
+    for (const key of ["from", "to", "category", "tax_flag", "status", "keyword"]) if (q[key]) filter[key] = q[key];
+    if (q.limit) filter.limit = Number(q.limit);
+    return respond(c, await listTransactions(c.env.DB, filter));
   });
 
   // 取引

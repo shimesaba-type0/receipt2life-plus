@@ -66,8 +66,7 @@ describe("memoView", () => {
 
 describe("要確認・最近の記録", () => {
   it("要確認の行き先", () => {
-    expect(reviewHref(home({ recent: [tx({ date: "2026-10-09", status: "needs_review" })] }))).toBe("/day/2026-10-09");
-    expect(reviewHref(home({ recent: [tx({})] }))).toBe("/calendar?month=2026-10");
+    expect(reviewHref()).toBe("/review");
     expect(reviewLabel(3)).toBe("要確認の記録が3件あります");
   });
   it("店名とサブ行", () => {

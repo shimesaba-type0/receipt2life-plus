@@ -160,10 +160,9 @@ export function isEmptyHome(data: HomeData): boolean {
   return data.month.count === 0 && data.today.count === 0 && data.recent.length === 0;
 }
 
-// 要確認のタップ先。直近に要確認があればその日、なければその月のカレンダー
-export function reviewHref(data: Pick<HomeData, "recent" | "month">): string {
-  const target = data.recent.find((t) => t.status === "needs_review");
-  return target ? `/day/${target.date}` : `/calendar?month=${data.month.month}`;
+// 要確認のタップ先。要確認の記録だけを並べた一覧
+export function reviewHref(): string {
+  return "/review";
 }
 
 export function reviewLabel(count: number): string {
