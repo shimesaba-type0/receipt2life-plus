@@ -26,7 +26,7 @@ interface Tool {
   inputSchema: unknown;
 }
 
-const FIELDS = ["paid_time", "merchant_phone", "merchant_address", "invoice_number", "clerk_name", "receipt_no"];
+const FIELDS = ["paid_time", "merchant_phone", "merchant_address", "invoice_number", "receipt_no"];
 
 describe("MCP のレシートの情報", () => {
   it("add_transactions の説明に、拾う項目・省略・読めないときの確認(3択)が書かれ、スキーマに6項目がある", async () => {
@@ -62,7 +62,7 @@ describe("MCP のレシートの情報", () => {
   it("add → list(keyword) → update(null で空) の通し", async () => {
     const added = await callTool("add_transactions", {
       transactions: [
-        { date: "2026-10-01", amount: 2400, merchant: "Aタクシー", category: "交通・チャージ", paid_time: "14:32", merchant_phone: "03-0000-0000", clerk_name: "山田", invoice_number: "T0000000000000" },
+        { date: "2026-10-01", amount: 2400, merchant: "Aタクシー", category: "交通・チャージ", paid_time: "14:32", merchant_phone: "03-0000-0000", invoice_number: "T0000000000000" },
         { date: "2026-10-02", amount: 500, merchant: "B店", category: "食費" },
       ],
     });
@@ -71,8 +71,8 @@ describe("MCP のレシートの情報", () => {
 
     const byPhone = await callTool("list_transactions", { keyword: "0300000000" });
     expect(text(byPhone).transactions.map((t: { merchant: string }) => t.merchant)).toEqual(["Aタクシー"]);
-    expect(text(byPhone).transactions[0]).toMatchObject({ clerk_name: "山田", invoice_number: "T0000000000000" });
-    expect(text(await callTool("list_transactions", { keyword: "山田" })).count).toBe(1);
+    expect(text(byPhone).transactions[0]).toMatchObject({ invoice_number: "T0000000000000" });
+    expect(Object.keys(text(byPhone).transactions[0])).not.toContain("clerk_name");
 
     const cleared = await callTool("update_transaction", { id, merchant_phone: null, receipt_no: "R-1" });
     expect(text(cleared)).toMatchObject({ ok: true, transaction: { merchant_phone: null, receipt_no: "R-1", paid_time: "14:32" } });
@@ -85,5 +85,22 @@ describe("MCP のレシートの情報", () => {
     expect(body).toContain("invoice_number");
     expect(body).toContain("T と数字13桁で入力してください");
     expect(body).toContain("paid_time");
+  });
+
+  it("clerk_name は入力項目にない。説明に「記録しない」と書かれ、渡すと未知の項目としてエラーになり、保存されない", async () => {
+    const tools = (await rpc("tools/list")).body.result.tools as Tool[];
+    for (const name of ["add_transactions", "update_transaction", "list_transactions"]) {
+      const t = tools.find((x) => x.name === name)!;
+      expect(JSON.stringify(t.inputSchema)).not.toContain("clerk_name");
+      expect(t.description).not.toContain("clerk_name");
+    }
+    expect(tools.find((x) => x.name === "add_transactions")!.description).toContain("店員名・店員コード・担当者番号は記録しない");
+
+    // 入力の検証で断られる(未知の項目)。何も保存されない
+    const added = await callTool("add_transactions", { transactions: [{ date: "2026-10-01", amount: 700, merchant: "Aタクシー", category: "交通・チャージ", clerk_name: "山田" }] });
+    expect(added.body.result.isError).toBe(true);
+    expect(added.body.result.content[0].text).toContain("clerk_name");
+    const n = await testEnv().DB.prepare("SELECT COUNT(*) AS n FROM transactions").first<{ n: number }>();
+    expect(n!.n).toBe(0);
   });
 });

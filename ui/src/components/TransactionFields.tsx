@@ -5,7 +5,7 @@ import { MerchantCombobox } from "./MerchantCombobox";
 import { Link } from "../router";
 import { groupCategories } from "../pages/categoriesLogic";
 import { TAX_FLAG_OPTIONS } from "../pages/dayLogic";
-import { invoiceHint, normalizeInvoiceNumber, MAX_ADDRESS, MAX_CLERK, MAX_PHONE, MAX_RECEIPT_NO, MAX_REGISTER_NO, MAX_STORE_CODE } from "../receiptDetails";
+import { invoiceHint, normalizeInvoiceNumber, MAX_ADDRESS, MAX_PHONE, MAX_RECEIPT_NO, MAX_REGISTER_NO, MAX_STORE_CODE } from "../receiptDetails";
 import type { TxFormValues } from "../pages/transactionLogic";
 import { RATE_OPTIONS, RATE_OTHER } from "../pages/taxLogic";
 import "../pages/Day.css";
@@ -191,8 +191,6 @@ function ReceiptDetailFields(props: { idPrefix: string; values: TxFormValues; on
           {invoiceError}
         </p>
       )}
-      <label for={`${id}-clerk`}>対応した人(担当・責任者・レジ)</label>
-      <input id={`${id}-clerk`} type="text" maxLength={MAX_CLERK} value={f.clerk_name} onInput={input("clerk_name")} />
       <label for={`${id}-receiptno`}>レシート番号・伝票番号</label>
       <input id={`${id}-receiptno`} type="text" autoComplete="off" maxLength={MAX_RECEIPT_NO} placeholder="例: P20261003152814" value={f.receipt_no} onInput={input("receipt_no")} />
       <label for={`${id}-registerno`}>レジ番号</label>

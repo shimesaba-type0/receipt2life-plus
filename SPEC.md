@@ -99,7 +99,7 @@ receipt2life/
 | created_at, updated_at | TEXT | |
 
 - 必須は金額だけ。読み取れなかった項目は空欄のまま登録でき、不完全なものには needs_review を付ける
-- レシートに印字された情報(決済時刻 paid_time、店の電話 merchant_phone・住所 merchant_address、登録番号 invoice_number、担当者 clerk_name、レシート番号 receipt_no、レジ番号 register_no、店番号 store_code)は、すべて任意の列で持つ(migration 0006、register_no / store_code は migration 0013。第13節「フェーズ5(レシートの情報)」)
+- レシートに印字された情報(決済時刻 paid_time、店の電話 merchant_phone・住所 merchant_address、登録番号 invoice_number、レシート番号 receipt_no、レジ番号 register_no、店番号 store_code)は、すべて任意の列で持つ(migration 0006、register_no / store_code は migration 0013。第13節「フェーズ5(レシートの情報)」)
 - 明細(レシートの行)は任意で、transaction_items に持つ(第13節「フェーズ5(明細)」)。取引の amount が支払総額の正
 
 **transaction_items**(明細。migration 0005)
@@ -585,3 +585,10 @@ backup/
 - ユーザー指摘(スマホ): ホームの「要確認の記録があります」を押しても、どの記録か分からない。以前のタップ先は、直近の記録の中の要確認の日(無ければ月のカレンダー)で、全部の要確認は見えなかった
 - 新しい画面 `/review`(要確認の記録の一覧)を作り、ホームの帯のタップ先にした。要確認の取引だけを新しい日付から並べ(最大500件)、店名(無ければ「店名なし」)・日付・メモ・金額・理由(「店名がありません」/「カテゴリがありません」)を出す。押すと明細ページ(`/tx/:id`)で直せる
 - `GET /api/transactions` を追加(絞り込み: from / to / category / tax_flag / status / keyword / limit)。`status`(needs_review / ok)は MCP の `list_transactions` にも足した(AI が要確認の一覧を取れる)
+
+### 店員名(clerk_name)を記録しない(暫定)
+- 方針(ユーザー依頼): レシートの店員コード・担当者名は、店への問い合わせに要らない(店には、日時・店舗・レジ・金額・品目・伝票番号で探してもらえる)。第三者の個人情報でもあり、将来オープンソース・SaaS で公開する可能性もあるため、このアプリでは持たない
+- 入力: `add_transactions` / `update_transaction`(MCP)と API の入力項目から `clerk_name` を外した。渡すと未知の項目としてエラー(MCP は SDK の「Unrecognized key」、API は「clerk_name は記録しません」という理由つき)。ツールの説明に「店員名・店員コード・担当者番号は記録しない(メモにも入れない)」と書いた
+- 出力: 取引の返り値(`list_transactions`・詳細・日・ホーム・更新の戻りなど)に含めない。画面の明細ページの表示と編集欄(「対応した人」)も消した。`list_transactions` の `keyword` と `search_records` の対象からも外した
+- バックアップ: 書き出しから外した。読み込みは、古いバックアップの `clerk_name` をエラーにせず捨てる
+- DB の `clerk_name` 列(migration 0006)は残し、読み書きしない。過去の値は消さない・書き換えない(更新でも触らない)。値を消したくなったときは、別途 `UPDATE transactions SET clerk_name = NULL` を、人間が確認して行う

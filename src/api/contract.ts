@@ -108,8 +108,6 @@ export interface TransactionView {
   merchant_address: string | null;
   // 適格請求書発行事業者の登録番号(T + 数字13桁)
   invoice_number: string | null;
-  // 対応した店員の名前(担当・責任者・レジなど)
-  clerk_name: string | null;
   // レシート番号・伝票番号
   receipt_no: string | null;
   // レジ番号(例: 0005)・店番号/店舗コード(例: 007832)。receipt_no(伝票番号)とは別
@@ -392,7 +390,6 @@ export interface NewTransaction {
   merchant_phone?: string | null;
   merchant_address?: string | null;
   invoice_number?: string | null;
-  clerk_name?: string | null;
   receipt_no?: string | null;
   register_no?: string | null;
   store_code?: string | null;
@@ -419,7 +416,6 @@ export interface TransactionPatch {
   merchant_phone?: string | null;
   merchant_address?: string | null;
   invoice_number?: string | null;
-  clerk_name?: string | null;
   receipt_no?: string | null;
   register_no?: string | null;
   store_code?: string | null;

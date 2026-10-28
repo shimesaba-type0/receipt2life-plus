@@ -58,7 +58,7 @@ export interface TransactionView extends TransactionRow {
 export type RegisteredTransaction = TransactionView & { applied_default_category?: string };
 
 // 取引の表示用の列(TransactionRow と同じ並び)。transactions を t、カテゴリを c、口座を a で JOIN して使う
-export const TX_VIEW_COLUMNS = "t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status, t.tax_flag, t.paid_time, t.merchant_phone, t.merchant_address, t.invoice_number, t.clerk_name, t.receipt_no, t.register_no, t.store_code";
+export const TX_VIEW_COLUMNS = "t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account, t.memo, t.source, t.status, t.tax_flag, t.paid_time, t.merchant_phone, t.merchant_address, t.invoice_number, t.receipt_no, t.register_no, t.store_code";
 
 export interface DuplicateInfo {
   index: number;
@@ -194,8 +194,8 @@ export async function addTransactions(db: D1Database, input: unknown, options: C
       db
         .prepare(
           `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag,
-                                      paid_time, merchant_phone, merchant_address, invoice_number, clerk_name, receipt_no, register_no, store_code)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                      paid_time, merchant_phone, merchant_address, invoice_number, receipt_no, register_no, store_code)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -289,7 +289,7 @@ export function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, "\\$&");
 }
 
-const KEYWORD_COLUMNS = ["t.merchant", "t.merchant_phone", "t.merchant_address", "t.clerk_name", "t.memo", "t.receipt_no", "t.invoice_number"] as const;
+const KEYWORD_COLUMNS = ["t.merchant", "t.merchant_phone", "t.merchant_address", "t.memo", "t.receipt_no", "t.invoice_number"] as const;
 // 保存済みの電話番号から数字以外(ハイフン・括弧・プラス・空白)を除く式
 const PHONE_DIGITS_SQL = `REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(t.merchant_phone, '-', ''), ' ', ''), '(', ''), ')', ''), '+', '')`;
 
@@ -482,7 +482,6 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
     merchant_phone: patch.merchant_phone === undefined ? current.merchant_phone : patch.merchant_phone,
     merchant_address: patch.merchant_address === undefined ? current.merchant_address : patch.merchant_address,
     invoice_number: patch.invoice_number === undefined ? current.invoice_number : patch.invoice_number,
-    clerk_name: patch.clerk_name === undefined ? current.clerk_name : patch.clerk_name,
     receipt_no: patch.receipt_no === undefined ? current.receipt_no : patch.receipt_no,
     register_no: patch.register_no === undefined ? current.register_no : patch.register_no,
     store_code: patch.store_code === undefined ? current.store_code : patch.store_code,
@@ -511,7 +510,7 @@ export async function updateTransaction(db: D1Database, input: unknown, options:
       .prepare(
         `UPDATE transactions
          SET date = ?, amount = ?, merchant = ?, category_id = ?, account_id = ?, memo = ?, source = ?, status = ?, dedup_hash = ?, updated_at = ?, tax_flag = ?,
-             paid_time = ?, merchant_phone = ?, merchant_address = ?, invoice_number = ?, clerk_name = ?, receipt_no = ?, register_no = ?, store_code = ?
+             paid_time = ?, merchant_phone = ?, merchant_address = ?, invoice_number = ?, receipt_no = ?, register_no = ?, store_code = ?
          WHERE id = ?`,
       )
       .bind(

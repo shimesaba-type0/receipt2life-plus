@@ -3,7 +3,6 @@ import type { FieldError, ItemView, NewItem, TaxFlag, TransactionPatch, Transact
 import { formatYen } from "../format";
 import {
   MAX_ADDRESS,
-  MAX_CLERK,
   MAX_RECEIPT_NO,
   MAX_REGISTER_NO,
   MAX_STORE_CODE,
@@ -87,7 +86,6 @@ export interface TxFormValues {
   merchant_phone: string;
   merchant_address: string;
   invoice_number: string;
-  clerk_name: string;
   receipt_no: string;
   register_no: string;
   store_code: string;
@@ -128,7 +126,6 @@ export function emptyTxForm(date: string): TxFormValues {
     merchant_phone: "",
     merchant_address: "",
     invoice_number: "",
-    clerk_name: "",
     receipt_no: "",
     register_no: "",
     store_code: "",
@@ -148,7 +145,6 @@ export function txFormFromView(tx: TransactionView): TxFormValues {
     merchant_phone: tx.merchant_phone ?? "",
     merchant_address: tx.merchant_address ?? "",
     invoice_number: tx.invoice_number ?? "",
-    clerk_name: tx.clerk_name ?? "",
     receipt_no: tx.receipt_no ?? "",
     register_no: tx.register_no ?? "",
     store_code: tx.store_code ?? "",
@@ -274,7 +270,7 @@ export function buildItems(rows: ItemRow[]): BuildResult<NewItem[]> {
   return { ok: true, value: out };
 }
 
-type DetailsPatch = Pick<TransactionPatch, "paid_time" | "merchant_phone" | "merchant_address" | "invoice_number" | "clerk_name" | "receipt_no" | "register_no" | "store_code">;
+type DetailsPatch = Pick<TransactionPatch, "paid_time" | "merchant_phone" | "merchant_address" | "invoice_number" | "receipt_no" | "register_no" | "store_code">;
 
 // レシートの情報の入力を、正規化・検証して API の入力にする(規則はサーバーと同じ。空欄は null = 空にする)
 export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
@@ -283,7 +279,6 @@ export function buildDetails(form: TxFormValues): BuildResult<DetailsPatch> {
     ["merchant_phone", parsePhone(form.merchant_phone)],
     ["merchant_address", parseText(form.merchant_address, MAX_ADDRESS, "住所")],
     ["invoice_number", parseInvoiceNumber(form.invoice_number)],
-    ["clerk_name", parseText(form.clerk_name, MAX_CLERK, "対応した人")],
     ["receipt_no", parseText(form.receipt_no, MAX_RECEIPT_NO, "レシート番号")],
     ["register_no", parseText(form.register_no, MAX_REGISTER_NO, "レジ番号")],
     ["store_code", parseText(form.store_code, MAX_STORE_CODE, "店番号")],

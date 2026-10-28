@@ -6,7 +6,6 @@ import type { TransactionView } from "../../src/api/contract";
 
 export const MAX_PHONE = 30;
 export const MAX_ADDRESS = 200;
-export const MAX_CLERK = 50;
 export const MAX_RECEIPT_NO = 50;
 export const MAX_REGISTER_NO = 30;
 export const MAX_STORE_CODE = 30;
@@ -76,13 +75,13 @@ export function invoiceHint(raw: string): string | null {
 
 // ---- 表示 ----
 
-export type ShopInfoTx = Pick<TransactionView, "merchant_phone" | "merchant_address" | "invoice_number" | "clerk_name" | "receipt_no" | "register_no" | "store_code">;
+export type ShopInfoTx = Pick<TransactionView, "merchant_phone" | "merchant_address" | "invoice_number" | "receipt_no" | "register_no" | "store_code">;
 
 const filled = (v: string | null | undefined): v is string => v != null && v.trim() !== "";
 
 // 「店舗の情報」のブロックを出すか。7項目が全部空なら出さない(決済時刻は日付の隣に出すので数えない)
 export function hasShopInfo(tx: ShopInfoTx): boolean {
-  return filled(tx.merchant_phone) || filled(tx.merchant_address) || filled(tx.invoice_number) || filled(tx.clerk_name) || filled(tx.receipt_no) || filled(tx.register_no) || filled(tx.store_code);
+  return filled(tx.merchant_phone) || filled(tx.merchant_address) || filled(tx.invoice_number) || filled(tx.receipt_no) || filled(tx.register_no) || filled(tx.store_code);
 }
 
 // 電話番号の tel: リンク。数字と先頭の + だけにする(ハイフン・括弧・空白は除く)。発信できる形にならなければ null

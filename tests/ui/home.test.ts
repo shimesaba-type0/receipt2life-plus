@@ -4,7 +4,7 @@ import { DISCOUNTS_NOTE, DONUT, GROUP_COLORS, INK, PAPER, barSegments, discounts
 
 const row = (key: string, total: number, percent: number): SummaryRow => ({ key, label: key, count: 1, total, percent });
 const tx = (over: Partial<TransactionView>): TransactionView => ({
-  id: "t1", date: "2026-10-11", amount: 100, merchant: null, category: null, account: null, memo: null, source: "manual", status: "confirmed", tax_flag: null, paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null, items: [], tax_lines: [], ...over,
+  id: "t1", date: "2026-10-11", amount: 100, merchant: null, category: null, account: null, memo: null, source: "manual", status: "confirmed", tax_flag: null, paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null, register_no: null, store_code: null, items: [], tax_lines: [], ...over,
 });
 const home = (over: Partial<HomeData> = {}): HomeData => ({
   today: { date: "2026-10-11", total: 0, count: 0 },
