@@ -49,6 +49,7 @@ import type {
   BookPatch,
   BookSaved,
   BookView,
+  TransactionListData,
   FavoriteSeriesSaved,
   BooksData,
   NewBook,
@@ -238,6 +239,8 @@ export function getBooks(filter: { q?: string; series?: string; author?: string;
   const qs = params.toString();
   return request<BooksData>("GET", `/api/books${qs ? `?${qs}` : ""}`);
 }
+// 取引の一覧(要確認の一覧: status=needs_review)
+export const getTransactionList = (query: string) => request<TransactionListData>("GET", `/api/transactions?${query}`);
 export const getBook = (id: string) => request<{ book: BookView }>("GET", `/api/books/${encodeURIComponent(id)}`);
 export const setFavoriteSeries = (series: string, favorite: boolean) => request<FavoriteSeriesSaved>("PUT", "/api/book-favorites", { series, favorite });
 export const addBook = (book: NewBook) => request<BookSaved>("POST", "/api/books", book);

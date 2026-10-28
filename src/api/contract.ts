@@ -1041,3 +1041,9 @@ export interface FavoriteSeriesSaved {
   favorite: boolean;
   message: string;
 }
+
+// GET /api/transactions?from=&to=&category=&tax_flag=&status=&keyword=&limit=(新しい日付から。status=needs_review で要確認だけ)
+export interface TransactionListData {
+  count: number;
+  transactions: TransactionView[];
+}

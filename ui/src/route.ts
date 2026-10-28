@@ -13,6 +13,7 @@ export type Route =
   | { name: "accounts" }
   | { name: "subscriptions" }
   | { name: "books"; id: string | null }
+  | { name: "review" }
   | { name: "tax" }
   | { name: "usage" }
   | { name: "products"; month: string | null; product: string | null; by: "product" | "group" | null }
@@ -64,6 +65,8 @@ export function parseRoute(pathname: string, search = ""): Route {
   if (path === "/accounts") return { name: "accounts" };
   // サブスク・固定費。API の /api/subscriptions とは衝突しない
   if (path === "/subscriptions") return { name: "subscriptions" };
+  // 要確認の記録の一覧。ホームの「要確認の記録があります」のタップ先
+  if (path === "/review") return { name: "review" };
   // 買った本の記録。API の /api/books とは衝突しない
   if (path === "/books") return { name: "books", id: null };
   const book = /^\/books\/([^/]+)$/.exec(path);

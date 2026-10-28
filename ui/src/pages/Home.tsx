@@ -122,7 +122,7 @@ function HomeBody(props: { data: HomeData; cats: CategoriesData }) {
 
       <div class="home__body">
         {data.needs_review > 0 && (
-          <Link href={reviewHref(data)} class="home__review" aria-label={`${reviewLabel(data.needs_review)}。タップして確認する`}>
+          <Link href={reviewHref()} class="home__review" aria-label={`${reviewLabel(data.needs_review)}。タップして確認する`}>
             <span>
               要確認の記録が <b class="num">{data.needs_review}件</b> あります
             </span>

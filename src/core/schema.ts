@@ -134,6 +134,10 @@ export const listTransactionsSchema = z.strictObject({
     .enum(TAX_FLAG_FILTERS, { error: `tax_flag は ${TAX_FLAG_FILTERS.join(" / ")} のいずれかで指定してください` })
     .optional()
     .describe(`${TAX_FLAG_FILTER_DESCRIPTION}。明細のある取引は、行の実効フラグ(行のフラグ、無ければ取引のフラグ)のどれかが当てはまれば含める`),
+  status: z
+    .enum(["needs_review", "ok"], { error: "status は needs_review / ok のいずれかで指定してください" })
+    .optional()
+    .describe("要確認(needs_review: 店名が無い、または実効カテゴリの無い行がある)の取引だけ、または確認済み(ok)だけ。要確認を直すときに使う"),
   keyword: z
     .string()
     .trim()

@@ -7,6 +7,25 @@ const app = createApp();
 const post = (body: string, headers: Record<string, string> = {}) =>
   app.request("http://localhost/import", { method: "POST", body, headers }, local);
 
+describe("GET /api/transactions(要確認の一覧)", () => {
+  it("status=needs_review で、要確認の取引だけを新しい順に返す", async () => {
+    await post(
+      [
+        JSON.stringify({ type: "transaction", id: "r1", date: "2026-10-10", amount: 100, merchant: "A店", category: "食費" }),
+        JSON.stringify({ type: "transaction", id: "r2", date: "2026-10-09", amount: 200, category: "食費" }),
+        JSON.stringify({ type: "transaction", id: "r3", date: "2026-10-08", amount: 300, merchant: "B店" }),
+      ].join("\n"),
+    );
+    const res = await app.request("http://localhost/api/transactions?status=needs_review", {}, local);
+    const body = (await res.json()) as { ok: boolean; count: number; transactions: { id: string }[] };
+    expect(body).toMatchObject({ ok: true, count: 2 });
+    expect(body.transactions.map((t) => t.id)).toEqual(["r2", "r3"]);
+    const ok = (await (await app.request("http://localhost/api/transactions?status=ok", {}, local)).json()) as { count: number };
+    expect(ok.count).toBe(1);
+    expect((await app.request("http://localhost/api/transactions?status=bad", {}, local)).status).toBe(400);
+  });
+});
+
 describe("GET /export", () => {
   it("未認証は401", async () => {
     const res = await app.request("http://example.test/export", {}, { DB: testEnv().DB });

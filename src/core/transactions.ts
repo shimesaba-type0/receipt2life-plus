@@ -310,7 +310,7 @@ export function keywordCondition(keyword: string): { sql: string; params: string
 export async function listTransactions(db: D1Database, input: unknown): Promise<ListResult> {
   const parsed = listTransactionsSchema.safeParse(input ?? {});
   if (!parsed.success) return { ok: false, errors: toFieldErrors(parsed.error) };
-  const { from, to, category, tax_flag: taxFlag, keyword, limit, include_items: includeItems } = parsed.data;
+  const { from, to, category, tax_flag: taxFlag, status, keyword, limit, include_items: includeItems } = parsed.data;
 
   if (from && to && from > to) {
     return { ok: false, errors: [{ field: "from", message: "from: from は to 以前の日付にしてください" }] };
@@ -339,6 +339,11 @@ export async function listTransactions(db: D1Database, input: unknown): Promise<
   } else if (taxFlag) {
     where.push(anyLineMatches("tax_flag", (v) => `${v} = ?`));
     params.push(taxFlag, taxFlag);
+  }
+
+  if (status) {
+    where.push("t.status = ?");
+    params.push(status);
   }
 
   if (keyword) {
