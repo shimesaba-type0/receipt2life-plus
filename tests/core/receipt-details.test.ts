@@ -73,7 +73,6 @@ describe("add_transactions", () => {
       merchant_phone: "０３−００００−００００",
       merchant_address: "  東京都〇〇区〇〇1-2-3  ",
       invoice_number: "T 0000-0000-00000",
-      clerk_name: " 担当 山田 ",
       receipt_no: " 0001-23 ",
     });
     const expected = {
@@ -81,7 +80,6 @@ describe("add_transactions", () => {
       merchant_phone: "03-0000-0000",
       merchant_address: "東京都〇〇区〇〇1-2-3",
       invoice_number: "T0000000000000",
-      clerk_name: "担当 山田",
       receipt_no: "0001-23",
     };
     expect(tx).toMatchObject(expected);
@@ -96,7 +94,7 @@ describe("add_transactions", () => {
 
   it("省略・null は null で保存(既存どおりの登録もそのまま通る)", async () => {
     const plain = await addOne({});
-    expect(plain).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null });
+    expect(plain).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null });
     const withNull = await addOne({ amount: 1001, paid_time: null, invoice_number: null });
     expect(withNull.paid_time).toBeNull();
   });
@@ -104,18 +102,18 @@ describe("add_transactions", () => {
   it("不正な値は項目名つきの日本語エラーで、全体を拒否する", async () => {
     const res = await add([
       { amount: 500, merchant: "Bマート" },
-      { amount: 1000, invoice_number: "T123", paid_time: "25:00", merchant_phone: "abc", merchant_address: "あ".repeat(201), clerk_name: "い".repeat(51), receipt_no: "う".repeat(51) },
+      { amount: 1000, invoice_number: "T123", paid_time: "25:00", merchant_phone: "abc", merchant_address: "あ".repeat(201), receipt_no: "う".repeat(51) },
     ]);
     expect(res.ok).toBe(false);
     if (res.ok) return;
-    expect(res.errors.map((e) => [e.index, e.field])).toEqual(expect.arrayContaining([[1, "invoice_number"], [1, "paid_time"], [1, "merchant_phone"], [1, "merchant_address"], [1, "clerk_name"], [1, "receipt_no"]]));
+    expect(res.errors.map((e) => [e.index, e.field])).toEqual(expect.arrayContaining([[1, "invoice_number"], [1, "paid_time"], [1, "merchant_phone"], [1, "merchant_address"], [1, "receipt_no"]]));
     expect(res.errors.find((e) => e.field === "invoice_number")!.message).toContain("T と数字13桁で入力してください");
     const total = await db().prepare("SELECT COUNT(*) AS n FROM transactions").first<{ n: number }>();
     expect(total!.n).toBe(0);
   });
 
-  it("上限ちょうど(住所200・担当50・レシート番号50)は通る", async () => {
-    const tx = await addOne({ merchant_address: "あ".repeat(200), clerk_name: "い".repeat(50), receipt_no: "う".repeat(50) });
+  it("上限ちょうど(住所200・レシート番号50)は通る", async () => {
+    const tx = await addOne({ merchant_address: "あ".repeat(200), receipt_no: "う".repeat(50) });
     expect(tx.merchant_address).toHaveLength(200);
   });
 });
@@ -162,18 +160,17 @@ describe("dedup_hash と重複判定", () => {
 
 describe("update_transaction", () => {
   it("項目だけの更新が成立し、null で空にでき、渡さない項目は変わらない", async () => {
-    const tx = await addOne({ paid_time: "14:32", merchant_phone: "03-0000-0000", clerk_name: "山田" });
+    const tx = await addOne({ paid_time: "14:32", merchant_phone: "03-0000-0000" });
     const r1 = await update({ id: tx.id, merchant_address: "東京都〇〇区〇〇1-2-3", invoice_number: "t 0000-0000-00000", receipt_no: "A-1" });
     expect(r1.ok && r1.transaction).toMatchObject({
       paid_time: "14:32",
       merchant_phone: "03-0000-0000",
-      clerk_name: "山田",
       merchant_address: "東京都〇〇区〇〇1-2-3",
       invoice_number: "T0000000000000",
       receipt_no: "A-1",
     });
-    const r2 = await update({ id: tx.id, merchant_phone: null, paid_time: null, clerk_name: null });
-    expect(r2.ok && r2.transaction).toMatchObject({ merchant_phone: null, paid_time: null, clerk_name: null, merchant_address: "東京都〇〇区〇〇1-2-3" });
+    const r2 = await update({ id: tx.id, merchant_phone: null, paid_time: null });
+    expect(r2.ok && r2.transaction).toMatchObject({ merchant_phone: null, paid_time: null, merchant_address: "東京都〇〇区〇〇1-2-3" });
     const detail = await getTransaction(db(), tx.id);
     expect(detail.ok && detail.transaction.receipt_no).toBe("A-1");
   });
@@ -211,7 +208,7 @@ describe("update_transaction", () => {
 describe("list_transactions の keyword", () => {
   async function seed() {
     await add([
-      { date: "2026-10-01", amount: 1000, merchant: "Aタクシー", paid_time: "08:10", merchant_phone: "03-0000-0000", merchant_address: "東京都〇〇区〇〇1-2-3", clerk_name: "山田", receipt_no: "R-100", memo: "空港まで" },
+      { date: "2026-10-01", amount: 1000, merchant: "Aタクシー", paid_time: "08:10", merchant_phone: "03-0000-0000", merchant_address: "東京都〇〇区〇〇1-2-3", receipt_no: "R-100", memo: "空港まで" },
       { date: "2026-10-02", amount: 2000, merchant: "Bストア", merchant_phone: "(045) 111-2222", memo: "100%ジュース" },
       { date: "2026-10-03", amount: 3000, merchant: "C_shop", memo: "ふつう" },
       { date: "2026-10-04", amount: 4000, merchant: "Dカフェ", invoice_number: "T0000000000001" },
@@ -223,12 +220,11 @@ describe("list_transactions の keyword", () => {
     return r.transactions.map((t) => t.merchant).sort();
   };
 
-  it("店名・電話番号・住所・担当者名・メモ・レシート番号のどれかに部分一致する", async () => {
+  it("店名・電話番号・住所・メモ・レシート番号・登録番号のどれかに部分一致する", async () => {
     await seed();
     expect(await names({ keyword: "タクシー" })).toEqual(["Aタクシー"]);
     expect(await names({ keyword: "03-0000" })).toEqual(["Aタクシー"]);
     expect(await names({ keyword: "〇〇区" })).toEqual(["Aタクシー"]);
-    expect(await names({ keyword: "山田" })).toEqual(["Aタクシー"]);
     expect(await names({ keyword: "空港" })).toEqual(["Aタクシー"]);
     expect(await names({ keyword: "r-100" })).toEqual(["Aタクシー"]);
     expect(await names({ keyword: "T0000000000001" })).toEqual(["Dカフェ"]);
@@ -296,5 +292,49 @@ describe("day の並び順", () => {
     await addTransactions(db(), { transactions: [{ date: "2026-10-10", amount: 200, merchant: "後", paid_time: "10:00" }] }, { now: new Date("2026-10-10T01:01:00Z") });
     const day = await getDay(db(), "2026-10-10");
     expect(day.ok && day.transactions.map((t) => t.merchant)).toEqual(["先", "後"]);
+  });
+});
+
+describe("店員名(clerk_name)は記録しない", () => {
+  const SECRET = "ダミー店員X";
+  // 過去のデータを想定して、DBの列に直接値を入れる(アプリの入口からは入れられない)
+  async function withLegacyClerk() {
+    const tx = await addOne({ memo: "ふつう" });
+    await db().prepare("UPDATE transactions SET clerk_name = ? WHERE id = ?").bind(SECRET, tx.id).run();
+    return tx;
+  }
+
+  it("登録・更新で clerk_name を渡すと、理由の分かるエラーにする(保存しない)", async () => {
+    const res = await add([{ date: "2026-10-10", amount: 1000, merchant: "Aタクシー", clerk_name: "山田" }]);
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.errors[0]!.field).toBe("clerk_name");
+    expect(res.errors[0]!.message).toContain("記録しません");
+    const tx = await addOne({});
+    const upd = await update({ id: tx.id, clerk_name: "山田" });
+    expect(upd.ok).toBe(false);
+    expect(!upd.ok && upd.errors[0]!.message).toContain("記録しません");
+  });
+
+  it("返り値(list・詳細・日・更新の戻り)に clerk_name を含めない。DBの過去の値は残る", async () => {
+    const tx = await withLegacyClerk();
+    const list = await listTransactions(db(), {});
+    expect(list.ok && Object.keys(list.transactions[0]!)).not.toContain("clerk_name");
+    expect(JSON.stringify(list)).not.toContain(SECRET);
+    const detail = await getTransaction(db(), tx.id);
+    expect(JSON.stringify(detail)).not.toContain(SECRET);
+    const day = await getDay(db(), "2026-10-10");
+    expect(JSON.stringify(day)).not.toContain(SECRET);
+    const upd = await update({ id: tx.id, memo: "直した" });
+    expect(JSON.stringify(upd)).not.toContain(SECRET);
+    // 更新しても、DBの過去の値は消さない・書き換えない
+    const row = await db().prepare("SELECT clerk_name FROM transactions WHERE id = ?").bind(tx.id).first<{ clerk_name: string | null }>();
+    expect(row!.clerk_name).toBe(SECRET);
+  });
+
+  it("keyword の検索対象に入れない", async () => {
+    await withLegacyClerk();
+    const r = await listTransactions(db(), { keyword: SECRET });
+    expect(r.ok && r.transactions).toHaveLength(0);
   });
 });

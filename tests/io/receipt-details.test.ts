@@ -15,7 +15,6 @@ const DETAILS = {
   merchant_phone: "03-0000-0000",
   merchant_address: "東京都〇〇区〇〇1-2-3",
   invoice_number: "T0000000000000",
-  clerk_name: "山田",
   receipt_no: "R-100",
 };
 
@@ -38,7 +37,6 @@ describe("JSONL とレシートの情報", () => {
       merchant_phone: null,
       merchant_address: null,
       invoice_number: null,
-      clerk_name: null,
       receipt_no: null,
     });
   });
@@ -93,7 +91,7 @@ describe("JSONL とレシートの情報", () => {
       { now: NOW },
     );
     expect(res.ok && res.summary).toMatchObject({ ok: 1, errors: 0 });
-    expect(await rowOf("old1")).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null });
+    expect(await rowOf("old1")).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null });
   });
 
   it("手書きの行でも値を正規化し、不正な値はその行だけエラー", async () => {
@@ -124,5 +122,17 @@ describe("JSONL とレシートの情報", () => {
       { now: NOW },
     );
     expect(res.ok && res.results.map((r) => r.status)).toEqual(["ok", "skipped_duplicate", "ok"]);
+  });
+
+  it("店員名(clerk_name)は書き出さない。古いバックアップの clerk_name は、エラーにせず捨てる", async () => {
+    await addTransactions(db(), { transactions: [{ date: "2026-10-01", amount: 1000, merchant: "Aタクシー" }] }, { now: NOW });
+    await db().prepare("UPDATE transactions SET clerk_name = ?").bind("ダミー店員X").run();
+    const rows = parse(await exportText()).filter((r) => r.type === "transaction");
+    expect(Object.keys(rows[0]!)).not.toContain("clerk_name");
+    expect(JSON.stringify(rows)).not.toContain("ダミー店員X");
+
+    const res = await importRecords(db(), jsonl({ type: "transaction", id: "legacy1", date: "2026-10-02", amount: 500, merchant: "B店", clerk_name: "ダミー店員Y", receipt_no: "R-1" }), { now: NOW });
+    expect(res).toMatchObject({ ok: true, summary: { ok: 1, errors: 0 } });
+    expect(await rowOf("legacy1")).toMatchObject({ receipt_no: "R-1", clerk_name: null });
   });
 });

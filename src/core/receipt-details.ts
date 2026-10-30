@@ -1,17 +1,17 @@
 import { z } from "zod";
 
 // レシートから読み取れる情報(取引の任意の列。migration 0006)。検証と正規化はここの1か所に置く
+// 店員の名前・コード・担当者番号は記録しない(第三者の個人情報のため)。DBの clerk_name 列は、過去のデータのために残してあるが、読み書きしない
 // (add_transactions / update_transaction / API / JSONL の取り込みは、同じスキーマを通る)
 // UI は core を import しない決まりなので、同じ規則を ui/src/receiptDetails.ts にも持つ(tests/ui/receipt-details.test.ts が一致を確かめる)
 
 export const MAX_PHONE = 30;
 export const MAX_ADDRESS = 200;
-export const MAX_CLERK = 50;
 export const MAX_RECEIPT_NO = 50;
 export const MAX_REGISTER_NO = 30;
 export const MAX_STORE_CODE = 30;
 
-export const RECEIPT_DETAIL_KEYS = ["paid_time", "merchant_phone", "merchant_address", "invoice_number", "clerk_name", "receipt_no", "register_no", "store_code"] as const;
+export const RECEIPT_DETAIL_KEYS = ["paid_time", "merchant_phone", "merchant_address", "invoice_number", "receipt_no", "register_no", "store_code"] as const;
 export type ReceiptDetailKey = (typeof RECEIPT_DETAIL_KEYS)[number];
 
 export const PAID_TIME_MESSAGE = "決済時刻は HH:MM 形式(00:00〜23:59、日本時間。例: 14:32)で指定してください";
@@ -66,12 +66,6 @@ export const merchantAddressField = z
 
 export const invoiceNumberField = z.string({ error: INVOICE_MESSAGE }).overwrite(normalizeInvoiceNumber).regex(INVOICE_RE, INVOICE_MESSAGE);
 
-export const clerkNameField = z
-  .string({ error: "担当者名は文字列で指定してください" })
-  .trim()
-  .min(1, "担当者名が空です(空にするときは null を指定してください)")
-  .max(MAX_CLERK, `担当者名は${MAX_CLERK}文字以内にしてください`);
-
 export const receiptNoField = z
   .string({ error: "レシート番号は文字列で指定してください" })
   .trim()
@@ -110,10 +104,6 @@ export const receiptDetailShape = {
     .describe(
       "適格請求書発行事業者の登録番号(T + 数字13桁。例: T0000000000000)。レシートの「登録番号」「事業者番号」の印字。全角・小文字の t・ハイフンや空白入りでも受け付け、正規化して保存する。T と数字13桁にならなければエラー。印字が無ければ省略",
     ),
-  clerk_name: clerkNameField
-    .nullable()
-    .optional()
-    .describe(`対応した店員の名前(レシートの「担当」「責任者」「レジ」などの印字。${MAX_CLERK}文字まで)。印字が無ければ省略`),
   receipt_no: receiptNoField
     .nullable()
     .optional()
@@ -140,7 +130,6 @@ export const receiptDetailPatchShape = {
     .nullable()
     .optional()
     .describe("適格請求書発行事業者の登録番号(T + 数字13桁。全角・小文字・ハイフンや空白入りは正規化する)。null で空にする"),
-  clerk_name: clerkNameField.nullable().optional().describe(`対応した店員の名前(${MAX_CLERK}文字まで)。null で空にする`),
   receipt_no: receiptNoField.nullable().optional().describe(`レシート番号・伝票番号(${MAX_RECEIPT_NO}文字まで)。null で空にする`),
   register_no: registerNoField.nullable().optional().describe(`レジ番号(例: 0005。${MAX_REGISTER_NO}文字まで)。null で空にする`),
   store_code: storeCodeField.nullable().optional().describe(`店番号・店舗コード(例: 007832。${MAX_STORE_CODE}文字まで)。null で空にする`),
@@ -152,7 +141,6 @@ export interface ReceiptDetails {
   merchant_phone: string | null;
   merchant_address: string | null;
   invoice_number: string | null;
-  clerk_name: string | null;
   receipt_no: string | null;
   register_no: string | null;
   store_code: string | null;
@@ -164,7 +152,6 @@ export function detailsOf(input: { [K in ReceiptDetailKey]?: string | null | und
     merchant_phone: input.merchant_phone ?? null,
     merchant_address: input.merchant_address ?? null,
     invoice_number: input.invoice_number ?? null,
-    clerk_name: input.clerk_name ?? null,
     receipt_no: input.receipt_no ?? null,
     register_no: input.register_no ?? null,
     store_code: input.store_code ?? null,

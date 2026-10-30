@@ -126,7 +126,7 @@ describe("buildDetails / buildPatch", () => {
     };
     expect(buildDetails(form)).toEqual({
       ok: true,
-      value: { paid_time: "14:32", merchant_phone: "03-0000-0000", merchant_address: "東京都〇〇区〇〇1-2-3", invoice_number: "T0000000000000", clerk_name: null, receipt_no: null, register_no: null, store_code: null },
+      value: { paid_time: "14:32", merchant_phone: "03-0000-0000", merchant_address: "東京都〇〇区〇〇1-2-3", invoice_number: "T0000000000000", receipt_no: null, register_no: null, store_code: null },
     });
   });
   it("不正な値は、保存せずエラーの文を返す", () => {
@@ -137,7 +137,7 @@ describe("buildDetails / buildPatch", () => {
   });
   it("PATCH に8項目が含まれる(全部空でも null を送り、画面で消した値が空になる)", () => {
     const r = buildPatch({ ...emptyTxForm("2026-10-11"), amount: "100" }, [], false);
-    expect(r.ok && r.value).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null });
+    expect(r.ok && r.value).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null, register_no: null, store_code: null });
   });
   it("取引からフォームの文字列にする", () => {
     const tx: TransactionView = {
@@ -155,19 +155,18 @@ describe("buildDetails / buildPatch", () => {
       merchant_phone: "03-0000-0000",
       merchant_address: null,
       invoice_number: "T0000000000000",
-      clerk_name: null,
       receipt_no: "A-1",
       register_no: "0005",
       store_code: "007832",
       items: [],
       tax_lines: [],
     };
-    expect(txFormFromView(tx)).toMatchObject({ paid_time: "09:05", merchant_phone: "03-0000-0000", merchant_address: "", invoice_number: "T0000000000000", clerk_name: "", receipt_no: "A-1", register_no: "0005", store_code: "007832" });
+    expect(txFormFromView(tx)).toMatchObject({ paid_time: "09:05", merchant_phone: "03-0000-0000", merchant_address: "", invoice_number: "T0000000000000", receipt_no: "A-1", register_no: "0005", store_code: "007832" });
   });
 });
 
 describe("表示", () => {
-  const none = { merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null };
+  const none = { merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null, register_no: null, store_code: null };
   it("店舗の情報: 7項目が全部空ならブロックを出さない", () => {
     expect(hasShopInfo(none)).toBe(false);
     expect(hasShopInfo({ ...none, merchant_phone: "  " })).toBe(false);
@@ -233,7 +232,7 @@ describe("レジ番号・店番号", () => {
   });
 
   it("店舗の情報のブロックは、レジ番号・店番号だけでも出す", () => {
-    const none = { merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null, register_no: null, store_code: null };
+    const none = { merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null, register_no: null, store_code: null };
     expect(hasShopInfo({ ...none, register_no: "0005" })).toBe(true);
     expect(hasShopInfo({ ...none, store_code: "007832" })).toBe(true);
   });

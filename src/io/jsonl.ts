@@ -67,7 +67,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   {
     sql: `SELECT 'transaction' AS type, t.id, t.date, t.amount, t.merchant, c.name AS category, a.name AS account,
-                 t.memo, t.source, t.status, t.tax_flag, t.paid_time, t.merchant_phone, t.merchant_address, t.invoice_number, t.clerk_name, t.receipt_no, t.register_no, t.store_code,
+                 t.memo, t.source, t.status, t.tax_flag, t.paid_time, t.merchant_phone, t.merchant_address, t.invoice_number, t.receipt_no, t.register_no, t.store_code,
                  t.created_at, t.updated_at
           FROM transactions t
           LEFT JOIN categories c ON c.id = t.category_id
@@ -605,7 +605,10 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
     hash: string;
   }[] = [];
   for (const entry of entries) {
-    const { extras, rest } = splitExtras(entry.record!, ["id", "status", "created_at", "updated_at"]);
+    // 古いバックアップの clerk_name(店員名)は、記録しない方針なので、エラーにせず捨てる
+    const record = { ...entry.record! };
+    delete record.clerk_name;
+    const { extras, rest } = splitExtras(record, ["id", "status", "created_at", "updated_at"]);
     const e = transactionExtrasSchema.safeParse(extras);
     const givenId = e.success ? e.data.id : undefined;
     const lines = givenId !== undefined && !claimed.has(givenId) ? (itemsByTx.get(givenId) ?? []) : [];
@@ -731,8 +734,8 @@ async function importTransactions(db: D1Database, entries: Entry[], itemEntries:
         db
           .prepare(
             `INSERT INTO transactions (id, date, amount, merchant, category_id, account_id, memo, source, status, dedup_hash, created_at, updated_at, tax_flag,
-                                        paid_time, merchant_phone, merchant_address, invoice_number, clerk_name, receipt_no, register_no, store_code)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                        paid_time, merchant_phone, merchant_address, invoice_number, receipt_no, register_no, store_code)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             v.id,

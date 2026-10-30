@@ -269,12 +269,6 @@ function TransactionBody(props: {
                 </dd>
               </div>
             )}
-            {tx.clerk_name && (
-              <div>
-                <dt>対応した人</dt>
-                <dd class="tx__memo">{tx.clerk_name}</dd>
-              </div>
-            )}
             {tx.receipt_no && (
               <div>
                 <dt>レシート番号・伝票番号</dt>

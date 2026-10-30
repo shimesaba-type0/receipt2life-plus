@@ -145,7 +145,7 @@ export const listTransactionsSchema = z.strictObject({
     .max(100, "keyword は100文字以内にしてください")
     .optional()
     .describe(
-      "キーワードで絞り込む。店名・電話番号・住所・担当者名(clerk_name)・メモ・レシート番号・登録番号のどれかに部分一致(英字の大文字小文字は区別しない)。電話番号は、ハイフンや括弧の有無にかかわらず数字だけでも当たる(例: 0300000000)。後から店に問い合わせるときに、電話番号や担当者名から取引を探す用途",
+      "キーワードで絞り込む。店名・電話番号・住所・メモ・レシート番号・登録番号のどれかに部分一致(英字の大文字小文字は区別しない)。電話番号は、ハイフンや括弧の有無にかかわらず数字だけでも当たる(例: 0300000000)。後から店に問い合わせるときに、電話番号や住所から取引を探す用途",
     ),
   limit: z.number().int().min(1).max(500).default(100).describe("最大件数(既定100、最大500)"),
   include_items: z.boolean().default(true).describe("true(既定)で各取引の明細(items)も返す。false で明細を省く(件数の多い一覧を軽くするとき)"),
@@ -188,7 +188,11 @@ export function toFieldErrors(error: z.ZodError, index?: number): FieldError[] {
   const entry = (field: string, message: string): FieldError => ({ ...(index !== undefined ? { index } : {}), field, message });
   for (const issue of error.issues) {
     if (issue.code === "unrecognized_keys") {
-      for (const key of issue.keys) out.push(entry(key, `${key} は未知の項目です。使える項目名を確認してください`));
+      for (const key of issue.keys) {
+        // 店員の名前・コードは記録しない。AI が古い説明のまま送ってきたときに、理由が分かるようにする
+        if (key === "clerk_name") out.push(entry(key, "clerk_name は記録しません(店員名・店員コード・担当者番号は個人情報のため持ちません)。この項目を取り除いて、もう一度送ってください"));
+        else out.push(entry(key, `${key} は未知の項目です。使える項目名を確認してください`));
+      }
     } else {
       const field = issue.path.map(String).join(".") || "input";
       out.push(entry(field, `${field}: ${issue.message}`));

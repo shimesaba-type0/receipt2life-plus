@@ -105,7 +105,7 @@ const SOURCES: Source[] = [
     type: "transaction",
     date: "t.date",
     from: "FROM transactions t LEFT JOIN categories c ON c.id = t.category_id",
-    hay: `${join("t.merchant", "t.merchant_phone", "t.merchant_address", "t.clerk_name", "t.memo", "t.receipt_no", "t.invoice_number", "c.name")} || ' ' || COALESCE((SELECT group_concat(COALESCE(i.name, '') || ' ' || COALESCE(i.memo, '') || ' ' || COALESCE(i.product, '') || ' ' || COALESCE(i.jan_code, ''), ' ') FROM transaction_items i WHERE i.transaction_id = t.id), '')`,
+    hay: `${join("t.merchant", "t.merchant_phone", "t.merchant_address", "t.memo", "t.receipt_no", "t.invoice_number", "c.name")} || ' ' || COALESCE((SELECT group_concat(COALESCE(i.name, '') || ' ' || COALESCE(i.memo, '') || ' ' || COALESCE(i.product, '') || ' ' || COALESCE(i.jan_code, ''), ' ') FROM transaction_items i WHERE i.transaction_id = t.id), '')`,
     select:
       "t.id AS id, t.date AS date, COALESCE(t.merchant, '(店名なし)') AS title, COALESCE(c.name, '') || CASE WHEN t.memo IS NOT NULL AND t.memo != '' THEN ' ' || t.memo ELSE '' END AS detail, t.amount AS amount, t.id AS transaction_id, t.merchant_phone AS phone",
     order: "t.date DESC, t.created_at DESC, t.id",

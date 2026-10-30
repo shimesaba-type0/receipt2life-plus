@@ -25,7 +25,6 @@ describe("API のレシートの情報", () => {
           merchant_phone: "０３−００００−００００",
           merchant_address: "東京都〇〇区〇〇1-2-3",
           invoice_number: "t 0000-0000-00000",
-          clerk_name: "山田",
           receipt_no: "R-100",
         },
       ],
@@ -38,7 +37,6 @@ describe("API のレシートの情報", () => {
       merchant_phone: "03-0000-0000",
       merchant_address: "東京都〇〇区〇〇1-2-3",
       invoice_number: "T0000000000000",
-      clerk_name: "山田",
       receipt_no: "R-100",
     };
     expect(added.registered[0]).toMatchObject(expected);
@@ -48,12 +46,12 @@ describe("API のレシートの情報", () => {
     expect((await json(await call("/api/home"))).recent[0]).toMatchObject(expected);
 
     const patch = await json(await send("PATCH", `/api/transactions/${id}`, { merchant_phone: "045-111-2222", paid_time: null }));
-    expect(patch).toMatchObject({ ok: true, transaction: { merchant_phone: "045-111-2222", paid_time: null, clerk_name: "山田" } });
+    expect(patch).toMatchObject({ ok: true, transaction: { merchant_phone: "045-111-2222", paid_time: null } });
   });
 
   it("既存の形の登録(6項目なし)は今までどおり通り、6項目は null で返る", async () => {
     const res = await json(await send("POST", "/api/transactions", { transactions: [{ date: todayJst(), amount: 300, merchant: "B店" }] }));
-    expect(res.registered[0]).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, clerk_name: null, receipt_no: null });
+    expect(res.registered[0]).toMatchObject({ paid_time: null, merchant_phone: null, merchant_address: null, invoice_number: null, receipt_no: null });
   });
 
   it("不正な値は400で、項目名つきの日本語エラー", async () => {

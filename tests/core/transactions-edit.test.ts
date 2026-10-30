@@ -33,7 +33,6 @@ describe("updateTransaction", () => {
       merchant_phone: null,
       merchant_address: null,
       invoice_number: null,
-      clerk_name: null,
       receipt_no: null,
       register_no: null,
       store_code: null,
