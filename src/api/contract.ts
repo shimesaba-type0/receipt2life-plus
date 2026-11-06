@@ -173,6 +173,8 @@ export interface SeatRecordView {
   rating: number | null;
   // 一言(200文字まで)
   note: string | null;
+  // ポスター画像のURL(https)。なければ null
+  poster_url: string | null;
   // 紐づけた取引(取引が消えたら null になる)
   transaction_id: string | null;
   created_at: string;
@@ -572,6 +574,8 @@ export interface SeatRecordsData {
   count: number;
   records: SeatRecordView[];
   summary: SeatSummaryRow[];
+  // 絞り込みの候補(全件から): venues=会場名、years=日付の年(新しい順)
+  facets: { venues: string[]; years: string[] };
   truncated: boolean;
   message: string;
 }
@@ -589,6 +593,8 @@ export interface NewSeatRecord {
   // 1〜5 の整数(5が最良)
   rating?: number;
   note?: string;
+  // ポスター画像のURL(https。任意。空文字は未指定)
+  poster_url?: string;
   transaction_id?: string;
 }
 
@@ -604,6 +610,7 @@ export interface SeatRecordPatch {
   seat_class?: string | null;
   rating?: number | null;
   note?: string | null;
+  poster_url?: string | null;
   transaction_id?: string | null;
 }
 

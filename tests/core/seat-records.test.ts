@@ -72,6 +72,37 @@ describe("seat_class(席種)", () => {
   });
 });
 
+describe("poster_url(ポスター画像のURL)と、映画の一覧用の絞り込み", () => {
+  it("https だけ。前後の空白を除き、空文字は未指定。直す・消すこともできる", async () => {
+    expect(await addSeatRecord(db(), { ...base, poster_url: "http://example.test/p.jpg" }, { now: NOW })).toMatchObject({ ok: false, errors: [{ field: "poster_url" }] });
+    const r = await add({ poster_url: " https://example.test/p.jpg#x " });
+    expect(r.poster_url).toBe("https://example.test/p.jpg");
+    expect((await add({ poster_url: "" })).poster_url).toBeNull();
+    const up = await updateSeatRecord(db(), { id: r.id, poster_url: "https://example.test/q.jpg" });
+    expect(up.ok && up.seat_record.poster_url).toBe("https://example.test/q.jpg");
+    expect(await updateSeatRecord(db(), { id: r.id, poster_url: "ftp://example.test/q.jpg" })).toMatchObject({ ok: false });
+    const cleared = await updateSeatRecord(db(), { id: r.id, poster_url: null });
+    expect(cleared.ok && cleared.seat_record.poster_url).toBeNull();
+  });
+
+  it("q(言葉)・offset(ページ送り)・facets(会場と年の候補)", async () => {
+    await add({ date: "2025-03-01", title: "ダミー作品A", venue: "A映画館", note: "泣いた" });
+    await add({ date: "2026-04-01", title: "ダミー作品B", venue: "B劇場", seat: "J-12", note: "笑った" });
+    await add({ date: "2026-05-01", title: "別の題名", venue: "A映画館", note: "ふつう" });
+    const byWord = await listSeatRecords(db(), { q: "作品 笑" });
+    expect(byWord.ok && byWord.records.map((r) => r.title)).toEqual(["ダミー作品B"]);
+    const byVenue = await listSeatRecords(db(), { q: "B劇場" });
+    expect(byVenue.ok && byVenue.count).toBe(1);
+    const all = await listSeatRecords(db(), {});
+    expect(all).toMatchObject({ ok: true, count: 3, facets: { venues: ["A映画館", "B劇場"], years: ["2026", "2025"] } });
+    const page2 = await listSeatRecords(db(), { limit: 2, offset: 2 });
+    expect(page2.ok && page2.records.map((r) => r.title)).toEqual(["ダミー作品A"]);
+    expect(page2.ok && page2.truncated).toBe(false);
+    const page1 = await listSeatRecords(db(), { limit: 2 });
+    expect(page1.ok && page1.truncated).toBe(true);
+  });
+});
+
 describe("addSeatRecord", () => {
   it("登録して、全項目を返す", async () => {
     const r = await add();
@@ -83,6 +114,7 @@ describe("addSeatRecord", () => {
       screen_note: null,
       title: null,
       seat_class: null,
+      poster_url: null,
       transaction_id: null,
       created_at: expect.any(String),
     });

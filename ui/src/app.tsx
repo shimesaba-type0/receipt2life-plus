@@ -4,6 +4,7 @@ import { Accounts } from "./pages/Accounts";
 import { Backup } from "./pages/Backup";
 import { Connect } from "./pages/Connect";
 import { Books } from "./pages/Books";
+import { Movies } from "./pages/Movies";
 import { Review } from "./pages/Review";
 import { Calendar } from "./pages/Calendar";
 import { Categories } from "./pages/Categories";
@@ -59,6 +60,7 @@ export function App() {
         {route.name === "subscriptions" && <Subscriptions />}
         {route.name === "books" && <Books id={route.id} />}
         {route.name === "review" && <Review />}
+        {route.name === "movies" && <Movies id={route.id} />}
         {route.name === "tax" && <Tax />}
         {route.name === "usage" && <Usage />}
         {route.name === "products" && <Products month={route.month} product={route.product} by={route.by} />}

@@ -234,8 +234,9 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `GET /api/seat-records` | クエリ(すべて任意・AND): `date`(その日だけ)、`title`(部分一致)、`seat_class`(席種。部分一致)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500) | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
-| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `seat_class?` / `rating?` / `note?` / `transaction_id?`)。`venue` / `screen` は名前で、無ければ会場・スクリーンを自動で作る | `seat_record: SeatRecordView`, `created_venue`, `created_screen`(新規に作ったか), `message` |
+| `GET /api/seat-records` | クエリ(すべて任意・AND): `q`(言葉。作品名・会場・スクリーン・座席・席種・一言。空白区切りで AND)、`date`(その日だけ)、`title`(部分一致)、`seat_class`(席種。部分一致)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500)、`offset` | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`facets`(`venues`=会場名、`years`=年。全件から)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
+| `GET /api/seat-records/:id` | なし | `seat_record: SeatRecordView`。無い id は404(映画の詳細画面用) |
+| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `seat_class?` / `rating?` / `note?` / `poster_url?`(https のURL。画像は保存せず参照だけ)/ `transaction_id?`)。`venue` / `screen` は名前で、無ければ会場・スクリーンを自動で作る | `seat_record: SeatRecordView`, `created_venue`, `created_screen`(新規に作ったか), `message` |
 | `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`title` / `screen` / `seat_class` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `created_venue`, `created_screen`, `message` |
 | `DELETE /api/seat-records/:id` | なし | `deleted`, `message` |
 

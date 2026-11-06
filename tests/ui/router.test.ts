@@ -35,6 +35,8 @@ describe("parseRoute", () => {
     expect(parseRoute("/subscriptions/")).toEqual({ name: "subscriptions" });
     expect(parseRoute("/books")).toEqual({ name: "books", id: null });
     expect(parseRoute("/books/abc")).toEqual({ name: "books", id: "abc" });
+    expect(parseRoute("/movies")).toEqual({ name: "movies", id: null });
+    expect(parseRoute("/movies/abc")).toEqual({ name: "movies", id: "abc" });
     expect(parseRoute("/books/a%20b")).toEqual({ name: "books", id: "a b" });
     expect(parseRoute("/subscriptions/abc")).toEqual({ name: "notfound" });
   });

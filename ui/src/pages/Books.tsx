@@ -294,7 +294,7 @@ function BookList(props: { selectedId: string | null }) {
 }
 
 // スマホ幅の下からのシート: 上の持ち手と ‹ › の行を、下へ引くと閉じる(一定以上引いたら閉じ、足りなければ戻る)
-function sheetSwipe(close: () => void) {
+export function sheetSwipe(close: () => void) {
   return (e: PointerEvent) => {
     if (!window.matchMedia("(max-width: 899px)").matches) return;
     const el = e.currentTarget as HTMLElement;
@@ -322,7 +322,7 @@ function sheetSwipe(close: () => void) {
   };
 }
 
-function Pager(props: { page: number; pages: number; onPage: (p: number) => void }) {
+export function Pager(props: { page: number; pages: number; onPage: (p: number) => void }) {
   const go = (p: number) => {
     props.onPage(p);
     window.scrollTo({ top: 0 });

@@ -34,3 +34,6 @@ export const SUBSCRIPTION_ICON = ["M20 11a8 8 0 0 0-14.5-4.6", "M5 3v4h4", "M4 1
 
 // 本(本の記録)
 export const BOOK_ICON = ["M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z", "M5 17a3 3 0 0 1 3-3h11"];
+
+// 映画(座席の記録の一覧)
+export const MOVIE_ICON = ["M4 6h16v12H4z", "M8 6v12", "M16 6v12", "M4 10h4M4 14h4M16 10h4M16 14h4"];

@@ -18,6 +18,7 @@ import {
 } from "../../ui/src/pages/seatRecordLogic";
 
 const record: SeatRecordView = {
+  poster_url: null,
   id: "s1",
   date: "2026-10-10",
   venue: "A映画館",

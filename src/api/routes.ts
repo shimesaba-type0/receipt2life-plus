@@ -9,7 +9,7 @@ import { listMerchants } from "../core/merchants";
 import { addLink, deleteLink, refreshLinkTitle, updateLink } from "../core/links";
 import type { TitleFetcher } from "../core/link-titles";
 import { addBook, deleteBook, getBook, listBooks, setFavoriteSeries, updateBook } from "../core/books";
-import { addSeatRecord, deleteSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
+import { addSeatRecord, deleteSeatRecord, getSeatRecord, listSeatRecords, updateSeatRecord } from "../core/seat-records";
 import { listVenues, updateScreen, updateVenue } from "../core/venues";
 import { deletePhoto, getPhoto, MAX_PHOTO_BYTES, restorePhoto, savePhoto } from "../core/photos";
 import { addTransactions, deleteTransaction, getTransaction, listTransactions, updateTransaction } from "../core/transactions";
@@ -339,15 +339,22 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
   app.get("/api/seat-records", async (c) => {
     const q = c.req.query();
     const filter: Record<string, unknown> = {};
-    for (const key of ["title", "venue", "screen", "seat", "seat_class", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
+    for (const key of ["q", "title", "venue", "screen", "seat", "seat_class", "from", "to", "transaction_id"]) if (q[key]) filter[key] = q[key];
     // date は「その日だけ」(from と to を同じ日にする)
     if (q.date) {
       filter.from = q.date;
       filter.to = q.date;
     }
     // 数値は文字列で届くので変換する。数値にならないものは NaN になり、検証でエラーになる
-    for (const key of ["min_rating", "max_rating", "limit"]) if (q[key]) filter[key] = Number(q[key]);
+    for (const key of ["min_rating", "max_rating", "limit", "offset"]) if (q[key]) filter[key] = Number(q[key]);
     return respond(c, await listSeatRecords(c.env.DB, filter));
+  });
+
+  // 1件(詳細画面用)。無い id は404
+  app.get("/api/seat-records/:id", async (c) => {
+    const record = await getSeatRecord(c.env.DB, c.req.param("id"));
+    if (!record) return c.json({ ok: false as const, errors: [{ field: "id", message: "id: という座席の記録はありません" }] }, 404);
+    return c.json({ ok: true as const, seat_record: record });
   });
 
   app.post("/api/seat-records", async (c) => {

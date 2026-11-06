@@ -34,10 +34,11 @@ describe("MCP 座席の記録のツール", () => {
     expect(byName("list_seat_records").description).toContain("次の席選び");
     expect(byName("list_seat_records").description).toContain("要約");
     expect(Object.keys(byName("list_seat_records").inputSchema.properties).sort()).toEqual(
-      ["from", "limit", "max_rating", "min_rating", "screen", "seat", "seat_class", "title", "to", "transaction_id", "venue"],
+      ["from", "limit", "max_rating", "min_rating", "offset", "q", "screen", "seat", "seat_class", "title", "to", "transaction_id", "venue"],
     );
     expect(Object.keys(byName("add_seat_record").inputSchema.properties)).toContain("title");
     for (const n of ["add_seat_record", "update_seat_record"]) expect(Object.keys(byName(n).inputSchema.properties)).toContain("seat_class");
+    for (const n of ["add_seat_record", "update_seat_record"]) expect(Object.keys(byName(n).inputSchema.properties)).toContain("poster_url");
     for (const n of ["add_seat_record", "update_seat_record", "list_seat_records"]) {
       expect(byName(n).description).toContain("seat_class");
       expect(byName(n).description).toContain("席種");
