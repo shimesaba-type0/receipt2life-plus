@@ -76,15 +76,16 @@ export interface SeatFormValues {
   seat: string;
   seatClass: string;
   rating: number | null;
+  workRating: number | null;
   note: string;
 }
 
 export function emptySeatForm(venue = ""): SeatFormValues {
-  return { title: "", venue, screen: "", seat: "", seatClass: "", rating: null, note: "" };
+  return { title: "", venue, screen: "", seat: "", seatClass: "", rating: null, workRating: null, note: "" };
 }
 
 export function seatFormFromRecord(r: SeatRecordView): SeatFormValues {
-  return { title: r.title ?? "", venue: r.venue, screen: r.screen ?? "", seat: r.seat, seatClass: r.seat_class ?? "", rating: r.rating, note: r.note ?? "" };
+  return { title: r.title ?? "", venue: r.venue, screen: r.screen ?? "", seat: r.seat, seatClass: r.seat_class ?? "", rating: r.rating, workRating: r.work_rating, note: r.note ?? "" };
 }
 
 // 選んだ評価をもう一度押したら外す(評価は任意)
@@ -121,6 +122,7 @@ export function toNewSeatRecord(date: string, f: SeatFormValues): FormResult<New
   if (f.screen.trim() !== "") value.screen = f.screen.trim();
   if (f.seatClass.trim() !== "") value.seat_class = f.seatClass.trim();
   if (f.rating !== null) value.rating = f.rating;
+  if (f.workRating !== null) value.work_rating = f.workRating;
   if (f.note.trim() !== "") value.note = f.note.trim();
   return { ok: true, value };
 }
@@ -138,6 +140,7 @@ export function toSeatRecordPatch(f: SeatFormValues): FormResult<SeatRecordPatch
       seat_class: f.seatClass.trim() === "" ? null : f.seatClass.trim(),
       screen: f.screen.trim() === "" ? null : f.screen.trim(),
       rating: f.rating,
+      work_rating: f.workRating,
       note: f.note.trim() === "" ? null : f.note.trim(),
     },
   };
