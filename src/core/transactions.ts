@@ -428,7 +428,7 @@ export async function getTransaction(db: D1Database, id: string): Promise<Transa
       .bind(id)
       .all<Omit<PhotoView, "url">>(),
     db
-      .prepare("SELECT id, url, kind, title, description, date, transaction_id, event_id, created_at FROM links WHERE transaction_id = ? ORDER BY created_at, id")
+      .prepare("SELECT id, url, kind, title, description, thumbnail_url, date, transaction_id, event_id, created_at FROM links WHERE transaction_id = ? ORDER BY created_at, id")
       .bind(id)
       .all<LinkView>(),
   ]);

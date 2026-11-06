@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addEvent, deleteEvent } from "../../src/core/events";
-import { addLink, deleteLink, listLinks, parseLinkUrl, updateLink } from "../../src/core/links";
+import { TitleFetchError } from "../../src/core/link-titles";
+import { addLink, deleteLink, listLinks, parseLinkUrl, refreshLinkTitle, updateLink } from "../../src/core/links";
 import { addTransactions, deleteTransaction } from "../../src/core/transactions";
 import { NOW, testEnv } from "../helpers";
 
@@ -399,11 +400,35 @@ describe("ウェブのリンクの登録と説明文", () => {
     expect(r.link).toMatchObject({ kind: "web", title: "映画の公式ページ", description: "公開日や上映館の案内" });
   });
 
-  it("title が無くても、取りに行かず タイトルなしで登録する", async () => {
+  it("ウェブのページは、title が無ければ OGP のタイトル・説明文・画像を取って登録する。自分で書いた説明文を優先する", async () => {
+    const info = { title: "公式ページ", description: "取った説明", thumbnail_url: "https://example.com/og.jpg" };
+    const r = await addLink(db(), { url: URL_WEB, date: "2026-10-10" }, { now: NOW, fetchTitle: async () => info });
+    expect(r.ok && r.link).toMatchObject({ kind: "web", title: "公式ページ", description: "取った説明", thumbnail_url: "https://example.com/og.jpg" });
+    const own = await addLink(db(), { url: `${URL_WEB}?b`, date: "2026-10-10", description: "自分の説明" }, { now: NOW, fetchTitle: async () => info });
+    expect(own.ok && own.link).toMatchObject({ title: "公式ページ", description: "自分の説明" });
+    // title を渡したときは、取りに行かない
     let called = false;
-    const r = await addLink(db(), { url: URL_WEB, date: "2026-10-10" }, { now: NOW, fetchTitle: async () => ((called = true), "x") });
-    expect(r.ok && r.link.title).toBeNull();
+    await addLink(db(), { url: `${URL_WEB}?c`, date: "2026-10-10", title: "手入力" }, { now: NOW, fetchTitle: async () => ((called = true), info) });
     expect(called).toBe(false);
+  });
+
+  it("取れなかったときは、タイトルなしで登録する(登録は失敗させない)。Instagram は取りに行かない", async () => {
+    const failed = await addLink(db(), { url: URL_WEB, date: "2026-10-10" }, { now: NOW, fetchTitle: async () => Promise.reject(new TitleFetchError("ページが404を返しました")) });
+    expect(failed.ok && failed.link).toMatchObject({ title: null, thumbnail_url: null });
+    let called = false;
+    await addLink(db(), { url: "https://www.instagram.com/p/AbC123/", date: "2026-10-10" }, { now: NOW, fetchTitle: async () => ((called = true), "x") });
+    expect(called).toBe(false);
+  });
+
+  it("refreshLinkTitle: ウェブのリンクも取り直せる。説明文はすでにあれば変えず、サムネイルは取れたときだけ付け直す", async () => {
+    const added = await addLink(db(), { url: URL_WEB, date: "2026-10-10", description: "自分の説明" }, { now: NOW });
+    if (!added.ok) throw new Error("setup");
+    const r = await refreshLinkTitle(db(), { id: added.link.id }, async () => ({ title: "取れた題", description: "取った説明", thumbnail_url: "https://example.com/og.jpg" }));
+    expect(r.ok && r.link).toMatchObject({ title: "取れた題", description: "自分の説明", thumbnail_url: "https://example.com/og.jpg" });
+    const failed = await refreshLinkTitle(db(), { id: added.link.id }, async () => Promise.reject(new TitleFetchError("ページが404を返しました")));
+    expect(failed).toMatchObject({ ok: false });
+    const kept = await db().prepare("SELECT title, thumbnail_url FROM links WHERE id = ?").bind(added.link.id).first();
+    expect(kept).toEqual({ title: "取れた題", thumbnail_url: "https://example.com/og.jpg" });
   });
 
   it("description は500文字まで", async () => {

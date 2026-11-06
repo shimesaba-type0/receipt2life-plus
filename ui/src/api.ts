@@ -220,12 +220,13 @@ export const fetchLinkTitle = (id: string) => request<{ link: LinkView; duplicat
 export const deleteLink = (id: string) => request<{ deleted: LinkView; message: string }>("DELETE", `/api/links/${encodeURIComponent(id)}`);
 
 // 座席の記録(映画館などの席の評価)。getSeatRecords は絞り込み(date / venue / limit など)つきの一覧と、会場・スクリーン・座席ごとの集計
-export function getSeatRecords(filter: { date?: string; title?: string; venue?: string; screen?: string; seat?: string; limit?: number } = {}) {
+export function getSeatRecords(filter: { date?: string; q?: string; title?: string; venue?: string; screen?: string; seat?: string; min_rating?: number; from?: string; to?: string; limit?: number; offset?: number } = {}) {
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "") params.set(k, String(v));
+  for (const [k, v] of Object.entries(filter)) if (v !== undefined && v !== "" && v !== 0) params.set(k, String(v));
   const qs = params.toString();
   return request<SeatRecordsData>("GET", `/api/seat-records${qs ? `?${qs}` : ""}`);
 }
+export const getSeatRecord = (id: string) => request<{ seat_record: SeatRecordView }>("GET", `/api/seat-records/${encodeURIComponent(id)}`);
 export const addSeatRecord = (record: NewSeatRecord) => request<SeatRecordSaved>("POST", "/api/seat-records", record);
 export const updateSeatRecord = (id: string, patch: SeatRecordPatch) => request<SeatRecordSaved>("PATCH", `/api/seat-records/${encodeURIComponent(id)}`, patch);
 // 会場とスクリーンの一覧(フォームの候補に使う)

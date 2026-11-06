@@ -21,7 +21,7 @@ export function registerSeatRecordTools(server: McpServer, db: D1Database): void
       title: "座席の記録を登録する",
       description: [
         "映画館のスクリーン・座席や、野球場の席種など、会場の席の評価を1件、構造化して残す(メモではなく検索できる記録になる)。映画以外(劇場、ライブ会場など)にも使える。作品名・公演名は title に入れる(明細の品名とは別)。",
-        "date(YYYY-MM-DD)、venue(会場名)、seat(座席。例: F-5)は必須。title(作品名・公演名)、seat_class(席種)、screen(スクリーン・ホール・エリア名)、rating(席の評価。整数1〜5、5が最良)、note(一言。例「前すぎて首が疲れた」)は任意。transaction_id でチケット代などの取引に紐づけられる(任意。存在しない id はエラー)。",
+        "date(YYYY-MM-DD)、venue(会場名)、seat(座席。例: F-5)は必須。title(作品名・公演名)、seat_class(席種)、screen(スクリーン・ホール・エリア名)、rating(席の評価。整数1〜5、5が最良)、note(一言。例「前すぎて首が疲れた」)、poster_url(ポスター画像のURL。https のみ。作品をネットで調べて分かったときだけ。画像は保存せず参照する)は任意。映画館以外(配信・自宅)で見た映画も、venue に「自宅リビング」、seat に「ソファ」のように入れて記録できる。transaction_id でチケット代などの取引に紐づけられる(任意。存在しない id はエラー)。",
         "seat_class は席種(プレミアムシート、内野指定席、ボックスシートなど)。座席番号(seat)とは別に、その席の種類を入れる。次の席選びで「この席種は良かったか」を引けるように、できるだけ入れる。list_seat_records で seat_class を絞り込める。ユーザーが言っていなければ省略する(勝手に作らない)。",
         "screen は、映画館のスクリーンだけでなく、ホール・ブロック・エリアなどの区画にも使える(例: 野球場の「内野エリア」「外野エリア」)。",
         "title は作品名や公演名(映画のタイトル、ライブ名など)。会場・スクリーン・座席とは別に、そのときの催しの名前を入れる。明細の品名とは別物(明細は取引の品目、title は座席の記録に持つ催しの名前)。ユーザーが作品名・公演名を言ったら title に入れる。言っていなければ省略する(勝手に作らない)。",
@@ -40,8 +40,8 @@ export function registerSeatRecordTools(server: McpServer, db: D1Database): void
     {
       title: "座席の記録を一覧する",
       description: [
-        "登録済みの座席の記録を、日付の新しい順に返す。絞り込み(すべて任意・AND): title(作品名・公演名。部分一致。映画のタイトル、ライブ名など。会場・スクリーン・座席とは別に催しの名前で探せる)、venue、screen、seat(いずれも完全一致)、seat_class(席種。部分一致。プレミアムシート、内野指定席、ボックスシートなど。次の席選びで「この席種は良かったか」を引ける)、min_rating / max_rating、from / to(日付)、transaction_id。limit は records の最大件数(既定100、最大500)。",
-        "返り値: count(絞り込みに合う全件の数)、records(各要素は id、date、title(作品名・公演名。なければ null)、venue(会場名)、venue_id、screen(スクリーン・ホール・エリア名。なければ null)、screen_id、screen_note(そのスクリーンの特徴)、seat、seat_class(席種。なければ null)、rating、note、transaction_id、created_at)、summary(venue・screen・seat ごとの件数 count、評価のある件数 rated_count、平均評価 avg_rating。評価がなければ null)。count と summary は limit に関わらず絞り込みに合う全件で数える。",
+        "登録済みの座席の記録を、日付の新しい順に返す。絞り込み(すべて任意・AND): q(言葉で探す。作品名・会場・スクリーン・座席・席種・一言のどれかに部分一致。空白区切りで AND)、title(作品名・公演名。部分一致。映画のタイトル、ライブ名など。会場・スクリーン・座席とは別に催しの名前で探せる)、venue、screen、seat(いずれも完全一致)、seat_class(席種。部分一致。プレミアムシート、内野指定席、ボックスシートなど。次の席選びで「この席種は良かったか」を引ける)、min_rating / max_rating、from / to(日付)、transaction_id。limit は records の最大件数(既定100、最大500)、offset は飛ばす件数(ページ送り用)。",
+        "返り値: count(絞り込みに合う全件の数)、records(各要素は id、date、title(作品名・公演名。なければ null)、venue(会場名)、venue_id、screen(スクリーン・ホール・エリア名。なければ null)、screen_id、screen_note(そのスクリーンの特徴)、seat、seat_class(席種。なければ null)、rating、note、poster_url、transaction_id、created_at)、facets(venues=会場名、years=年の一覧)、summary(venue・screen・seat ごとの件数 count、評価のある件数 rated_count、平均評価 avg_rating。評価がなければ null)。count と summary は limit に関わらず絞り込みに合う全件で数える。",
         "使いどころ1: 会場・スクリーンの名前の確認は list_venues を使う(会場ごとのスクリーン、記録件数、平均評価、スクリーンの特徴 note が分かる)。",
         "使いどころ2: 次の席選びの参考にする。ユーザーが席(例: F-5)や会場・スクリーン、席種(例: プレミアムシート)を挙げたら、その venue / screen / seat / seat_class で絞って呼び、その席が過去に評価されていたか(rating・note)を、平均評価と一言を添えて要約して伝える。評価の高い席を探すなら min_rating: 4 などで絞る。記録がなければ「記録はない」と伝える。",
         "update_seat_record / delete_seat_record に渡す id を調べるときにも使う。",

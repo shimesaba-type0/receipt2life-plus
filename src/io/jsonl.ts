@@ -31,7 +31,8 @@ import {
   coverUrlField,
   normalizeIsbn,
 } from "../core/books";
-import { MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
+import { thumbnailUrlField } from "../core/link-og";
+import { posterUrlField, MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
 import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
 import { dedupHash } from "../core/transactions";
 
@@ -86,7 +87,7 @@ const EXPORT_TABLES: TableSpec[] = [
           FROM attachments WHERE id > ? ORDER BY id LIMIT ?`,
   },
   {
-    sql: `SELECT 'link' AS type, id, url, kind, title, description, date, transaction_id, event_id, created_at
+    sql: `SELECT 'link' AS type, id, url, kind, title, description, thumbnail_url, date, transaction_id, event_id, created_at
           FROM links WHERE id > ? ORDER BY id LIMIT ?`,
   },
   // スクリーン(会場の名前、スクリーン名、特徴 note)。会場の id は出さず、名前で持つ(座席の記録と同じ)
@@ -97,7 +98,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   // 座席の記録。venue / screen は名前で出す(会場・スクリーンが別のレコードになる前の形式のまま)
   {
-    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.seat_class, r.rating, r.note, r.transaction_id, r.created_at
+    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.seat_class, r.rating, r.note, r.poster_url, r.transaction_id, r.created_at
           FROM seat_records r
           JOIN venues v ON v.id = r.venue_id
           LEFT JOIN screens s ON s.id = r.screen_id
@@ -233,6 +234,8 @@ const linkSchema = z
     kind: z.enum(["x", "youtube", "instagram", "web"]).optional(),
     title: z.string().trim().min(1).max(200).optional(),
     description: z.string().trim().min(1).max(MAX_DESCRIPTION_LENGTH).optional(),
+    // 旧形式(thumbnail_url なし)の行も取り込める
+    thumbnail_url: thumbnailUrlField.optional(),
     date: isoDate.optional(),
     transaction_id: z.string().min(1).optional(),
     event_id: z.string().min(1).optional(),
@@ -256,6 +259,8 @@ const seatRecordSchema = z.strictObject({
   seat_class: z.string().trim().max(MAX_SEAT_CLASS_LENGTH).optional(),
   rating: z.number().int().min(1, "1〜5の整数にしてください").max(5, "1〜5の整数にしてください").optional(),
   note: z.string().trim().min(1).max(MAX_NOTE_LENGTH).optional(),
+  // 旧形式(poster_url なし)の行も取り込める
+  poster_url: posterUrlField.optional(),
   transaction_id: z.string().min(1).optional(),
   created_at: timestampField.optional(),
 });
@@ -918,8 +923,8 @@ async function importLinks(db: D1Database, entries: Entry[], report: Report, now
       id: v.id,
       statements: [
         db
-          .prepare("INSERT INTO links (id, url, kind, title, description, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.description ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
+          .prepare("INSERT INTO links (id, url, kind, title, description, thumbnail_url, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.description ?? null, v.data.thumbnail_url ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
       ],
     });
   }
@@ -941,10 +946,10 @@ function seatRecordStatements(db: D1Database, id: string, d: z.infer<typeof seat
   statements.push(
     db
       .prepare(
-        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, transaction_id, created_at)
-         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, poster_url, transaction_id, created_at)
+         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.seat_class || null, d.rating ?? null, d.note ?? null, d.transaction_id ?? null, createdAt),
+      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.seat_class || null, d.rating ?? null, d.note ?? null, d.poster_url || null, d.transaction_id ?? null, createdAt),
   );
   return statements;
 }

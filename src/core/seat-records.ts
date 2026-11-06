@@ -2,6 +2,7 @@ import { z } from "zod";
 import { checkRefs } from "./photos";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
 import { escapeLike, type CoreOptions } from "./transactions";
+import { parseHttpsUrl } from "./urls";
 import {
   findOrCreateScreen,
   findOrCreateVenue,
@@ -25,6 +26,7 @@ export const MAX_TITLE_LENGTH = 100;
 export const MAX_SEAT_LENGTH = 50;
 export const MAX_SEAT_CLASS_LENGTH = 50;
 export const MAX_NOTE_LENGTH = 200;
+export const MAX_POSTER_URL_LENGTH = 500;
 export const MIN_RATING = 1;
 export const MAX_RATING = 5;
 export const DEFAULT_LIST_LIMIT = 100;
@@ -49,6 +51,8 @@ export interface SeatRecordView {
   seat_class: string | null;
   rating: number | null;
   note: string | null;
+  // ポスター画像のURL(https)。なければ null
+  poster_url: string | null;
   transaction_id: string | null;
   created_at: string;
 }
@@ -64,6 +68,21 @@ export interface SeatSummaryRow {
 }
 
 // ---- スキーマ(MCP の入力定義・API の検証・型を兼ねる) ----
+
+// ポスター画像のURL。https のみ(ポート・認証情報つきは不可)。500文字まで。空文字は未指定扱い: 追加では NULL、更新では消去
+export const posterUrlField = z
+  .string({ error: "poster_url は文字列で指定してください" })
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return "";
+    const u = parseHttpsUrl(v);
+    if (u === null || u.length > MAX_POSTER_URL_LENGTH) {
+      ctx.addIssue({ code: "custom", message: `poster_url は https のURL(${MAX_POSTER_URL_LENGTH}文字まで)で指定してください` });
+      return "";
+    }
+    return u;
+  });
+const POSTER_DESCRIPTION = "ポスター画像のURL(https のみ。500文字まで)。任意。画像は保存せず、URLを参照して表示する。ネットで作品を調べたときに分かれば入れる(勝手に作らない)";
 
 const idField = z.string().min(1).max(100);
 const venueField = venueNameField;
@@ -93,6 +112,7 @@ export const seatRecordFieldsSchema = z.strictObject({
   seat_class: seatClassField.optional().describe(SEAT_CLASS_DESCRIPTION),
   rating: ratingField.optional().describe(`席の評価(整数の${MIN_RATING}〜${MAX_RATING}。${MAX_RATING}が最良)。任意。ユーザーが言った感想から決める`),
   note: noteField.optional().describe(`一言の感想(${MAX_NOTE_LENGTH}文字まで。例「前すぎて首が疲れた」)。任意`),
+  poster_url: posterUrlField.optional().describe(POSTER_DESCRIPTION),
   transaction_id: idField.optional().describe("紐づける取引の id(チケット代の取引など。list_transactions や add_transactions の結果で分かる)。任意"),
 });
 export const newSeatRecordSchema = seatRecordFieldsSchema;
@@ -109,12 +129,14 @@ export const updateSeatRecordFieldsSchema = z.strictObject({
   seat_class: seatClassField.nullable().optional().describe("新しい席種(プレミアムシート、内野指定席など)。null か空文字で消去。省略すると変えない"),
   rating: ratingField.nullable().optional().describe(`新しい評価(${MIN_RATING}〜${MAX_RATING}の整数)。null で消去。省略すると変えない`),
   note: noteField.nullable().optional().describe("新しい一言。null で消去。省略すると変えない"),
+  poster_url: posterUrlField.nullable().optional().describe("新しいポスター画像のURL(https)。null か空文字で消去。省略すると変えない"),
   transaction_id: idField.nullable().optional().describe("新しい紐づけ先の取引 id。null で紐づけを外す。省略すると変えない"),
 });
 
 export const deleteSeatRecordSchema = z.strictObject({ id: idField.describe("削除する座席の記録の id(list_seat_records で分かる)。必須") });
 
 export const listSeatRecordsFieldsSchema = z.strictObject({
+  q: z.string().trim().min(1).max(100).optional().describe("言葉で探す(作品名・会場・スクリーン・座席・席種・一言のどれかに部分一致。空白で区切ると、すべてを含むものに絞る)"),
   title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).optional().describe("この作品名・公演名の記録だけ(部分一致。映画のタイトル、ライブ名など。例: 「ダミー作品」)"),
   venue: venueField.optional().describe("この会場の記録だけ(完全一致)。list_seat_records を絞らずに呼ぶと、既存の会場名が summary で分かる"),
   screen: screenField.optional().describe("このスクリーン名・ホール名の記録だけ(完全一致)"),
@@ -126,13 +148,14 @@ export const listSeatRecordsFieldsSchema = z.strictObject({
   to: isoDate.optional().describe("この日以前(YYYY-MM-DD)"),
   transaction_id: idField.optional().describe("この取引に紐づく記録だけ"),
   limit: z.number().int().min(1).max(MAX_LIST_LIMIT).default(DEFAULT_LIST_LIMIT).describe(`records の最大件数(既定${DEFAULT_LIST_LIMIT}、最大${MAX_LIST_LIMIT})。件数 count と summary は、上限に関わらず絞り込みに合う全件で数える`),
+  offset: z.number().int().min(0).max(100_000).default(0).describe("先頭から飛ばす件数(ページ送り用。例: limit 24 の2ページ目は offset 24)"),
 });
 
 // ---- 保存・取得 ----
 
 // 会場・スクリーンを JOIN した読み取り用の SELECT(venue / screen は名前、venue_id / screen_id は id)
 const VIEW_SELECT = `SELECT r.id, r.date, r.title, v.name AS venue, r.venue_id, s.name AS screen, r.screen_id, s.note AS screen_note,
-       r.seat, r.seat_class, r.rating, r.note, r.transaction_id, r.created_at
+       r.seat, r.seat_class, r.rating, r.note, r.poster_url, r.transaction_id, r.created_at
   FROM seat_records r
   JOIN venues v ON v.id = r.venue_id
   LEFT JOIN screens s ON s.id = r.screen_id`;
@@ -152,6 +175,8 @@ export type ListSeatRecordsResult =
       count: number;
       records: SeatRecordView[];
       summary: SeatSummaryRow[];
+      // 絞り込みの候補(全件から): venues=会場名、years=日付の年(新しい順)
+      facets: { venues: string[]; years: string[] };
       truncated: boolean;
       message: string;
     }
@@ -174,7 +199,7 @@ function createdNotice(venue: string, screen: string | null, flags: CreatedFlags
   return `。${parts.join("。")}(既存の表記と違うなら、list_venues で確かめて update_seat_record で直してください)`;
 }
 
-async function getSeatRecord(db: D1Database, id: string): Promise<SeatRecordView | null> {
+export async function getSeatRecord(db: D1Database, id: string): Promise<SeatRecordView | null> {
   return db.prepare(`${VIEW_SELECT} WHERE r.id = ?`).bind(id).first<SeatRecordView>();
 }
 
@@ -191,8 +216,8 @@ export async function addSeatRecord(db: D1Database, input: unknown, options: Cor
 
   const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, m.date, m.title || null, venue.id, screen?.id ?? null, m.seat, m.seat_class || null, m.rating ?? null, m.note ?? null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
+    .prepare("INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, poster_url, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, m.date, m.title || null, venue.id, screen?.id ?? null, m.seat, m.seat_class || null, m.rating ?? null, m.note ?? null, m.poster_url || null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
     .run();
   const record = (await getSeatRecord(db, id))!;
   return { ok: true, seat_record: record, ...flags, message: `座席の記録を登録しました: ${label(record)}${createdNotice(record.venue, record.screen, flags)}` };
@@ -208,7 +233,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown, options: 
   if (Object.values(changes).every((v) => v === undefined)) {
     return {
       ok: false,
-      errors: [{ field: "input", message: "input: 更新する項目(date / title / venue / screen / seat / seat_class / rating / note / transaction_id)を1つ以上指定してください" }],
+      errors: [{ field: "input", message: "input: 更新する項目(date / title / venue / screen / seat / seat_class / rating / note / poster_url / transaction_id)を1つ以上指定してください" }],
     };
   }
   if (changes.transaction_id) {
@@ -238,7 +263,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown, options: 
 
   // 指定のない項目は、既存の値を保つ
   await db
-    .prepare("UPDATE seat_records SET date = ?, title = ?, venue_id = ?, screen_id = ?, seat = ?, seat_class = ?, rating = ?, note = ?, transaction_id = ? WHERE id = ?")
+    .prepare("UPDATE seat_records SET date = ?, title = ?, venue_id = ?, screen_id = ?, seat = ?, seat_class = ?, rating = ?, note = ?, poster_url = ?, transaction_id = ? WHERE id = ?")
     .bind(
       changes.date ?? current.date,
       // null と空文字は消去
@@ -249,6 +274,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown, options: 
       changes.seat_class === undefined ? current.seat_class : changes.seat_class || null,
       changes.rating === undefined ? current.rating : changes.rating,
       changes.note === undefined ? current.note : changes.note,
+      changes.poster_url === undefined ? current.poster_url : changes.poster_url || null,
       changes.transaction_id === undefined ? current.transaction_id : changes.transaction_id,
       id,
     )
@@ -293,6 +319,12 @@ export async function listSeatRecords(db: D1Database, input: unknown): Promise<L
     where.push(sql);
     binds.push(value);
   };
+  // 言葉は空白で区切り、すべてを含むものに絞る(各語は、いずれかの列に部分一致)
+  for (const word of (m.q ?? "").split(/\s+/).filter(Boolean)) {
+    const like = `%${escapeLike(word)}%`;
+    where.push("(r.title LIKE ? ESCAPE '\\' OR v.name LIKE ? ESCAPE '\\' OR s.name LIKE ? ESCAPE '\\' OR r.seat LIKE ? ESCAPE '\\' OR r.seat_class LIKE ? ESCAPE '\\' OR r.note LIKE ? ESCAPE '\\')");
+    binds.push(like, like, like, like, like, like);
+  }
   if (m.title !== undefined) {
     where.push("r.title LIKE ? ESCAPE '\\'");
     binds.push(`%${escapeLike(m.title)}%`);
@@ -312,10 +344,10 @@ export async function listSeatRecords(db: D1Database, input: unknown): Promise<L
   const clause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
   const from = "FROM seat_records r JOIN venues v ON v.id = r.venue_id LEFT JOIN screens s ON s.id = r.screen_id";
 
-  const [rows, total, summary] = await Promise.all([
+  const [rows, total, summary, venueList, yearList] = await Promise.all([
     db
-      .prepare(`${VIEW_SELECT} ${clause} ORDER BY r.date DESC, r.created_at DESC, r.id DESC LIMIT ?`)
-      .bind(...binds, m.limit)
+      .prepare(`${VIEW_SELECT} ${clause} ORDER BY r.date DESC, r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`)
+      .bind(...binds, m.limit, m.offset)
       .all<SeatRecordView>(),
     db.prepare(`SELECT COUNT(*) AS n ${from} ${clause}`).bind(...binds).first<{ n: number }>(),
     db
@@ -328,15 +360,18 @@ export async function listSeatRecords(db: D1Database, input: unknown): Promise<L
       )
       .bind(...binds, MAX_SUMMARY_ROWS)
       .all<SeatSummaryRow>(),
+    db.prepare("SELECT DISTINCT v.name AS v FROM seat_records r JOIN venues v ON v.id = r.venue_id ORDER BY v.name LIMIT 200").all<{ v: string }>(),
+    db.prepare("SELECT DISTINCT substr(date, 1, 4) AS v FROM seat_records ORDER BY v DESC LIMIT 50").all<{ v: string }>(),
   ]);
   const count = total?.n ?? 0;
-  const truncated = count > rows.results.length;
+  const truncated = m.offset + rows.results.length < count;
   return {
     ok: true,
     count,
     records: rows.results,
     summary: summary.results,
+    facets: { venues: venueList.results.map((r) => r.v), years: yearList.results.map((r) => r.v) },
     truncated,
-    message: count === 0 ? "該当する座席の記録はありません" : `${count}件の座席の記録があります${truncated ? `(新しい順に${rows.results.length}件を返しました)` : ""}`,
+    message: count === 0 ? "該当する座席の記録はありません" : `${count}件の座席の記録があります${truncated || m.offset > 0 ? `(新しい順に、${m.offset + 1}〜${m.offset + rows.results.length}件目を返しました)` : ""}`,
   };
 }

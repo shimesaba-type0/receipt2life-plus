@@ -65,6 +65,30 @@ describe("本の記録のバックアップ(エクスポートとインポート
   });
 });
 
+describe("座席の記録(映画)のバックアップとAPI", () => {
+  it("poster_url も書き出して読み込める。古い行(poster_url なし)も取り込める。不正なURLはその行だけエラー", async () => {
+    const lines = [
+      JSON.stringify({ type: "seat_record", id: "m1", date: "2026-10-01", title: "ダミー作品", venue: "A映画館", seat: "F-5", poster_url: "https://example.test/p.jpg" }),
+      JSON.stringify({ type: "seat_record", id: "m2", date: "2026-10-02", venue: "A映画館", seat: "F-6" }),
+      JSON.stringify({ type: "seat_record", id: "m3", date: "2026-10-03", venue: "A映画館", seat: "F-7", poster_url: "http://example.test/p.jpg" }),
+    ].join("\n");
+    const res = (await (await post(lines)).json()) as { summary: { ok: number; errors: number } };
+    expect(res.summary).toMatchObject({ ok: 2, errors: 1 });
+    const rows = (await exportLines()).filter((r) => r.type === "seat_record");
+    expect(rows.find((r) => r.id === "m1")).toMatchObject({ poster_url: "https://example.test/p.jpg" });
+    expect(rows.find((r) => r.id === "m2")).toMatchObject({ poster_url: null });
+  });
+
+  it("GET /api/seat-records/:id は1件を返す。無い id は404。q と offset も使える", async () => {
+    await post(JSON.stringify({ type: "seat_record", id: "m9", date: "2026-10-01", title: "ダミー作品", venue: "A映画館", seat: "F-5" }));
+    const one = await app.request("http://localhost/api/seat-records/m9", {}, local);
+    expect(await one.json()).toMatchObject({ ok: true, seat_record: { id: "m9", title: "ダミー作品" } });
+    expect((await app.request("http://localhost/api/seat-records/nope", {}, local)).status).toBe(404);
+    const list = (await (await app.request("http://localhost/api/seat-records?q=ダミー&limit=1&offset=0", {}, local)).json()) as { count: number; facets: { years: string[] } };
+    expect(list).toMatchObject({ count: 1, facets: { years: ["2026"] } });
+  });
+});
+
 describe("本の記録のAPI", () => {
   const json = (method: string, path: string, body?: unknown) =>
     app.request(`http://localhost${path}`, { method, headers: { "content-type": "application/json", origin: "http://localhost" }, body: body === undefined ? undefined : JSON.stringify(body) }, local);

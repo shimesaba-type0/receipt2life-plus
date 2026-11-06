@@ -164,19 +164,19 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 ## リンク(Xの投稿・YouTubeの動画・Instagramの投稿・ウェブのページ)
 
-日付・取引・出来事に、外部リンクを付ける。YouTube のサムネイルは、画面が動画のIDから決まるURL(`i.ytimg.com`)をブラウザで読み込む(サーバーは取りに行かない・保存しない)。ほかの埋め込みや画像は出さない。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため取得しない(`POST /api/links/:id/title` は400)。ウェブ(`kind=web`。上の3つ以外の、どのサイトの https のページでもよい)も、サーバーは中身を読みに行かない。タイトル(`title`)と説明文(`description`、500文字まで)は、ページを読んだ AI が MCP の `add_link` / `update_link` で付ける(画面からも手で付けられる)。`POST /api/links/:id/title` は Instagram・ウェブでは400。`kind` は `x` / `youtube` / `instagram` / `web`。URLの検証と正規化は `src/core/links.ts`。
+日付・取引・出来事に、外部リンクを付ける。YouTube のサムネイルは、画面が動画のIDから決まるURL(`i.ytimg.com`)をブラウザで読み込む(サーバーは取りに行かない・保存しない)。ウェブのページは、登録のときに OGP の画像のURL(`thumbnail_url`)を取り、画面がそのURLをブラウザで読み込む(画像は保存しない)。タイトルは、`title` を省略した登録のときと、`POST /api/links/:id/title` のときだけ、Worker が公式の oEmbed(YouTube: `www.youtube.com/oembed`、X: `publish.twitter.com/oembed`。固定のこの2つのホストだけ。タイムアウト3秒、応答は64KBまで)から取得する。取得できなければ表題なしで登録する。Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため取得しない(`POST /api/links/:id/title` は400)。ウェブ(`kind=web`。上の3つ以外の、どのサイトの https のページでもよい)も、サーバーは中身を読みに行かない。タイトル(`title`)と説明文(`description`、500文字まで)は、ページを読んだ AI が MCP の `add_link` / `update_link` で付ける(画面からも手で付けられる)。`POST /api/links/:id/title` は Instagram・ウェブでは400。`kind` は `x` / `youtube` / `instagram` / `web`。URLの検証と正規化は `src/core/links.ts`。
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
 | `POST /api/links` | `NewLink`(`url` 必須、`title?`、`description?`、`date?` / `transaction_id?` / `event_id?` のうち1つ以上) | `link: LinkView`, `duplicate`, `message` |
 | `PATCH /api/links/:id` | `LinkPatch`(`title` / `description` のどちらか1つ以上。渡した項目だけ変わる。null で消去) | `link`, `duplicate: false`, `message` |
-| `POST /api/links/:id/title` | なし(タイトルが無いリンクのタイトルを、取りに行って付ける) | `link`, `duplicate: false`, `message`。取得できなければ400(`errors` に理由。いまのタイトルは変わらない)。理由の例: 「YouTubeが 401 を返しました(埋め込みが許可されていない、または非公開の可能性)」「Xが3秒以内に応答しませんでした」 |
+| `POST /api/links/:id/title` | なし(タイトルが無いリンクのタイトル(ウェブのページは、説明文・サムネイルも)を、取りに行って付ける) | `link`, `duplicate: false`, `message`。取得できなければ400(`errors` に理由。いまのタイトルは変わらない)。理由の例: 「YouTubeが 401 を返しました(埋め込みが許可されていない、または非公開の可能性)」「Xが3秒以内に応答しませんでした」 |
 | `DELETE /api/links/:id` | なし | `deleted`, `message` |
 
-- `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube` / `instagram` / `web`), `title`, `description`, `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)
+- `LinkView`: `id`, `url`(正規化済み), `kind`(`x` / `youtube` / `instagram` / `web`), `title`, `description`, `thumbnail_url`(ウェブのページの OGP の画像のURL。https のみ。なければ null), `date`, `transaction_id`, `event_id`, `created_at`(無い項目は null)
 - URL: https のみ。`user:pass@` と、443 以外のポートは不可。最大2048文字。X・YouTube・Instagram は、ホストが完全一致のときだけその種類として扱う(偽装ホストは `web` になる)
   - X(`kind=x`): `x.com` / `www.x.com` / `mobile.x.com` / `twitter.com` / `www.twitter.com` / `mobile.twitter.com`。パスは `/<ユーザー名>/status/<数字>`(投稿)か `/<ユーザー名>`(プロフィール)
-  - ウェブ(`kind=web`): 上記以外のホスト。IPアドレス・`localhost`・ドットの無い名前・`.local` などの内部向けホストは不可。`#` 以降と `utm_*` / `fbclid` / `gclid` など追跡用のクエリを消し、そのほかのクエリは残す
+  - ウェブ(`kind=web`): 上記以外のホスト。IPアドレス・`localhost`・ドットの無い名前・`.local` などの内部向けホストは不可。登録のとき(`title` を省略したとき)と `POST /api/links/:id/title` のときだけ、サーバーがそのページの先頭部分(最初の256KB)の OGP(`og:title`・`og:description`・`og:image`。無ければ `<title>`・`description`)だけを読みに行く(https のみ・3秒で打ち切り・HTML のみ。リダイレクトは同じホストだけ最大3回。クッキー・認証は付けない。本文は読まず、画像は保存しない。読めなくても、登録は成功し、タイトルなしになる)。`#` 以降と `utm_*` / `fbclid` / `gclid` など追跡用のクエリを消し、そのほかのクエリは残す
   - YouTube(`kind=youtube`): `youtube.com` / `www.youtube.com` / `m.youtube.com` / `music.youtube.com`(`/watch?v=<ID>`、`/shorts/<ID>`、`/live/<ID>`、`/playlist?list=<ID>`)と `youtu.be/<ID>`
 - 正規化: `#` 以降を消す、`utm_*` / `si` / `fbclid` / `feature` を消す(Xは `s` / `t` も消す。YouTubeの `t`(開始位置)は残す)、ホストは小文字(入力のホストのまま保存)
 - 重複: 同じ紐づけ先(date・transaction_id・event_id が全部同じ)に同じ正規化URLがあれば、登録せず既存のリンクを `duplicate: true` で返す(200)
@@ -234,8 +234,9 @@ Zaim のように、大分類(`group_name`)の下にサブカテゴリ(`name`)�
 
 | メソッド・パス | 入力 | 戻り |
 | --- | --- | --- |
-| `GET /api/seat-records` | クエリ(すべて任意・AND): `date`(その日だけ)、`title`(部分一致)、`seat_class`(席種。部分一致)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500) | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
-| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `seat_class?` / `rating?` / `note?` / `transaction_id?`)。`venue` / `screen` は名前で、無ければ会場・スクリーンを自動で作る | `seat_record: SeatRecordView`, `created_venue`, `created_screen`(新規に作ったか), `message` |
+| `GET /api/seat-records` | クエリ(すべて任意・AND): `q`(言葉。作品名・会場・スクリーン・座席・席種・一言。空白区切りで AND)、`date`(その日だけ)、`title`(部分一致)、`seat_class`(席種。部分一致)、`venue` / `screen` / `seat`(完全一致)、`min_rating` / `max_rating`、`from` / `to`、`transaction_id`、`limit`(既定100、最大500)、`offset` | `SeatRecordsData`: `count`(絞り込みに合う全件の数)、`records`(`date` の新しい順。`limit` まで)、`facets`(`venues`=会場名、`years`=年。全件から)、`summary`(venue・screen・seat ごとの `count` / `rated_count` / `avg_rating`。全件で集計)、`truncated`、`message` |
+| `GET /api/seat-records/:id` | なし | `seat_record: SeatRecordView`。無い id は404(映画の詳細画面用) |
+| `POST /api/seat-records` | `NewSeatRecord`(`date`・`venue`・`seat` 必須。`title?` / `screen?` / `seat_class?` / `rating?` / `note?` / `poster_url?`(https のURL。画像は保存せず参照だけ)/ `transaction_id?`)。`venue` / `screen` は名前で、無ければ会場・スクリーンを自動で作る | `seat_record: SeatRecordView`, `created_venue`, `created_screen`(新規に作ったか), `message` |
 | `PATCH /api/seat-records/:id` | `SeatRecordPatch`(指定した項目だけ変える。`title` / `screen` / `seat_class` / `rating` / `note` / `transaction_id` は null で消去。1つ以上必須) | `seat_record`, `created_venue`, `created_screen`, `message` |
 | `DELETE /api/seat-records/:id` | なし | `deleted`, `message` |
 
