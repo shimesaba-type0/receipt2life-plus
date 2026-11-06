@@ -171,8 +171,10 @@ export interface SeatRecordView {
   seat: string;
   // 席種(プレミアムシート、内野指定席など。50文字まで)。なければ null
   seat_class: string | null;
-  // 席の評価(整数1〜5、5が最良)。未評価は null
+  // 席の評価(整数1〜5、5が最良。座席の座り心地で、作品の感想ではない)。未評価は null
   rating: number | null;
+  // 作品の評価(整数1〜5、5が最良)。未評価は null
+  work_rating: number | null;
   // 一言(200文字まで)
   note: string | null;
   // ポスター画像のURL(https)。なければ null
@@ -594,6 +596,8 @@ export interface NewSeatRecord {
   seat_class?: string;
   // 1〜5 の整数(5が最良)
   rating?: number;
+  // 作品の評価(1〜5。席の評価とは別。任意)
+  work_rating?: number;
   note?: string;
   // ポスター画像のURL(https。任意。空文字は未指定)
   poster_url?: string;
@@ -611,6 +615,7 @@ export interface SeatRecordPatch {
   // null か空文字で消去
   seat_class?: string | null;
   rating?: number | null;
+  work_rating?: number | null;
   note?: string | null;
   poster_url?: string | null;
   transaction_id?: string | null;

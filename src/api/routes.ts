@@ -346,7 +346,7 @@ export function registerApiRoutes(app: Hono<AppEnv>, options: ApiRouteOptions = 
       filter.to = q.date;
     }
     // 数値は文字列で届くので変換する。数値にならないものは NaN になり、検証でエラーになる
-    for (const key of ["min_rating", "max_rating", "limit", "offset"]) if (q[key]) filter[key] = Number(q[key]);
+    for (const key of ["min_rating", "min_work_rating", "max_rating", "limit", "offset"]) if (q[key]) filter[key] = Number(q[key]);
     return respond(c, await listSeatRecords(c.env.DB, filter));
   });
 

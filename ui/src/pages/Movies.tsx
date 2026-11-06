@@ -7,6 +7,7 @@ import { errorText } from "./categoriesLogic";
 import { PAGE_SIZES, clampPanelWidth, isYearSelected, pageCountOf, yearRange } from "./booksLogic";
 import { readPageSize, readPanelWidth, savePageSize, savePanelWidth } from "./booksStorage";
 import { Pager, sheetSwipe } from "./Books";
+import { SeatChairs } from "../components/SeatChairs";
 import { movieCountText, movieHeading, ratingStars, seatText } from "./moviesLogic";
 import "./Categories.css";
 import "./Books.css";
@@ -36,7 +37,7 @@ export function Movies(props: { id: string | null }) {
   async function load(f: Filter) {
     const my = ++seq.current;
     try {
-      const res = await getSeatRecords({ q: f.q, venue: f.venue, from: f.from, to: f.to, min_rating: f.minRating, limit: pageSize, offset: (page - 1) * pageSize });
+      const res = await getSeatRecords({ q: f.q, venue: f.venue, from: f.from, to: f.to, min_work_rating: f.minRating, limit: pageSize, offset: (page - 1) * pageSize });
       if (my !== seq.current) return;
       if (res.ok) {
         setData(res);
@@ -92,7 +93,7 @@ export function Movies(props: { id: string | null }) {
           絞り込み{filtered ? "(あり)" : ""} {showFilter ? "▴" : "▾"}
         </button>
         <button type="button" class={`books__tool${filter.minRating === 4 ? " is-on" : ""}`} aria-pressed={filter.minRating === 4} onClick={() => set("minRating", filter.minRating === 4 ? 0 : 4)}>
-          ★4以上
+          作品★4以上
         </button>
         {facets.years.map((y) => (
           <button
@@ -177,7 +178,7 @@ export function Movies(props: { id: string | null }) {
                   <BookCover title={r.title ?? r.venue} isbn={null} coverUrl={r.poster_url} />
                   <span class="books__tile-title">{movieHeading(r)}</span>
                   <span class="books__tile-author">{r.date}</span>
-                  {r.rating !== null && <span class="movie__stars">{ratingStars(r.rating)}</span>}
+                  {r.work_rating !== null && <span class="movie__stars">{ratingStars(r.work_rating)}</span>}
                 </Link>
               </li>
             ))}
@@ -282,7 +283,7 @@ function MovieDetail(props: { id: string; prevId: string | null; nextId: string 
           <div class="bookd__info">
             <div class="bookd__head">
               <h1 class="bookd__title">{movieHeading(rec)}</h1>
-              {rec.rating !== null && <p class="bookd__author movie__stars">{ratingStars(rec.rating)}</p>}
+              {rec.work_rating !== null && <p class="bookd__author movie__stars">{ratingStars(rec.work_rating)}</p>}
             </div>
             <dl class="bookd__table">
               <dt>見た日</dt>
@@ -293,6 +294,14 @@ function MovieDetail(props: { id: string; prevId: string | null; nextId: string 
                 <>
                   <dt>座席</dt>
                   <dd>{seatText(rec)}</dd>
+                </>
+              )}
+              {rec.rating !== null && (
+                <>
+                  <dt>席の評価</dt>
+                  <dd>
+                    <SeatChairs value={rec.rating} />
+                  </dd>
                 </>
               )}
               {rec.screen_note && (

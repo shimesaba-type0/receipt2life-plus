@@ -1,3 +1,4 @@
+import { ChairIcon, SeatChairs } from "./SeatChairs";
 import { useRef, useState } from "preact/hooks";
 import type { SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
@@ -37,9 +38,12 @@ export function SeatRecordLine(props: { record: SeatRecordView }) {
           <strong class="seat__seat num">{record.seat}</strong>
           {record.seat_class && <span class="seat__class">{seatClassLabel(record.seat_class)}</span>}
         </span>
-        <span class="seat__rating num" aria-label={ratingSpoken(record.rating)}>
-          {ratingLabel(record.rating)}
-        </span>
+        {record.rating !== null && <SeatChairs value={record.rating} />}
+        {record.work_rating !== null && (
+          <span class="seat__rating num" aria-label={`作品の評価: ${ratingSpoken(record.work_rating)}`}>
+            作品 {ratingLabel(record.work_rating)}
+          </span>
+        )}
       </span>
       {record.note && <span class="seat__note muted">{record.note}</span>}
     </>
@@ -134,7 +138,7 @@ function SeatForm(props: {
         onInput={(e) => setF({ ...f, seatClass: (e.currentTarget as HTMLInputElement).value })}
       />
       <span class="seat__label" id={`${id}-rating`}>
-        評価(任意。5が最良。もう一度押すと外れる)
+        席の評価(任意。座り心地・見やすさ。5が最良。もう一度押すと外れる)
       </span>
       <div class="seat__ratings" role="group" aria-labelledby={`${id}-rating`}>
         {RATINGS.map((n) => (
@@ -143,8 +147,26 @@ function SeatForm(props: {
             type="button"
             class={`seat__star${f.rating === n ? " is-selected" : ""}`}
             aria-pressed={f.rating === n}
-            aria-label={`評価${n}`}
+            aria-label={`席の評価${n}`}
             onClick={() => setF({ ...f, rating: toggleRating(f.rating, n) })}
+          >
+            <ChairIcon filled />
+            {n}
+          </button>
+        ))}
+      </div>
+      <span class="seat__label" id={`${id}-work-rating`}>
+        作品の評価(任意。映画・ライブそのものの感想。5が最良)
+      </span>
+      <div class="seat__ratings" role="group" aria-labelledby={`${id}-work-rating`}>
+        {RATINGS.map((n) => (
+          <button
+            key={n}
+            type="button"
+            class={`seat__star${f.workRating === n ? " is-selected" : ""}`}
+            aria-pressed={f.workRating === n}
+            aria-label={`作品の評価${n}`}
+            onClick={() => setF({ ...f, workRating: toggleRating(f.workRating, n) })}
           >
             ★{n}
           </button>
