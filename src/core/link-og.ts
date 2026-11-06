@@ -21,8 +21,8 @@ export const thumbnailUrlField = z
   .trim()
   .transform((v, ctx) => {
     const u = parseHttpsUrl(v);
-    if (u === null || u.length > MAX_IMAGE_URL) {
-      ctx.addIssue({ code: "custom", message: `thumbnail_url は https のURL(${MAX_IMAGE_URL}文字まで)で指定してください` });
+    if (u === null || u.length > MAX_IMAGE_URL || isBlockedHost(new URL(u).hostname)) {
+      ctx.addIssue({ code: "custom", message: `thumbnail_url は https のURL(${MAX_IMAGE_URL}文字まで。内部向けのホストは不可)で指定してください` });
       return "";
     }
     return u;
@@ -46,10 +46,15 @@ export function isBlockedHost(hostname: string): boolean {
 
 const sameSite = (a: string, b: string) => a.replace(/^www\./, "") === b.replace(/^www\./, "");
 
+// 解析する範囲と個数の上限(正規表現の処理時間が、入力の長さの2乗に伸びるのを防ぐ。タグ1つは2KBまで、属性名は64文字まで)
+const MAX_PARSE_CHARS = 64 * 1024;
+const MAX_TAG_CHARS = 2048;
+const MAX_META_TAGS = 300;
+
 // <meta> の属性を読む(属性の値は、ダブル・シングルクォートか、クォートなし)
 function metaAttrs(tag: string): Map<string, string> {
   const attrs = new Map<string, string>();
-  for (const m of tag.matchAll(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
+  for (const m of tag.matchAll(/([a-zA-Z_:][-a-zA-Z0-9_:.]{0,63})\s{0,8}=\s{0,8}(?:"([^"]{0,2000})"|'([^']{0,2000})'|([^\s"'>]{1,2000}))/g)) {
     attrs.set(m[1]!.toLowerCase(), m[2] ?? m[3] ?? m[4] ?? "");
   }
   return attrs;
@@ -57,10 +62,13 @@ function metaAttrs(tag: string): Map<string, string> {
 
 /** HTML の先頭部分から OGP を取り出す(純関数)。baseUrl は、画像の相対URLを絶対にするための、ページのURL */
 export function parsePageInfo(html: string, baseUrl: string): PageInfo {
-  const headEnd = html.search(/<\/head\s*>/i);
-  const head = headEnd >= 0 ? html.slice(0, headEnd) : html;
+  const limited = html.length > MAX_PARSE_CHARS ? html.slice(0, MAX_PARSE_CHARS) : html;
+  const headEnd = limited.search(/<\/head\s*>/i);
+  const head = headEnd >= 0 ? limited.slice(0, headEnd) : limited;
   const meta = new Map<string, string>();
-  for (const m of head.matchAll(/<meta\b[^>]*>/gi)) {
+  let tags = 0;
+  for (const m of head.matchAll(new RegExp(`<meta\\b[^>]{0,${MAX_TAG_CHARS}}>`, "gi"))) {
+    if (++tags > MAX_META_TAGS) break;
     const a = metaAttrs(m[0]);
     const key = (a.get("property") ?? a.get("name") ?? "").toLowerCase();
     const content = a.get("content");
@@ -71,8 +79,8 @@ export function parsePageInfo(html: string, baseUrl: string): PageInfo {
     const t = squash(decodeEntities(v));
     return t === "" ? null : t;
   };
-  const titleTag = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head)?.[1];
-  const title = text(meta.get("og:title")) ?? text(meta.get("twitter:title")) ?? text(titleTag?.replace(/<[^>]*>/g, ""));
+  const titleTag = /<title\b[^>]{0,256}>([^<]{0,2000})<\/title\s*>/i.exec(head)?.[1];
+  const title = text(meta.get("og:title")) ?? text(meta.get("twitter:title")) ?? text(titleTag);
   const description = text(meta.get("og:description")) ?? text(meta.get("twitter:description")) ?? text(meta.get("description"));
   const imageRaw = text(meta.get("og:image")) ?? text(meta.get("og:image:url")) ?? text(meta.get("twitter:image")) ?? text(meta.get("twitter:image:src"));
   let thumbnail: string | null = null;
@@ -80,7 +88,8 @@ export function parsePageInfo(html: string, baseUrl: string): PageInfo {
     try {
       const abs = new URL(imageRaw, baseUrl).toString();
       const safe = parseHttpsUrl(abs);
-      if (safe && safe.length <= MAX_IMAGE_URL) thumbnail = safe;
+      // 画面を開くたびに、ブラウザがこのURLを読み込む。内部向けのホストは指させない
+      if (safe && safe.length <= MAX_IMAGE_URL && !isBlockedHost(new URL(safe).hostname)) thumbnail = safe;
     } catch {
       thumbnail = null;
     }
@@ -93,13 +102,14 @@ export function parsePageInfo(html: string, baseUrl: string): PageInfo {
 }
 
 // 先頭の MAX_PAGE_BYTES まで読む(超えたら、そこで読むのをやめる。失敗にはしない: <head> は先頭にあるため)
-async function readHead(res: Response): Promise<Uint8Array | null> {
+async function readHead(res: Response, deadline: Promise<never>): Promise<Uint8Array | null> {
   const reader = res.body?.getReader();
   if (!reader) return null;
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
-    const { done, value } = await reader.read();
+    // 少しずつ返す遅い応答でも、全体の期限で打ち切る
+    const { done, value } = await Promise.race([reader.read(), deadline]);
     if (done) break;
     chunks.push(value);
     total += value.byteLength;
@@ -133,11 +143,16 @@ function decodeBody(bytes: Uint8Array, contentType: string): string {
 }
 
 // fetchImpl はテスト用の差し替え。成功すれば PageInfo(何も取れなければ全部 null)、失敗は TitleFetchError(理由つき)を投げる
-export async function fetchPageInfo(url: string, fetchImpl: typeof fetch = fetch): Promise<PageInfo> {
-  let current = parseHttpsUrl(url);
-  if (current === null) throw new TitleFetchError("ページのURLが https ではありません");
+export async function fetchPageInfo(url: string, fetchImpl: typeof fetch = fetch, options: { timeoutMs?: number } = {}): Promise<PageInfo> {
+  const first = parseHttpsUrl(url);
+  if (first === null) throw new TitleFetchError("ページのURLが https ではありません");
+  let current: string = first;
   const startHost = new URL(current).hostname;
   if (isBlockedHost(startHost)) throw new TitleFetchError("このホストのページは、取りに行きません");
+  // 期限は、転送も本文の読み込みも含めた全体で1つ
+  const signal = AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS);
+  const deadline = new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(Object.assign(new Error("timeout"), { name: "TimeoutError" })), { once: true }));
+  deadline.catch(() => undefined);
   try {
     let res: Response | null = null;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
@@ -145,7 +160,7 @@ export async function fetchPageInfo(url: string, fetchImpl: typeof fetch = fetch
         method: "GET",
         headers: { accept: "text/html,application/xhtml+xml;q=0.9", "accept-language": "ja,en;q=0.8", "user-agent": "ReceiptToLifePlus-LinkPreview/1.0" },
         redirect: "manual",
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal,
       });
       if (res.status < 300 || res.status >= 400) break;
       const location = res.headers.get("location");
@@ -156,10 +171,11 @@ export async function fetchPageInfo(url: string, fetchImpl: typeof fetch = fetch
         next = null;
       }
       await res.body?.cancel().catch(() => undefined);
-      if (!next || next.protocol !== "https:" || next.port !== "" || next.username !== "" || !sameSite(next.hostname, startHost) || isBlockedHost(next.hostname)) {
+      const nextUrl: string | null = next ? parseHttpsUrl(next.toString()) : null;
+      if (!next || nextUrl === null || !sameSite(next.hostname, startHost) || isBlockedHost(next.hostname)) {
         throw new TitleFetchError("ページが、別のサイトへ転送しようとしました");
       }
-      current = next.toString();
+      current = nextUrl;
       res = null;
     }
     if (!res) throw new TitleFetchError("ページの転送が多すぎます");
@@ -173,7 +189,7 @@ export async function fetchPageInfo(url: string, fetchImpl: typeof fetch = fetch
       await res.body?.cancel().catch(() => undefined);
       throw new TitleFetchError("ページが HTML ではありません");
     }
-    const bytes = await readHead(res);
+    const bytes = await readHead(res, deadline);
     if (bytes === null) throw new TitleFetchError("ページの中身を読み取れませんでした");
     const info = parsePageInfo(decodeBody(bytes, contentType), current);
     if (info.title === null && info.description === null && info.thumbnail_url === null) throw new TitleFetchError("ページにタイトルや説明がありませんでした");

@@ -45,6 +45,34 @@ describe("parsePageInfo", () => {
   });
 });
 
+describe("parsePageInfo: 悪意のある入力でも、処理時間が伸びない", () => {
+  const fast = (name: string, html: string) =>
+    it(name, () => {
+      const t = Date.now();
+      parsePageInfo(html, PAGE);
+      expect(Date.now() - t).toBeLessThan(1500);
+    });
+  fast("閉じない <meta と、= も > も無い長い属性名(250KB)", `<head><meta ${"a".repeat(250 * 1024)}`);
+  fast("<meta<meta<meta… の繰り返し(> が無い)", "<head>" + "<meta".repeat(50_000));
+  fast("閉じない <title> の繰り返し", "<head>" + "<title>".repeat(30_000));
+  fast("属性が大量にあるタグ", `<head><meta ${'a="b" '.repeat(40_000)}>`);
+  fast("<title> の中にタグ・< が大量にある", `<head><title>${"<b>".repeat(60_000)}</title>`);
+
+  it("メタタグの個数と、解析する範囲に上限がある(64KBより後ろの og は読まない)", () => {
+    const late = `<head>${" ".repeat(70 * 1024)}<meta property="og:title" content="後ろにある題">`;
+    expect(parsePageInfo(late, PAGE).title).toBeNull();
+  });
+});
+
+describe("サムネイルの宛先", () => {
+  it("内部向けのホスト(LAN・localhost・IP直書き)を指す画像のURLは、取らない", () => {
+    for (const host of ["192.168.1.1", "router.local", "localhost", "127.0.0.1", "intranet"]) {
+      expect(parsePageInfo(`<meta property="og:image" content="https://${host}/x.png">`, PAGE).thumbnail_url, host).toBeNull();
+    }
+    expect(parsePageInfo('<meta property="og:image" content="https://cdn.example.test/x.png">', PAGE).thumbnail_url).toBe("https://cdn.example.test/x.png");
+  });
+});
+
 describe("isBlockedHost", () => {
   it("IPアドレス直書き・localhost・内部向けの名前・1語だけの名前は取りに行かない。ふつうのドメインは行く", () => {
     for (const h of ["localhost", "127.0.0.1", "10.0.0.5", "192.168.1.1", "169.254.169.254", "[::1]", "::1", "2130706433", "0x7f000001", "intranet", "printer.local", "svc.internal", "a.localhost", "example.test."]) {
@@ -109,6 +137,29 @@ describe("fetchPageInfo", () => {
     expect(await reason(fetchPageInfo(PAGE, (async () => Promise.reject(new TypeError("fetch failed"))) as unknown as typeof fetch))).toContain("通信に失敗");
     const timeout = (async () => Promise.reject(Object.assign(new Error("t"), { name: "TimeoutError" }))) as unknown as typeof fetch;
     expect(await reason(fetchPageInfo(PAGE, timeout))).toContain("3秒");
+  });
+
+  it("転送先のURLにパスワードがあれば追わない", async () => {
+    const seq = (() => {
+      let n = 0;
+      return async () => (n++ === 0 ? new Response(null, { status: 301, headers: { location: "https://user:pw@example.test/x" } }) : html(HTML));
+    })() as unknown as typeof fetch;
+    expect(await reason(fetchPageInfo(PAGE, seq))).toContain("別のサイトへ転送");
+  });
+
+  it("期限は転送も本文の読み込みも含めた全体で1つ。少しずつ返す遅い応答でも打ち切る", async () => {
+    const slow = (async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new TextEncoder().encode("<head><title>"));
+        },
+        pull: () => new Promise(() => undefined), // 続きを返さない
+      });
+      return new Response(body, { headers: { "content-type": "text/html" } });
+    }) as unknown as typeof fetch;
+    const t = Date.now();
+    expect(await reason(fetchPageInfo(PAGE, slow, { timeoutMs: 200 }))).toContain("3秒");
+    expect(Date.now() - t).toBeLessThan(2000);
   });
 
   it("文字コード: ヘッダーや <meta charset> の Shift_JIS も読める", async () => {
