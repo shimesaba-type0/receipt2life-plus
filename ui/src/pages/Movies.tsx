@@ -7,6 +7,7 @@ import { errorText } from "./categoriesLogic";
 import { PAGE_SIZES, clampPanelWidth, isYearSelected, pageCountOf, yearRange } from "./booksLogic";
 import { readPageSize, readPanelWidth, savePageSize, savePanelWidth } from "./booksStorage";
 import { Pager, sheetSwipe } from "./Books";
+import { SeatChairs } from "../components/SeatChairs";
 import { movieCountText, movieHeading, ratingStars, seatText } from "./moviesLogic";
 import "./Categories.css";
 import "./Books.css";
@@ -298,7 +299,9 @@ function MovieDetail(props: { id: string; prevId: string | null; nextId: string 
               {rec.rating !== null && (
                 <>
                   <dt>席の評価</dt>
-                  <dd class="movie__stars">{ratingStars(rec.rating)}</dd>
+                  <dd>
+                    <SeatChairs value={rec.rating} />
+                  </dd>
                 </>
               )}
               {rec.screen_note && (

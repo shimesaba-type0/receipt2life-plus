@@ -17,3 +17,7 @@
 .seat__ratings { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .day__form .seat__star { width: auto; min-width: 48px; min-height: 44px; padding: 0 14px; border: 2px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); font-size: 15px; cursor: pointer; }
 .day__form .seat__star.is-selected { border-color: var(--accent); background: var(--accent); color: #fff; font-weight: 700; }
+.chairs { display: inline-flex; gap: 2px; font-size: 18px; vertical-align: middle; }
+.chair { color: currentColor; opacity: 0.2; }
+.chair.is-filled { opacity: 1; color: #7a5a2a; }
+.seat__star .chair { opacity: 1; margin-right: 4px; }

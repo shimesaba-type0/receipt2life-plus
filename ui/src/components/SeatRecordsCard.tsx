@@ -1,3 +1,4 @@
+import { ChairIcon, SeatChairs } from "./SeatChairs";
 import { useRef, useState } from "preact/hooks";
 import type { SeatRecordView, VenueSummary } from "../../../src/api/contract";
 import {
@@ -37,9 +38,7 @@ export function SeatRecordLine(props: { record: SeatRecordView }) {
           <strong class="seat__seat num">{record.seat}</strong>
           {record.seat_class && <span class="seat__class">{seatClassLabel(record.seat_class)}</span>}
         </span>
-        <span class="seat__rating num" aria-label={`席の評価: ${ratingSpoken(record.rating)}`}>
-          席 {ratingLabel(record.rating)}
-        </span>
+        {record.rating !== null && <SeatChairs value={record.rating} />}
         {record.work_rating !== null && (
           <span class="seat__rating num" aria-label={`作品の評価: ${ratingSpoken(record.work_rating)}`}>
             作品 {ratingLabel(record.work_rating)}
@@ -151,7 +150,8 @@ function SeatForm(props: {
             aria-label={`席の評価${n}`}
             onClick={() => setF({ ...f, rating: toggleRating(f.rating, n) })}
           >
-            ★{n}
+            <ChairIcon filled />
+            {n}
           </button>
         ))}
       </div>

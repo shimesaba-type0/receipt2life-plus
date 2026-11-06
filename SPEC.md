@@ -619,3 +619,5 @@ backup/
 - 映画の一覧・詳細の星は `work_rating`。席の評価は詳細の「席の評価」の行に出す。映画の絞り込みの「作品★4以上」は `min_work_rating`(API・MCP の一覧にも追加)
 - MCP は add/update_seat_record に `work_rating` を足し、「席の感想は rating、作品の感想は work_rating。混ぜない」と説明に書く。既存の記録の `work_rating` は未設定(AI に頼んで付ける)
 - バックアップは `seat_record` に `work_rating` を足す(古い形式の行も読める)
+
+- 席の評価は、星(作品の評価)と見分けるため、椅子のアイコン(5つのうち評価の数だけ濃く)で出す。日ページの記録・フォームのボタン・映画の詳細が対象。作品の評価は星のまま
