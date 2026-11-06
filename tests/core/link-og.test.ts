@@ -31,7 +31,6 @@ describe("parsePageInfo", () => {
   });
 
   it("画像が https でない・長すぎる・壊れているときは無視する。タグの中身が HTML でも、文字として持つ", () => {
-    expect(parsePageInfo('<meta property="og:image" content="http://example.test/a.jpg">', PAGE).thumbnail_url).toBeNull();
     expect(parsePageInfo('<meta property="og:image" content="javascript:alert(1)">', PAGE).thumbnail_url).toBeNull();
     expect(parsePageInfo(`<meta property="og:image" content="https://example.test/${"a".repeat(600)}.jpg">`, PAGE).thumbnail_url).toBeNull();
     const info = parsePageInfo('<meta property="og:title" content="&lt;script&gt;alert(1)&lt;/script&gt;">', PAGE);
@@ -65,6 +64,12 @@ describe("parsePageInfo: 悪意のある入力でも、処理時間が伸びな�
 });
 
 describe("サムネイルの宛先", () => {
+  it("http:// の画像は https:// に読み替える(別のポートは読み替えない)。https でも http でもないものは取らない", () => {
+    expect(parsePageInfo('<meta property="og:image" content="http://www.example.test/img/a1.jpg">', PAGE).thumbnail_url).toBe("https://www.example.test/img/a1.jpg");
+    expect(parsePageInfo('<meta property="og:image" content="http://www.example.test:8080/a.jpg">', PAGE).thumbnail_url).toBeNull();
+    expect(parsePageInfo('<meta property="og:image" content="ftp://www.example.test/a.jpg">', PAGE).thumbnail_url).toBeNull();
+  });
+
   it("内部向けのホスト(LAN・localhost・IP直書き)を指す画像のURLは、取らない", () => {
     for (const host of ["192.168.1.1", "router.local", "localhost", "127.0.0.1", "intranet"]) {
       expect(parsePageInfo(`<meta property="og:image" content="https://${host}/x.png">`, PAGE).thumbnail_url, host).toBeNull();

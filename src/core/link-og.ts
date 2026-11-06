@@ -86,8 +86,10 @@ export function parsePageInfo(html: string, baseUrl: string): PageInfo {
   let thumbnail: string | null = null;
   if (imageRaw) {
     try {
-      const abs = new URL(imageRaw, baseUrl).toString();
-      const safe = parseHttpsUrl(abs);
+      const resolved = new URL(imageRaw, baseUrl);
+      // http:// の画像は、https:// に読み替える(このアプリは https なので、http の画像は、ブラウザが読まない。読み込めなければ、画面で地球儀に戻る)
+      if (resolved.protocol === "http:" && resolved.port === "") resolved.protocol = "https:";
+      const safe = parseHttpsUrl(resolved.toString());
       // 画面を開くたびに、ブラウザがこのURLを読み込む。内部向けのホストは指させない
       if (safe && safe.length <= MAX_IMAGE_URL && !isBlockedHost(new URL(safe).hostname)) thumbnail = safe;
     } catch {

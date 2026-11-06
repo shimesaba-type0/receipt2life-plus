@@ -129,7 +129,10 @@ export function LinkCard(props: {
           {thumb ?? <KindIcon kind={link.kind} />}
           <span class="link__text">
             <span class="link__title">{text}</span>
-            <span class="link__kind muted">{label}</span>
+            <span class="link__kind muted">
+              {label}
+              {thumbFailed && thumbSrc ? "・サムネイルを読み込めませんでした" : ""}
+            </span>
           </span>
         </a>
       ) : (
