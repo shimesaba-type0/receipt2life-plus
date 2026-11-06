@@ -16,6 +16,7 @@ const SLOW_API_MS = 300;
 export interface AppOptions {
   // リンクのタイトルを取りに行く関数(本番だけ渡す。省略するとタイトルは取りに行かない。テストで外へ出ないように)
   fetchTitle?: TitleFetcher;
+  previewFetch?: typeof fetch;
   // 使用量のグラフを取りに行く fetch(本番だけ渡す。省略すると、設定があっても取得しない。テストで外へ出ないように)
   usageFetch?: typeof fetch;
   // 書き込み回数の制限(省略すると既定。テストで小さくして試す)
@@ -44,7 +45,7 @@ export function createApp(options: AppOptions = {}) {
 
   // MCP(Streamable HTTP、ステートレス): リクエストごとにサーバーとトランスポートを作る
   app.all("/mcp", async (c) => {
-    const server = createMcpServer(c.env.DB, c.env.PHOTOS, new URL(c.req.url).origin, options.fetchTitle);
+    const server = createMcpServer(c.env.DB, c.env.PHOTOS, new URL(c.req.url).origin, options.fetchTitle, options.previewFetch);
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);

@@ -23,10 +23,10 @@ const X_POST = "https://x.com/example_user/status/1234567890";
 const YT = "https://youtu.be/dQw4w9WgXcQ";
 
 describe("MCP リンクのツール", () => {
-  it("tools/list は43個で、リンクの3ツールの説明が具体的", async () => {
+  it("tools/list は44個で、リンクの3ツールの説明が具体的", async () => {
     const r = await rpc("tools/list");
     const tools = r.body.result.tools as { name: string; description: string; inputSchema: { required?: string[] } }[];
-    expect(tools).toHaveLength(43);
+    expect(tools).toHaveLength(44);
     const byName = (n: string) => tools.find((t) => t.name === n)!;
     expect(byName("add_link").description).toContain("Xの投稿");
     expect(byName("add_link").description).toContain("YouTube");
@@ -151,5 +151,46 @@ describe("MCP list_merchants", () => {
     const d = tools.find((t) => t.name === "list_merchants")!.description;
     expect(d).toContain("レジ番号");
     expect(d).toContain("読めないものを過去の値で埋めて登録しない");
+  });
+});
+
+describe("MCP preview_page", () => {
+  const html = (img: string) => `<html><head><title>作品名</title><meta property="og:description" content="説明"><meta property="og:image" content="${img}"></head></html>`;
+  const stub = (imgStatus: number, imgType: string, imgUrl = "https://img.example.com/p.jpg"): typeof fetch =>
+    (async (input: RequestInfo | URL) => {
+      const u = String(input);
+      if (u === imgUrl) return new Response("x", { status: imgStatus, headers: { "content-type": imgType } });
+      return new Response(html(imgUrl), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    }) as typeof fetch;
+  const call = async (url: string, f: typeof fetch) => {
+    const res = await createApp({ previewFetch: f }).request(
+      "http://localhost/mcp",
+      { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "preview_page", arguments: { url } } }) },
+      env(),
+    );
+    const body = (await res.json()) as { result: { isError?: boolean; content: { text: string }[] } };
+    return { isError: body.result.isError ?? false, data: JSON.parse(body.result.content[0]!.text) };
+  };
+
+  it("題名・説明・画像を返し、画像が読めれば image_ok が true", async () => {
+    const r = await call("https://film.example.com/", stub(200, "image/jpeg"));
+    expect(r.isError).toBe(false);
+    expect(r.data).toMatchObject({ ok: true, title: "作品名", description: "説明", image_url: "https://img.example.com/p.jpg", image_ok: true });
+  });
+
+  it("画像が 404 なら image_ok が false", async () => {
+    const r = await call("https://film.example.com/", stub(404, "text/html"));
+    expect(r.data.image_ok).toBe(false);
+    expect(r.data.image_note).toContain("404");
+  });
+
+  it("画像でないものが返れば image_ok は false", async () => {
+    const r = await call("https://film.example.com/", stub(200, "text/html"));
+    expect(r.data.image_ok).toBe(false);
+  });
+
+  it("http や内部向けのURLはエラー", async () => {
+    expect((await call("http://film.example.com/", stub(200, "image/jpeg"))).isError).toBe(true);
+    expect((await call("https://localhost/", stub(200, "image/jpeg"))).isError).toBe(true);
   });
 });

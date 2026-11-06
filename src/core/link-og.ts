@@ -202,3 +202,69 @@ export async function fetchPageInfo(url: string, fetchImpl: typeof fetch = fetch
     throw new TitleFetchError(timeout ? "ページが3秒以内に応答しませんでした" : "ページへの通信に失敗しました");
   }
 }
+
+export type ImageCheck = { ok: boolean; note: string };
+
+// 画像のURLが本当に画像として読めるかを確かめる(AIが poster_url / cover_url に入れる前の確認用)。
+// https だけ・内部向けのホストは不可。リダイレクトは https の公開ホストへ最大2回。3秒で打ち切る。中身は読まず、ヘッダーだけ見て閉じる
+export async function checkImageUrl(url: string, fetchImpl: typeof fetch = fetch, options: { timeoutMs?: number } = {}): Promise<ImageCheck> {
+  let current = parseHttpsUrl(url);
+  if (current === null) return { ok: false, note: "画像のURLが https ではありません" };
+  const signal = AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS);
+  try {
+    for (let hop = 0; hop <= 2; hop++) {
+      if (isBlockedHost(new URL(current).hostname)) return { ok: false, note: "このホストの画像は、確かめに行きません" };
+      const res = await fetchImpl(current, {
+        method: "GET",
+        headers: { accept: "image/*", range: "bytes=0-0", "user-agent": "ReceiptToLifePlus-LinkPreview/1.0" },
+        redirect: "manual",
+        signal,
+      });
+      await res.body?.cancel().catch(() => undefined);
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get("location");
+        let next: string | null = null;
+        try {
+          next = location ? parseHttpsUrl(new URL(location, current).toString()) : null;
+        } catch {
+          next = null;
+        }
+        if (next === null) return { ok: false, note: "画像が、https ではない場所へ転送されました" };
+        current = next;
+        continue;
+      }
+      if (res.status !== 200 && res.status !== 206) return { ok: false, note: `画像が ${res.status} を返しました${res.status === 404 ? "(見つからない)" : ""}` };
+      const type = res.headers.get("content-type") ?? "";
+      if (!/^image\//i.test(type)) return { ok: false, note: "画像ではないものが返りました" };
+      return { ok: true, note: "画像を読めることを確認しました" };
+    }
+    return { ok: false, note: "画像の転送が多すぎます" };
+  } catch {
+    return { ok: false, note: "画像への通信に失敗しました(3秒以内に応答がない場合を含む)" };
+  }
+}
+
+export type PagePreview = { url: string; title: string | null; description: string | null; image_url: string | null; image_ok: boolean | null; image_note: string };
+
+// preview_page の本体。ページの OGP を読み、画像があれば本当に読めるかも確かめる
+export async function previewPage(url: string, fetchImpl: typeof fetch = fetch): Promise<{ ok: true; preview: PagePreview } | { ok: false; errors: string[] }> {
+  const safe = parseHttpsUrl(url);
+  if (safe === null) return { ok: false, errors: ["url は https のURLで指定してください"] };
+  try {
+    const info = await fetchPageInfo(safe, fetchImpl);
+    const check = info.thumbnail_url ? await checkImageUrl(info.thumbnail_url, fetchImpl) : null;
+    return {
+      ok: true,
+      preview: {
+        url: safe,
+        title: info.title,
+        description: info.description,
+        image_url: info.thumbnail_url,
+        image_ok: check ? check.ok : null,
+        image_note: check ? check.note : "このページには画像(og:image)がありません",
+      },
+    };
+  } catch (e) {
+    return { ok: false, errors: [e instanceof TitleFetchError ? e.message : "ページを読めませんでした"] };
+  }
+}

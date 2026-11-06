@@ -40,7 +40,7 @@ export function registerBookTools(server: McpServer, db: D1Database): void {
       title: "本の記録を直す",
       description: [
         "登録済みの本の記録を直す。id は必須(list_books で分かる)。変えたい項目だけ指定する(省略した項目は変わらない)。1つ以上の指定が必要。",
-        "isbn / title / author / series / buyer / note / cover_url / released_on / purchased_on / transaction_id は null で消去できる。status で手元の状況を変える(owned に戻すと手放した日は消える)(transaction_id は紐づけを外す。purchased_on を消すと、紐づけた取引の日付になる)。ただし isbn と title の両方は消せない。ISBN は13桁にそろえて保存する。",
+        "isbn / title / author / series / buyer / note / cover_url(表紙画像のURL。公式ページを preview_page で読み、image_ok が true の image_url を入れる) / released_on / purchased_on / transaction_id は null で消去できる。status で手元の状況を変える(owned に戻すと手放した日は消える)(transaction_id は紐づけを外す。purchased_on を消すと、紐づけた取引の日付になる)。ただし isbn と title の両方は消せない。ISBN は13桁にそろえて保存する。",
       ].join("\n"),
       inputSchema: updateBookFieldsSchema.shape,
     },
