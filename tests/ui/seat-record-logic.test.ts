@@ -19,6 +19,7 @@ import {
 
 const record: SeatRecordView = {
   poster_url: null,
+  work_rating: null,
   id: "s1",
   date: "2026-10-10",
   venue: "A映画館",

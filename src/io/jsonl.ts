@@ -98,7 +98,7 @@ const EXPORT_TABLES: TableSpec[] = [
   },
   // 座席の記録。venue / screen は名前で出す(会場・スクリーンが別のレコードになる前の形式のまま)
   {
-    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.seat_class, r.rating, r.note, r.poster_url, r.transaction_id, r.created_at
+    sql: `SELECT 'seat_record' AS type, r.id, r.date, r.title, v.name AS venue, s.name AS screen, r.seat, r.seat_class, r.rating, r.work_rating, r.note, r.poster_url, r.transaction_id, r.created_at
           FROM seat_records r
           JOIN venues v ON v.id = r.venue_id
           LEFT JOIN screens s ON s.id = r.screen_id
@@ -258,6 +258,8 @@ const seatRecordSchema = z.strictObject({
   // 旧形式(seat_class なし)の行も取り込める。空文字は未指定(NULL)
   seat_class: z.string().trim().max(MAX_SEAT_CLASS_LENGTH).optional(),
   rating: z.number().int().min(1, "1〜5の整数にしてください").max(5, "1〜5の整数にしてください").optional(),
+  // 旧形式(work_rating なし)の行も取り込める
+  work_rating: z.number().int().min(1, "1〜5の整数にしてください").max(5, "1〜5の整数にしてください").optional(),
   note: z.string().trim().min(1).max(MAX_NOTE_LENGTH).optional(),
   // 旧形式(poster_url なし)の行も取り込める
   poster_url: posterUrlField.optional(),
@@ -946,10 +948,10 @@ function seatRecordStatements(db: D1Database, id: string, d: z.infer<typeof seat
   statements.push(
     db
       .prepare(
-        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, poster_url, transaction_id, created_at)
-         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, work_rating, note, poster_url, transaction_id, created_at)
+         VALUES (?, ?, ?, (SELECT id FROM venues WHERE name = ?), ${screenId}, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.seat_class || null, d.rating ?? null, d.note ?? null, d.poster_url || null, d.transaction_id ?? null, createdAt),
+      .bind(id, d.date, d.title || null, d.venue, ...(d.screen === undefined ? [] : [d.venue, d.screen]), d.seat, d.seat_class || null, d.rating ?? null, d.work_rating ?? null, d.note ?? null, d.poster_url || null, d.transaction_id ?? null, createdAt),
   );
   return statements;
 }

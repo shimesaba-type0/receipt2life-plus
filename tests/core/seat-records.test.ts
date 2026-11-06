@@ -72,6 +72,21 @@ describe("seat_class(席種)", () => {
   });
 });
 
+describe("work_rating(作品の評価。席の評価 rating とは別)", () => {
+  it("席の評価と別に持ち、1〜5だけ。直す・消す・min_work_rating で絞ることもできる", async () => {
+    const r = await add({ rating: 2, work_rating: 5 });
+    expect(r).toMatchObject({ rating: 2, work_rating: 5 });
+    expect(await addSeatRecord(db(), { ...base, work_rating: 6 }, { now: NOW })).toMatchObject({ ok: false, errors: [{ field: "work_rating" }] });
+    await add({ work_rating: 3, seat: "A-1" });
+    const list = await listSeatRecords(db(), { min_work_rating: 4 });
+    expect(list.ok && list.records.map((x) => x.id)).toEqual([r.id]);
+    const up = await updateSeatRecord(db(), { id: r.id, work_rating: 4 });
+    expect(up.ok && up.seat_record).toMatchObject({ rating: 2, work_rating: 4 });
+    const cleared = await updateSeatRecord(db(), { id: r.id, work_rating: null });
+    expect(cleared.ok && cleared.seat_record.work_rating).toBeNull();
+  });
+});
+
 describe("poster_url(ポスター画像のURL)と、映画の一覧用の絞り込み", () => {
   it("https だけ。前後の空白を除き、空文字は未指定。直す・消すこともできる", async () => {
     expect(await addSeatRecord(db(), { ...base, poster_url: "http://example.test/p.jpg" }, { now: NOW })).toMatchObject({ ok: false, errors: [{ field: "poster_url" }] });
@@ -115,6 +130,7 @@ describe("addSeatRecord", () => {
       title: null,
       seat_class: null,
       poster_url: null,
+      work_rating: null,
       transaction_id: null,
       created_at: expect.any(String),
     });

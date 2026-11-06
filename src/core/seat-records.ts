@@ -49,7 +49,10 @@ export interface SeatRecordView {
   seat: string;
   // 席種(プレミアムシート、内野指定席など)。なければ null
   seat_class: string | null;
+  // 席の評価(座席の座り心地。作品の感想ではない)
   rating: number | null;
+  // 作品の評価(1〜5。席の評価とは別)
+  work_rating: number | null;
   note: string | null;
   // ポスター画像のURL(https)。なければ null
   poster_url: string | null;
@@ -110,7 +113,8 @@ export const seatRecordFieldsSchema = z.strictObject({
   screen: screenField.optional().describe(`スクリーン名・ホール名・エリア名(例: スクリーン5、シアター3、内野エリア。映画館のスクリーンだけでなく、ホール・ブロック・エリアなどの区画にも使える。${MAX_SCREEN_LENGTH}文字まで)。任意。その会場の下に、無ければ自動で作られる。list_venues で既存のスクリーンを確かめて同じ名前を使う`),
   seat: seatField.describe(`座席(例: F-5、J列12番。${MAX_SEAT_LENGTH}文字まで)。必須`),
   seat_class: seatClassField.optional().describe(SEAT_CLASS_DESCRIPTION),
-  rating: ratingField.optional().describe(`席の評価(整数の${MIN_RATING}〜${MAX_RATING}。${MAX_RATING}が最良)。任意。ユーザーが言った感想から決める`),
+  rating: ratingField.optional().describe(`席の評価(整数の${MIN_RATING}〜${MAX_RATING}。${MAX_RATING}が最良)。座席の座り心地・見やすさの評価で、作品の感想ではない。任意。ユーザーが席について言った感想から決める`),
+  work_rating: ratingField.optional().describe(`作品の評価(整数の${MIN_RATING}〜${MAX_RATING}。${MAX_RATING}が最良)。映画やライブそのものの感想で、席の評価(rating)とは別。任意。ユーザーが言っていなければ省略する(勝手に決めない)`),
   note: noteField.optional().describe(`一言の感想(${MAX_NOTE_LENGTH}文字まで。例「前すぎて首が疲れた」)。任意`),
   poster_url: posterUrlField.optional().describe(POSTER_DESCRIPTION),
   transaction_id: idField.optional().describe("紐づける取引の id(チケット代の取引など。list_transactions や add_transactions の結果で分かる)。任意"),
@@ -127,7 +131,8 @@ export const updateSeatRecordFieldsSchema = z.strictObject({
   screen: screenField.nullable().optional().describe("新しいスクリーン名(その会場の下に、無ければ自動で作る)。null で消去。省略すると変えない"),
   seat: seatField.optional().describe("新しい座席。省略すると変えない"),
   seat_class: seatClassField.nullable().optional().describe("新しい席種(プレミアムシート、内野指定席など)。null か空文字で消去。省略すると変えない"),
-  rating: ratingField.nullable().optional().describe(`新しい評価(${MIN_RATING}〜${MAX_RATING}の整数)。null で消去。省略すると変えない`),
+  rating: ratingField.nullable().optional().describe(`新しい席の評価(${MIN_RATING}〜${MAX_RATING}の整数。作品の感想ではない)。null で消去。省略すると変えない`),
+  work_rating: ratingField.nullable().optional().describe(`新しい作品の評価(${MIN_RATING}〜${MAX_RATING}の整数)。null で消去。省略すると変えない`),
   note: noteField.nullable().optional().describe("新しい一言。null で消去。省略すると変えない"),
   poster_url: posterUrlField.nullable().optional().describe("新しいポスター画像のURL(https)。null か空文字で消去。省略すると変えない"),
   transaction_id: idField.nullable().optional().describe("新しい紐づけ先の取引 id。null で紐づけを外す。省略すると変えない"),
@@ -143,6 +148,7 @@ export const listSeatRecordsFieldsSchema = z.strictObject({
   seat: seatField.optional().describe("この座席の記録だけ(完全一致。例: F-5)"),
   seat_class: z.string().trim().min(1).max(MAX_SEAT_CLASS_LENGTH).optional().describe("この席種の記録だけ(部分一致。例: 「プレミアム」「内野指定席」)"),
   min_rating: ratingField.optional().describe(`この評価以上の記録だけ(${MIN_RATING}〜${MAX_RATING})。評価のない記録は除かれる`),
+  min_work_rating: ratingField.optional().describe(`作品の評価がこの値以上の記録だけ(${MIN_RATING}〜${MAX_RATING})。作品の評価のない記録は除かれる`),
   max_rating: ratingField.optional().describe(`この評価以下の記録だけ(${MIN_RATING}〜${MAX_RATING})。評価のない記録は除かれる`),
   from: isoDate.optional().describe("この日以降(YYYY-MM-DD)"),
   to: isoDate.optional().describe("この日以前(YYYY-MM-DD)"),
@@ -155,7 +161,7 @@ export const listSeatRecordsFieldsSchema = z.strictObject({
 
 // 会場・スクリーンを JOIN した読み取り用の SELECT(venue / screen は名前、venue_id / screen_id は id)
 const VIEW_SELECT = `SELECT r.id, r.date, r.title, v.name AS venue, r.venue_id, s.name AS screen, r.screen_id, s.note AS screen_note,
-       r.seat, r.seat_class, r.rating, r.note, r.poster_url, r.transaction_id, r.created_at
+       r.seat, r.seat_class, r.rating, r.work_rating, r.note, r.poster_url, r.transaction_id, r.created_at
   FROM seat_records r
   JOIN venues v ON v.id = r.venue_id
   LEFT JOIN screens s ON s.id = r.screen_id`;
@@ -216,8 +222,8 @@ export async function addSeatRecord(db: D1Database, input: unknown, options: Cor
 
   const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, note, poster_url, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, m.date, m.title || null, venue.id, screen?.id ?? null, m.seat, m.seat_class || null, m.rating ?? null, m.note ?? null, m.poster_url || null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
+    .prepare("INSERT INTO seat_records (id, date, title, venue_id, screen_id, seat, seat_class, rating, work_rating, note, poster_url, transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, m.date, m.title || null, venue.id, screen?.id ?? null, m.seat, m.seat_class || null, m.rating ?? null, m.work_rating ?? null, m.note ?? null, m.poster_url || null, m.transaction_id ?? null, (options.now ?? new Date()).toISOString())
     .run();
   const record = (await getSeatRecord(db, id))!;
   return { ok: true, seat_record: record, ...flags, message: `座席の記録を登録しました: ${label(record)}${createdNotice(record.venue, record.screen, flags)}` };
@@ -233,7 +239,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown, options: 
   if (Object.values(changes).every((v) => v === undefined)) {
     return {
       ok: false,
-      errors: [{ field: "input", message: "input: 更新する項目(date / title / venue / screen / seat / seat_class / rating / note / poster_url / transaction_id)を1つ以上指定してください" }],
+      errors: [{ field: "input", message: "input: 更新する項目(date / title / venue / screen / seat / seat_class / rating / work_rating / note / poster_url / transaction_id)を1つ以上指定してください" }],
     };
   }
   if (changes.transaction_id) {
@@ -263,7 +269,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown, options: 
 
   // 指定のない項目は、既存の値を保つ
   await db
-    .prepare("UPDATE seat_records SET date = ?, title = ?, venue_id = ?, screen_id = ?, seat = ?, seat_class = ?, rating = ?, note = ?, poster_url = ?, transaction_id = ? WHERE id = ?")
+    .prepare("UPDATE seat_records SET date = ?, title = ?, venue_id = ?, screen_id = ?, seat = ?, seat_class = ?, rating = ?, work_rating = ?, note = ?, poster_url = ?, transaction_id = ? WHERE id = ?")
     .bind(
       changes.date ?? current.date,
       // null と空文字は消去
@@ -273,6 +279,7 @@ export async function updateSeatRecord(db: D1Database, input: unknown, options: 
       changes.seat ?? current.seat,
       changes.seat_class === undefined ? current.seat_class : changes.seat_class || null,
       changes.rating === undefined ? current.rating : changes.rating,
+      changes.work_rating === undefined ? current.work_rating : changes.work_rating,
       changes.note === undefined ? current.note : changes.note,
       changes.poster_url === undefined ? current.poster_url : changes.poster_url || null,
       changes.transaction_id === undefined ? current.transaction_id : changes.transaction_id,
@@ -337,6 +344,7 @@ export async function listSeatRecords(db: D1Database, input: unknown): Promise<L
   add("s.name = ?", m.screen);
   add("r.seat = ?", m.seat);
   add("r.rating >= ?", m.min_rating);
+  add("r.work_rating >= ?", m.min_work_rating);
   add("r.rating <= ?", m.max_rating);
   add("r.date >= ?", m.from);
   add("r.date <= ?", m.to);

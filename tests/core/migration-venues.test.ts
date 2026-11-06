@@ -9,7 +9,7 @@ import { testEnv } from "../helpers";
 // 旧い形(venue / screen が文字列)のデータを入れてから 0010 を当てて、データが失われないことを確かめる
 const MIGRATION = "0010_venues_screens.sql";
 // 0010 はテーブルを作り直すので、後ろの 0011(seat_class の追加)と 0028(poster_url の追加)も当て直す必要がある
-const LATER_MIGRATIONS = ["0011_seat_record_class.sql", "0028_seat_poster.sql"];
+const LATER_MIGRATIONS = ["0011_seat_record_class.sql", "0028_seat_poster.sql", "0030_seat_work_rating.sql"];
 
 async function rollBackTo0009() {
   const e = testEnv();
@@ -23,7 +23,7 @@ async function rollBackTo0009() {
   await e.DB.exec("CREATE INDEX idx_seat_records_venue_date ON seat_records(venue, date)");
   await e.DB.exec("CREATE INDEX idx_seat_records_date ON seat_records(date)");
   await e.DB.exec("CREATE INDEX idx_seat_records_transaction_id ON seat_records(transaction_id)");
-  await e.DB.prepare("DELETE FROM d1_migrations WHERE name IN (?, ?, ?)").bind(MIGRATION, ...LATER_MIGRATIONS).run();
+  await e.DB.prepare("DELETE FROM d1_migrations WHERE name IN (?, ?, ?, ?)").bind(MIGRATION, ...LATER_MIGRATIONS).run();
 }
 
 const insertOld = (id: string, date: string, venue: string, screen: string | null, over: { rating?: number | null; note?: string | null; title?: string | null; tx?: string | null } = {}) =>
