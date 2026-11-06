@@ -31,6 +31,7 @@ import {
   coverUrlField,
   normalizeIsbn,
 } from "../core/books";
+import { thumbnailUrlField } from "../core/link-og";
 import { posterUrlField, MAX_NOTE_LENGTH, MAX_SEAT_CLASS_LENGTH, MAX_SEAT_LENGTH, MAX_TITLE_LENGTH } from "../core/seat-records";
 import { MAX_SCREEN_LENGTH, MAX_SCREEN_NOTE_LENGTH, MAX_VENUE_LENGTH } from "../core/venues";
 import { dedupHash } from "../core/transactions";
@@ -86,7 +87,7 @@ const EXPORT_TABLES: TableSpec[] = [
           FROM attachments WHERE id > ? ORDER BY id LIMIT ?`,
   },
   {
-    sql: `SELECT 'link' AS type, id, url, kind, title, description, date, transaction_id, event_id, created_at
+    sql: `SELECT 'link' AS type, id, url, kind, title, description, thumbnail_url, date, transaction_id, event_id, created_at
           FROM links WHERE id > ? ORDER BY id LIMIT ?`,
   },
   // スクリーン(会場の名前、スクリーン名、特徴 note)。会場の id は出さず、名前で持つ(座席の記録と同じ)
@@ -233,6 +234,8 @@ const linkSchema = z
     kind: z.enum(["x", "youtube", "instagram", "web"]).optional(),
     title: z.string().trim().min(1).max(200).optional(),
     description: z.string().trim().min(1).max(MAX_DESCRIPTION_LENGTH).optional(),
+    // 旧形式(thumbnail_url なし)の行も取り込める
+    thumbnail_url: thumbnailUrlField.optional(),
     date: isoDate.optional(),
     transaction_id: z.string().min(1).optional(),
     event_id: z.string().min(1).optional(),
@@ -920,8 +923,8 @@ async function importLinks(db: D1Database, entries: Entry[], report: Report, now
       id: v.id,
       statements: [
         db
-          .prepare("INSERT INTO links (id, url, kind, title, description, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.description ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
+          .prepare("INSERT INTO links (id, url, kind, title, description, thumbnail_url, date, transaction_id, event_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(v.id, v.url, v.kind, v.data.title ?? null, v.data.description ?? null, v.data.thumbnail_url ?? null, v.data.date ?? null, v.data.transaction_id ?? null, v.data.event_id ?? null, v.data.created_at ?? nowIso),
       ],
     });
   }

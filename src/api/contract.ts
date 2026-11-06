@@ -141,12 +141,14 @@ export interface PhotoView {
 
 export interface LinkView {
   id: string;
-  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画 / Instagramの投稿 / ウェブのページ)。タイトルは登録のときに取得する(YouTube・Xだけ)。それ以外は AI が付ける
+  // 正規化済みのhttps URL(Xの投稿 / YouTubeの動画 / Instagramの投稿 / ウェブのページ)。タイトルは登録のときに取得する(YouTube・Xは公式の oEmbed、ウェブのページは OGP)。Instagram などは AI が付ける
   url: string;
   kind: "x" | "youtube" | "instagram" | "web";
   title: string | null;
-  // 説明文(AI が読んだ要約など)
+  // 説明文(AI が読んだ要約、ウェブのページの OGP の説明文など)
   description: string | null;
+  // サムネイル画像のURL(https)。ウェブのページの OGP(og:image)から取ったもの。画像は保存せず参照だけ。なければ null(YouTube は動画のIDから画面が作る)
+  thumbnail_url: string | null;
   date: string | null;
   transaction_id: string | null;
   event_id: string | null;

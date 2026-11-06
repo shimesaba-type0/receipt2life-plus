@@ -99,4 +99,18 @@ describe("往復(export → 空にする → import)とバックアップ復元�
     expect(await count("links")).toBe(3);
     expect(await db().prepare("SELECT kind, description FROM links WHERE kind = 'web'").first()).toEqual({ kind: "web", description: "上映館の案内" });
   });
+
+  it("thumbnail_url も書き出して読み込める。古い行(なし)も取り込める。https でなければその行だけエラー", async () => {
+    const lines = [
+      JSON.stringify({ type: "link", id: "t1", url: "https://example.com/p1", kind: "web", title: "題", thumbnail_url: "https://example.com/og.jpg", date: "2026-10-10" }),
+      JSON.stringify({ type: "link", id: "t2", url: "https://example.com/p2", kind: "web", date: "2026-10-10" }),
+      JSON.stringify({ type: "link", id: "t3", url: "https://example.com/p3", kind: "web", thumbnail_url: "http://example.com/og.jpg", date: "2026-10-10" }),
+    ].join("\n");
+    const res = await importRecords(db(), lines, { now: NOW });
+    expect(res).toMatchObject({ ok: true, summary: { ok: 2, errors: 1 } });
+    const text = await new Response(exportJsonl(db())).text();
+    const rows = text.trimEnd().split("\n").map((l) => JSON.parse(l) as Record<string, unknown>).filter((r) => r.type === "link");
+    expect(rows.find((r) => r.id === "t1")).toMatchObject({ thumbnail_url: "https://example.com/og.jpg" });
+    expect(rows.find((r) => r.id === "t2")).toMatchObject({ thumbnail_url: null });
+  });
 });

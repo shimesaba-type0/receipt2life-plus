@@ -1,13 +1,20 @@
+import { fetchPageInfo } from "./link-og";
 import type { LinkKind } from "./links";
 
-// リンクのタイトルの取得(公式の oEmbed だけ。ページの本文・OGP・画像には取りに行かない)
+// リンクのタイトルの取得。YouTube と X は公式の oEmbed。ウェブのページは、ページの先頭部分の OGP だけ(src/core/link-og.ts。本文は読まず、画像は保存しない)
 // 取りに行く先は、次の2つの固定のホストだけ(リンクのURLは検索の値として渡す。リンクのホストへは行かない):
 //   YouTube: https://www.youtube.com/oembed → title
 //   X:       https://publish.twitter.com/oembed → 投稿者名と、投稿の本文の先頭
 // Instagram は公式の oEmbed に事前の登録(アクセストークン)が要るため、取りに行かない(null)
 // 失敗(通信エラー・タイムアウト・削除された動画や非公開の投稿・仕様の変更)は null を返す。タイトルが付かないだけで、リンクの登録は成功する
 
-export type TitleFetcher = (kind: LinkKind, url: string) => Promise<string | null>;
+// 取ってきたもの。YouTube と X はタイトルだけ(文字列)。ウェブのページは、OGP のタイトル・説明文・画像のURL
+export interface PageInfo {
+  title: string | null;
+  description: string | null;
+  thumbnail_url: string | null;
+}
+export type TitleFetcher = (kind: LinkKind, url: string) => Promise<string | PageInfo | null>;
 
 export const MAX_FETCHED_TITLE = 200;
 const TIMEOUT_MS = 3000;
@@ -16,7 +23,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
 
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
     if (e[0] === "#") {
       const code = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
@@ -100,7 +107,9 @@ const SERVICE: Record<"youtube" | "x", string> = { youtube: "YouTube", x: "X" };
 // fetchImpl はテスト用の差し替え。成功すればタイトル、タイトルが無ければ null、失敗は TitleFetchError(理由つき)を投げる
 export function makeTitleFetcher(fetchImpl: typeof fetch = fetch): TitleFetcher {
   return async (kind, url) => {
-    if (kind === "instagram" || kind === "web") return null;
+    if (kind === "instagram") return null;
+    // ウェブのページは、先頭部分の OGP だけを取る(src/core/link-og.ts)
+    if (kind === "web") return fetchPageInfo(url, fetchImpl);
     const service = SERVICE[kind];
     let endpoint = oembedEndpoint(kind, url);
     try {

@@ -109,9 +109,11 @@ export function LinkCard(props: {
   // YouTube は、動画のIDからサムネイルを出す(再生はしない。カードを押すと新しいタブで YouTube が開く)
   const videoId = link.kind === "youtube" ? youtubeVideoIdOf(link.url) : null;
   const [thumbFailed, setThumbFailed] = useState(false);
+  // ウェブのページは、OGP のサムネイル(サーバーが登録のときに取ったURL。画像そのものは保存していない)
+  const thumbSrc = videoId ? youtubeThumbnailUrl(videoId) : link.kind === "web" ? link.thumbnail_url : null;
   const thumb =
-    videoId && !thumbFailed ? (
-      <img class="link__thumb" src={youtubeThumbnailUrl(videoId)} alt="" width={160} height={90} loading="lazy" referrerpolicy="no-referrer" onError={() => setThumbFailed(true)} />
+    thumbSrc && !thumbFailed ? (
+      <img class="link__thumb" src={thumbSrc} alt="" width={160} height={90} loading="lazy" referrerpolicy="no-referrer" onError={() => setThumbFailed(true)} />
     ) : null;
   const [title, setTitle] = useState(link.title ?? "");
   const [description, setDescription] = useState(link.description ?? "");
@@ -161,7 +163,7 @@ export function LinkCard(props: {
               {embedOpen ? "投稿を閉じる" : "投稿を表示"}
             </button>
           )}
-          {!link.title && link.kind !== "instagram" && link.kind !== "web" && props.onFetchTitle && (
+          {!link.title && link.kind !== "instagram" && props.onFetchTitle && (
             <button type="button" class="btn" disabled={busy} onClick={() => void props.onFetchTitle?.(link.id)}>
               タイトルを取得
             </button>

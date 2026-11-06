@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { checkRefs, onDay } from "./photos";
 import { isoDate, toFieldErrors, type FieldError } from "./schema";
-import { TitleFetchError, type TitleFetcher } from "./link-titles";
+import { TitleFetchError, type PageInfo, type TitleFetcher } from "./link-titles";
 import type { CoreOptions } from "./transactions";
 
 // 外部リンク(links)。Xの投稿・YouTubeの動画・Instagramの投稿・サイトを問わない https のページのURLを、日付・取引・出来事に付ける。
-// URLの形だけを検証・正規化する。タイトルは、登録のときだけ公式の oEmbed から取得する(src/core/link-titles.ts。YouTube と X だけ)。
-// それ以外(Instagram・ウェブ)はサーバーから取りに行かない。AI が読んだタイトルと説明文を、MCP 経由で渡してもらう。
+// URLの形だけを検証・正規化する。タイトルは、登録のときに取得する(src/core/link-titles.ts)。YouTube と X は公式の oEmbed、ウェブのページは先頭部分の OGP(src/core/link-og.ts。タイトル・説明文・画像のURLだけ)。
+// Instagram はサーバーから取りに行かない(公式の取得方法に事前の登録が要るため)。AI が読んだタイトルと説明文を、MCP 経由で渡してもらう。
 
 export const LINK_KINDS = ["x", "youtube", "instagram", "web"] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
@@ -21,6 +21,8 @@ export interface LinkView {
   title: string | null;
   // 説明文(AI が読んだ要約など、任意)
   description: string | null;
+  // サムネイル画像のURL(https)。ウェブのページの OGP(og:image)から取ったもの。画像は保存せず参照だけ。YouTube は、動画のIDから画面が作るので null
+  thumbnail_url: string | null;
   date: string | null;
   transaction_id: string | null;
   event_id: string | null;
@@ -232,7 +234,10 @@ export const listLinksSchema = listLinksFieldsSchema.refine(anyTarget, { message
 
 // ---- 保存 ----
 
-const COLUMNS = "id, url, kind, title, description, date, transaction_id, event_id, created_at";
+const COLUMNS = "id, url, kind, title, description, thumbnail_url, date, transaction_id, event_id, created_at";
+
+// 取ってきたものを、タイトル・説明文・サムネイルにそろえる(YouTube と X は、タイトルだけの文字列)
+const asPageInfo = (r: string | PageInfo | null): PageInfo | null => (r === null ? null : typeof r === "string" ? { title: r, description: null, thumbnail_url: null } : r);
 
 export type LinkResult =
   | { ok: true; link: LinkView; duplicate: boolean; message: string }
@@ -283,24 +288,33 @@ export async function addLink(db: D1Database, input: unknown, options: AddLinkOp
 
   // 表題が無ければ取りに行く。取れなければ表題なしで登録する(登録は失敗させない)
   let title = m.title ?? null;
-  if (title === null && options.fetchTitle && url.kind !== "instagram" && url.kind !== "web") {
-    title = await options.fetchTitle(url.kind, url.url).catch((e: unknown) => {
-      console.log(`link title: ${url.kind} ${e instanceof TitleFetchError ? e.reason : "取得に失敗しました"}`);
-      return null;
-    });
+  let description = m.description ?? null;
+  let thumbnail: string | null = null;
+  if (title === null && options.fetchTitle && url.kind !== "instagram") {
+    const fetched = asPageInfo(
+      await options.fetchTitle(url.kind, url.url).catch((e: unknown) => {
+        console.log(`link title: ${url.kind} ${e instanceof TitleFetchError ? e.reason : "取得に失敗しました"}`);
+        return null;
+      }),
+    );
+    title = fetched?.title ?? null;
+    // 説明文は、自分で書いた(AI が付けた)ものを優先する
+    description = description ?? fetched?.description ?? null;
+    thumbnail = fetched?.thumbnail_url ?? null;
   }
   const link: LinkView = {
     id: crypto.randomUUID(),
     url: url.url,
     kind: url.kind,
     title,
-    description: m.description ?? null,
+    description,
+    thumbnail_url: thumbnail,
     ...target,
     created_at: (options.now ?? new Date()).toISOString(),
   };
   await db
-    .prepare(`INSERT INTO links (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(link.id, link.url, link.kind, link.title, link.description, link.date, link.transaction_id, link.event_id, link.created_at)
+    .prepare(`INSERT INTO links (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(link.id, link.url, link.kind, link.title, link.description, link.thumbnail_url, link.date, link.transaction_id, link.event_id, link.created_at)
     .run();
   return { ok: true, link, duplicate: false, message: `リンクを登録しました: ${kindLabel(link.kind)} ${link.url}` };
 }
@@ -329,24 +343,25 @@ export async function refreshLinkTitle(db: D1Database, input: unknown, fetchTitl
   if (current.kind === "instagram") {
     return { ok: false, errors: [{ field: "title", message: "title: Instagram のタイトルは自動では取得できません(公式の取得方法は事前の登録が必要なため)。「タイトルを編集」で手入力してください" }] };
   }
-  if (current.kind === "web") {
-    return { ok: false, errors: [{ field: "title", message: "title: ウェブのリンクのタイトルは、サーバーからは取得しません。「タイトルを編集」で手入力するか、AI に update_link で付けてもらってください" }] };
-  }
-  let title: string | null = null;
+  let fetched: PageInfo | null = null;
   let reason = "タイトルが見つかりませんでした";
   try {
-    title = await fetchTitle(current.kind, current.url);
+    fetched = asPageInfo(await fetchTitle(current.kind, current.url));
   } catch (e) {
     if (e instanceof TitleFetchError) reason = e.reason;
     else reason = "取得に失敗しました";
     // どこで失敗したかを、ダッシュボードのログに残す(リンクのURLは書かない)
     console.log(`link title: ${current.kind} ${reason}`);
   }
+  const title = fetched?.title ?? null;
   if (title === null) {
     return { ok: false, errors: [{ field: "title", message: `title: タイトルを取得できませんでした(${reason})。「タイトルを編集」で手入力できます` }] };
   }
-  await db.prepare("UPDATE links SET title = ? WHERE id = ?").bind(title, id).run();
-  const link = { ...current, title };
+  // 説明文は、すでにあれば変えない。サムネイルは、取れたときだけ付け直す
+  const description = current.description ?? fetched?.description ?? null;
+  const thumbnail = fetched?.thumbnail_url ?? current.thumbnail_url;
+  await db.prepare("UPDATE links SET title = ?, description = ?, thumbnail_url = ? WHERE id = ?").bind(title, description, thumbnail, id).run();
+  const link = { ...current, title, description, thumbnail_url: thumbnail };
   return { ok: true, link, duplicate: false, message: `タイトルを取得しました: ${title}` };
 }
 
@@ -363,7 +378,7 @@ export async function deleteLink(db: D1Database, input: unknown): Promise<Delete
 // 日の詳細と同じ条件(日付そのもの、その日の取引、その日と重なる出来事)
 export async function listLinksOnDay(db: D1Database, date: string): Promise<LinkView[]> {
   const { results } = await db
-    .prepare(`SELECT l.id, l.url, l.kind, l.title, l.description, l.date, l.transaction_id, l.event_id, l.created_at FROM links l WHERE ${onDay("l", "?")} ORDER BY l.created_at, l.id`)
+    .prepare(`SELECT l.id, l.url, l.kind, l.title, l.description, l.thumbnail_url, l.date, l.transaction_id, l.event_id, l.created_at FROM links l WHERE ${onDay("l", "?")} ORDER BY l.created_at, l.id`)
     .bind(date, date, date, date)
     .all<LinkView>();
   return results;
@@ -393,7 +408,7 @@ export async function listLinks(db: D1Database, input: unknown): Promise<ListLin
   }
   const { results } = await db
     .prepare(
-      `SELECT l.id, l.url, l.kind, l.title, l.description, l.date, l.transaction_id, l.event_id, l.created_at FROM links l
+      `SELECT l.id, l.url, l.kind, l.title, l.description, l.thumbnail_url, l.date, l.transaction_id, l.event_id, l.created_at FROM links l
        WHERE ${conditions.join(" OR ")} ORDER BY l.created_at, l.id`,
     )
     .bind(...binds)

@@ -8,6 +8,7 @@ const link = (over: Partial<LinkView>): LinkView => ({
   kind: "x",
   title: null,
   description: null,
+  thumbnail_url: null,
   date: "2026-10-11",
   transaction_id: null,
   event_id: null,
